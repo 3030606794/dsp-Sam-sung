@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fusion_tone_title">听感调音</string>
+    <string name="fusion_tone_explanation">参考 MSEB 的十项调节方式，自研听感近似。零值保持原声；自动预留增益空间，开启后音量可能降低。随设备配置与预设保存。</string>
+    <string name="fusion_tone_range">滑杆范围</string>
+    <string name="fusion_tone_reset">全部归零</string>
+    <string name="fusion_tone_reset_summary">恢复原声和 ±100 范围，保留开关状态</string>
+    <string-array name="fusion_tone_ranges">
+        <item>小（±20）</item><item>中（±40）</item><item>大（±100）</item>
+    </string-array>
+    <string-array name="fusion_tone_range_values">
+        <item>20</item><item>40</item><item>100</item>
+    </string-array>
+    <string-array name="fusion_tone_names">
+        <item>总温度</item><item>低音下潜度</item><item>低音弹性</item><item>厚度</item><item>人声</item>
+        <item>女毒</item><item>齿音（低频）</item><item>齿音（高频）</item><item>乐器瞬态</item><item>空气声</item>
+    </string-array>
+    <string-array name="fusion_tone_directions">
+        <item>冷 / 清脆 ← 0 → 暖 / 暗</item><item>轻快 ← 0 → 深</item><item>清 ← 0 → 强</item>
+        <item>薄 ← 0 → 厚</item><item>靠后 ← 0 → 突出</item><item>解毒 ← 0 → 加毒</item>
+        <item>柔和 ← 0 → 清脆</item><item>柔和 ← 0 → 清脆</item>
+        <item>慢 / 弹 ← 0 → 快 / 硬</item><item>柔和 ← 0 → 清脆</item>
+    </string-array>
+</resources>

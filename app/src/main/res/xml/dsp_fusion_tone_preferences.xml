@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <SwitchPreferenceCompat
+        android:key="fusion_tone_enabled"
+        android:title="@string/fusion_tone_title"
+        android:defaultValue="false"
+        app:iconSpaceReserved="false" />
+    <ListPreference
+        android:key="fusion_tone_range"
+        android:title="@string/fusion_tone_range"
+        android:defaultValue="100"
+        android:entries="@array/fusion_tone_ranges"
+        android:entryValues="@array/fusion_tone_range_values"
+        app:iconSpaceReserved="false" />
+    <Preference
+        android:key="fusion_tone_reset"
+        android:title="@string/fusion_tone_reset"
+        android:summary="@string/fusion_tone_reset_summary"
+        app:iconSpaceReserved="false" />
+</PreferenceScreen>

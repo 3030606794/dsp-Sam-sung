@@ -1,0 +1,112 @@
+package me.timschneeberger.rootlessjamesdsp.fusion
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.SharedPreferences
+import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.ViewGroup
+import androidx.preference.ListPreference
+import androidx.preference.Preference
+import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.SeekBarPreference
+import androidx.preference.SwitchPreferenceCompat
+import androidx.recyclerview.widget.RecyclerView
+import me.timschneeberger.rootlessjamesdsp.R
+import me.timschneeberger.rootlessjamesdsp.fragment.DspFragment
+import me.timschneeberger.rootlessjamesdsp.utils.Constants
+import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.registerLocalReceiver
+import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
+import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.unregisterLocalReceiver
+
+class TonePreferenceFragment : PreferenceFragmentCompat() {
+    private var batching = false
+    private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        if (!batching) context?.sendLocalBroadcast(Intent(Constants.ACTION_PREFERENCES_UPDATED))
+    }
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Constants.ACTION_PRESET_LOADED) {
+                (parentFragment as? DspFragment)?.restartFragment(id, TonePreferenceFragment())
+            }
+        }
+    }
+
+    override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        preferenceManager.sharedPreferencesName = ToneController.PREFS
+        @Suppress("DEPRECATION")
+        preferenceManager.sharedPreferencesMode = Context.MODE_MULTI_PROCESS
+        buildScreen()
+        preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener(listener)
+        requireContext().registerLocalReceiver(receiver, IntentFilter(Constants.ACTION_PRESET_LOADED))
+    }
+
+    private fun buildScreen() {
+        val ctx = requireContext()
+        val prefs = ToneController.preferences(ctx)
+        val limit = ToneController.range(prefs)
+        preferenceScreen = preferenceManager.createPreferenceScreen(ctx)
+        addPreferencesFromResource(R.xml.dsp_fusion_tone_preferences)
+        findPreference<SwitchPreferenceCompat>(ToneController.ENABLED)?.summary =
+            getString(R.string.fusion_tone_explanation)
+        findPreference<ListPreference>(ToneController.RANGE)?.apply {
+            summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
+            setOnPreferenceChangeListener { _, newValue ->
+                val newLimit = (newValue as? String)?.toIntOrNull() ?: return@setOnPreferenceChangeListener false
+                if (newLimit !in arrayOf(20, 40, 100)) return@setOnPreferenceChangeListener false
+                batching = true
+                prefs.edit().apply {
+                    putString(ToneController.RANGE, newLimit.toString())
+                    ToneController.KEYS.forEach { putInt(it, prefs.getInt(it, 0).coerceIn(-newLimit, newLimit)) }
+                }.apply()
+                batching = false
+                buildScreen()
+                ctx.sendLocalBroadcast(Intent(Constants.ACTION_PREFERENCES_UPDATED))
+                false
+            }
+        }
+        findPreference<Preference>("fusion_tone_reset")?.setOnPreferenceClickListener {
+            batching = true
+            prefs.edit().apply {
+                ToneController.KEYS.forEach { putInt(it, 0) }
+                putString(ToneController.RANGE, "100")
+            }.apply()
+            batching = false
+            buildScreen()
+            ctx.sendLocalBroadcast(Intent(Constants.ACTION_PREFERENCES_UPDATED))
+            true
+        }
+        val titles = resources.getStringArray(R.array.fusion_tone_names)
+        val directions = resources.getStringArray(R.array.fusion_tone_directions)
+        ToneController.KEYS.forEachIndexed { i, name ->
+            val slider = SeekBarPreference(ctx).apply {
+                key = name
+                title = titles[i]
+                summary = directions[i]
+                min = -limit
+                max = limit
+                seekBarIncrement = 1
+                showSeekBarValue = true
+                updatesContinuously = true
+                isIconSpaceReserved = false
+                setDefaultValue(0)
+            }
+            preferenceScreen.addPreference(slider)
+            slider.dependency = ToneController.ENABLED
+        }
+    }
+
+    override fun onCreateRecyclerView(inflater: LayoutInflater, parent: ViewGroup, savedInstanceState: Bundle?): RecyclerView =
+        super.onCreateRecyclerView(inflater, parent, savedInstanceState).apply {
+            itemAnimator = null
+            isNestedScrollingEnabled = false
+        }
+
+    override fun onDestroy() {
+        preferenceManager.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(listener)
+        context?.unregisterLocalReceiver(receiver)
+        super.onDestroy()
+    }
+}

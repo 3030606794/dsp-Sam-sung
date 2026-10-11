@@ -1,0 +1,105 @@
+name: Build DSP Fusion
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: fusion-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  apk:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Android build tools
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;26.3.11579264' 'cmake;3.22.1'
+      - name: Restore private signing key
+        env:
+          SIGNING_KEY: ${{ secrets.FUSION_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$SIGNING_KEY"
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/fusion-release.jks"
+          chmod 600 "$RUNNER_TEMP/fusion-release.jks"
+      - name: Build and test application
+        env:
+          FUSION_KEYSTORE: ${{ runner.temp }}/fusion-release.jks
+          FUSION_STORE_PASSWORD: ${{ secrets.FUSION_STORE_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 :app:assembleRootFdroidRelease :app:testRootFdroidReleaseUnitTest
+          mkdir -p dist
+          APK=$(find app/build/outputs/apk -name '*universal*release*.apk' -o -name '*universal*.apk' | head -n1)
+          test -n "$APK"
+          cp "$APK" dist/DSP-Fusion-0.1.0-alpha1.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs dist/*.apk > dist/APK-SIGNATURE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DSP-Fusion-APK
+          path: dist/*
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: apk-test-reports
+          path: app/build/reports
+  driver:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install native toolchain
+        run: sdkmanager 'ndk;26.3.11579264'
+      - name: Test listening controls
+        run: |
+          cmake -S native/tone -B build/tone -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build/tone --parallel 2
+          ctest --test-dir build/tone --output-on-failure
+      - name: Test complete audio engines and protocol
+        run: |
+          cmake -S native -B build/host -DFUSION_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build/host --parallel 2
+          ctest --test-dir build/host --output-on-failure
+      - name: Build unified driver
+        run: |
+          for ABI in arm64-v8a armeabi-v7a; do
+            cmake -S native -B "build/driver-$ABI" -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/26.3.11579264/build/cmake/android.toolchain.cmake" -DANDROID_ABI="$ABI" -DANDROID_PLATFORM=android-26 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release
+            cmake --build "build/driver-$ABI" --parallel 2
+          done
+          python3 scripts/package-module.py
+          python3 scripts/validate-release.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DSP-Fusion-Driver
+          path: dist/*
+  release:
+    needs: [apk, driver]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: DSP-Fusion-*
+          merge-multiple: true
+          path: release
+      - name: Publish tested build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp docs/COMPATIBILITY.zh-CN.md release/COMPATIBILITY.zh-CN.md
+          cd release
+          sha256sum *.apk *.zip > SHA256SUMS.txt
+          TAG="v0.1.0-alpha1-build.${{ github.run_number }}"
+          gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --title "DSP Fusion 0.1.0 alpha 1 · build ${{ github.run_number }}" --notes-file ../docs/RELEASE-NOTES.zh-CN.md ./*
