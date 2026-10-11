@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="slider_reset_zero">归零</string>
+    <item name="slider_reset_binding" type="id" />
+</resources>

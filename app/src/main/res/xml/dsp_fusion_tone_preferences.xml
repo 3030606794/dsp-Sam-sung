@@ -1,24 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
-    <SwitchPreferenceCompat
+    <me.timschneeberger.rootlessjamesdsp.preference.SwitchPreferenceGroup
         android:key="fusion_tone_enabled"
         android:title="@string/fusion_tone_title"
         android:defaultValue="false"
-        app:iconSpaceReserved="false" />
-    <Preference
-        android:key="fusion_tone_expand"
-        android:title="@string/fusion_tone_expand"
-        android:persistent="false"
-        app:iconSpaceReserved="false" />
-    <me.timschneeberger.rootlessjamesdsp.fusion.ToneRangePreference
-        android:key="fusion_tone_range"
-        android:title="@string/fusion_tone_range"
-        android:defaultValue="100"
-        app:iconSpaceReserved="false" />
-    <Preference
-        android:key="fusion_tone_reset"
-        android:title="@string/fusion_tone_reset"
-        android:summary="@string/fusion_tone_reset_summary"
-        app:iconSpaceReserved="false" />
+        android:icon="@drawable/ic_tune_vertical_variant_24dp"
+        app:iconSpaceReserved="false">
+        <me.timschneeberger.rootlessjamesdsp.fusion.ToneRangePreference
+            android:key="fusion_tone_range"
+            android:title="@string/fusion_tone_range"
+            android:defaultValue="100"
+            app:iconSpaceReserved="false" />
+        <Preference
+            android:key="fusion_tone_reset"
+            android:title="@string/fusion_tone_reset"
+            android:summary="@string/fusion_tone_reset_summary"
+            app:iconSpaceReserved="false" />
+    </me.timschneeberger.rootlessjamesdsp.preference.SwitchPreferenceGroup>
 </PreferenceScreen>

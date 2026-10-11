@@ -26,6 +26,7 @@ class DeviceProfilesCardFragment : PreferenceFragmentCompat(), RoutingObserver.R
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         addPreferencesFromResource(R.xml.device_profile_preferences)
+        profileActive?.layoutResource = R.layout.preference_device_profile_compact
         profileActive?.onMenuItemClick = {
             when(it) {
                 0 -> openCopyDialog()

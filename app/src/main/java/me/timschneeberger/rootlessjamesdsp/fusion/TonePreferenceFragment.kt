@@ -10,11 +10,12 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
-import androidx.preference.SeekBarPreference
-import androidx.preference.SwitchPreferenceCompat
+import androidx.preference.PreferenceScreen
 import androidx.recyclerview.widget.RecyclerView
 import me.timschneeberger.rootlessjamesdsp.R
+import me.timschneeberger.rootlessjamesdsp.adapter.RoundedRipplePreferenceGroupAdapter
 import me.timschneeberger.rootlessjamesdsp.fragment.DspFragment
+import me.timschneeberger.rootlessjamesdsp.preference.SwitchPreferenceGroup
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.registerLocalReceiver
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
@@ -22,9 +23,8 @@ import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.un
 
 class TonePreferenceFragment : PreferenceFragmentCompat() {
     private var batching = false
-    private var expanded = false
-    private val details = mutableListOf<Preference>()
-    private val sliders = mutableListOf<SeekBarPreference>()
+    private lateinit var group: SwitchPreferenceGroup
+    private val sliders = mutableListOf<ToneSliderPreference>()
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
         if (!batching) context?.sendLocalBroadcast(Intent(Constants.ACTION_PREFERENCES_UPDATED))
     }
@@ -40,8 +40,8 @@ class TonePreferenceFragment : PreferenceFragmentCompat() {
         preferenceManager.sharedPreferencesName = ToneController.PREFS
         @Suppress("DEPRECATION")
         preferenceManager.sharedPreferencesMode = Context.MODE_MULTI_PROCESS
-        expanded = savedInstanceState?.getBoolean(STATE_EXPANDED, false) ?: false
         buildScreen()
+        group.setExpanded(savedInstanceState?.getBoolean(STATE_EXPANDED, false) ?: false)
         preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener(listener)
         requireContext().registerLocalReceiver(receiver, IntentFilter(Constants.ACTION_PRESET_LOADED))
     }
@@ -50,23 +50,12 @@ class TonePreferenceFragment : PreferenceFragmentCompat() {
         val ctx = requireContext()
         val prefs = ToneController.preferences(ctx)
         val limit = ToneController.range(prefs)
-        details.clear()
         sliders.clear()
         preferenceScreen = preferenceManager.createPreferenceScreen(ctx)
         addPreferencesFromResource(R.xml.dsp_fusion_tone_preferences)
-        findPreference<SwitchPreferenceCompat>(ToneController.ENABLED)?.setOnPreferenceChangeListener { _, newValue ->
-            val enabled = newValue as Boolean
-            expanded = enabled
-            updateExpansion(enabled)
-            true
-        }
-        findPreference<Preference>(EXPAND)?.setOnPreferenceClickListener {
-            expanded = !expanded
-            updateExpansion()
-            true
-        }
+        group = requireNotNull(findPreference(ToneController.ENABLED))
+        group.setIsIconVisible(true)
         findPreference<ToneRangePreference>(ToneController.RANGE)?.apply {
-            details.add(this)
             setOnPreferenceChangeListener { _, newValue ->
                 val newLimit = newValue as? Int ?: return@setOnPreferenceChangeListener false
                 if (newLimit !in ToneController.RANGES) return@setOnPreferenceChangeListener false
@@ -82,7 +71,6 @@ class TonePreferenceFragment : PreferenceFragmentCompat() {
             }
         }
         findPreference<Preference>("fusion_tone_reset")?.apply {
-            details.add(this)
             setOnPreferenceClickListener {
                 batching = true
                 prefs.edit().apply {
@@ -97,48 +85,32 @@ class TonePreferenceFragment : PreferenceFragmentCompat() {
             }
         }
         val titles = resources.getStringArray(R.array.fusion_tone_names)
-        val directions = resources.getStringArray(R.array.fusion_tone_directions)
+        val left = resources.getStringArray(R.array.fusion_tone_left_keywords)
+        val right = resources.getStringArray(R.array.fusion_tone_right_keywords)
         ToneController.KEYS.forEachIndexed { i, name ->
-            val slider = SeekBarPreference(ctx).apply {
+            val slider = ToneSliderPreference(ctx).apply {
                 key = name
                 title = titles[i]
-                summary = directions[i]
-                min = -limit
-                max = limit
-                seekBarIncrement = 1
-                showSeekBarValue = true
-                updatesContinuously = true
-                isIconSpaceReserved = false
+                leftKeyword = left[i]
+                rightKeyword = right[i]
+                this.limit = limit
                 setDefaultValue(0)
             }
-            preferenceScreen.addPreference(slider)
-            slider.dependency = ToneController.ENABLED
+            group.addPreference(slider)
             sliders.add(slider)
-            details.add(slider)
         }
-        updateExpansion()
     }
 
     private fun updateSliders(limit: Int) {
         val prefs = ToneController.preferences(requireContext())
         sliders.forEach {
-            it.min = -limit
-            it.max = limit
+            it.limit = limit
             it.value = prefs.getInt(it.key, 0).coerceIn(-limit, limit)
         }
     }
 
-    private fun updateExpansion(enabled: Boolean =
-        findPreference<SwitchPreferenceCompat>(ToneController.ENABLED)?.isChecked == true) {
-        findPreference<Preference>(EXPAND)?.apply {
-            isVisible = enabled
-            setTitle(if (expanded) R.string.fusion_tone_collapse else R.string.fusion_tone_expand)
-        }
-        details.forEach { it.isVisible = enabled && expanded }
-    }
-
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putBoolean(STATE_EXPANDED, expanded)
+        outState.putBoolean(STATE_EXPANDED, group.isExpanded)
         super.onSaveInstanceState(outState)
     }
 
@@ -148,6 +120,9 @@ class TonePreferenceFragment : PreferenceFragmentCompat() {
             isNestedScrollingEnabled = false
         }
 
+    override fun onCreateAdapter(preferenceScreen: PreferenceScreen): RecyclerView.Adapter<*> =
+        RoundedRipplePreferenceGroupAdapter(preferenceScreen)
+
     override fun onDestroy() {
         preferenceManager.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(listener)
         context?.unregisterLocalReceiver(receiver)
@@ -155,7 +130,6 @@ class TonePreferenceFragment : PreferenceFragmentCompat() {
     }
 
     companion object {
-        const val EXPAND = "fusion_tone_expand"
         private const val STATE_EXPANDED = "tone_expanded"
     }
 }

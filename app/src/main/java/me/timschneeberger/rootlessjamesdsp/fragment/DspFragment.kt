@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -73,51 +74,51 @@ class DspFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListen
         binding.cardContainer.layoutTransition = transition
 
         childFragmentManager.beginTransaction()
-            .replace(R.id.card_device_profiles, DeviceProfilesCardFragment.newInstance())
-            .replace(R.id.card_fusion_viper, ViperPreferenceFragment())
-            .replace(R.id.card_fusion_tone, TonePreferenceFragment())
-            .replace(R.id.card_output_control, OutputControlFragment())
-            .replace(
+            .addIfMissing(R.id.card_device_profiles, DeviceProfilesCardFragment.newInstance())
+            .addIfMissing(R.id.card_fusion_viper, ViperPreferenceFragment())
+            .addIfMissing(R.id.card_fusion_tone, TonePreferenceFragment())
+            .addIfMissing(R.id.card_output_control, OutputControlFragment())
+            .addIfMissing(
                 R.id.card_compressor, PreferenceGroupFragment.newInstance(Constants.PREF_COMPANDER,
                     R.xml.dsp_compander_preferences
                 ))
-            .replace(
+            .addIfMissing(
                 R.id.card_bass, PreferenceGroupFragment.newInstance(Constants.PREF_BASS,
                     R.xml.dsp_bass_preferences
                 ))
-            .replace(
+            .addIfMissing(
                 R.id.card_eq, PreferenceGroupFragment.newInstance(Constants.PREF_EQ,
                     R.xml.dsp_equalizer_preferences
                 ))
-            .replace(
+            .addIfMissing(
                 R.id.card_geq, PreferenceGroupFragment.newInstance(Constants.PREF_GEQ,
                     R.xml.dsp_graphiceq_preferences
                 ))
-            .replace(
+            .addIfMissing(
                 R.id.card_ddc, PreferenceGroupFragment.newInstance(Constants.PREF_DDC,
                     R.xml.dsp_ddc_preferences
                 ))
-            .replace(
+            .addIfMissing(
                 R.id.card_convolver, PreferenceGroupFragment.newInstance(Constants.PREF_CONVOLVER,
                     R.xml.dsp_convolver_preferences
                 ))
-            .replace(
+            .addIfMissing(
                 R.id.card_liveprog, PreferenceGroupFragment.newInstance(Constants.PREF_LIVEPROG,
                     R.xml.dsp_liveprog_preferences
                 ))
-            .replace(
+            .addIfMissing(
                 R.id.card_tube, PreferenceGroupFragment.newInstance(Constants.PREF_TUBE,
                     R.xml.dsp_tube_preferences
                 ))
-            .replace(
+            .addIfMissing(
                 R.id.card_stereowide, PreferenceGroupFragment.newInstance(Constants.PREF_STEREOWIDE,
                     R.xml.dsp_stereowide_preferences
                 ))
-            .replace(
+            .addIfMissing(
                 R.id.card_crossfeed, PreferenceGroupFragment.newInstance(Constants.PREF_CROSSFEED,
                     R.xml.dsp_crossfeed_preferences
                 ))
-            .replace(
+            .addIfMissing(
                 R.id.card_reverb, PreferenceGroupFragment.newInstance(Constants.PREF_REVERB,
                     R.xml.dsp_reverb_preferences
                 ))
@@ -134,10 +135,17 @@ class DspFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListen
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when(key) {
             getString(R.string.key_device_profiles_enable) -> {
-                (binding.cardDeviceProfiles.parent as ViewGroup).isVisible =
+                binding.cardDeviceProfiles.isVisible =
                     prefsApp.get<Boolean>(R.string.key_device_profiles_enable)
             }
         }
+    }
+
+    private fun FragmentTransaction.addIfMissing(id: Int, fragment: Fragment): FragmentTransaction {
+        // FragmentManager restores child instances before the new view is created.
+        // Keep those instances so rotation preserves each effect's expanded state.
+        if (childFragmentManager.findFragmentById(id) == null) add(id, fragment)
+        return this
     }
 
     private fun hideTranslationNotice() {

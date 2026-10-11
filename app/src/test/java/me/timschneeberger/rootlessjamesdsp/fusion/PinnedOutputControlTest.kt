@@ -7,17 +7,24 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
 import android.os.Looper
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.FragmentActivity
 import com.google.android.material.slider.Slider
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.fragment.OutputControlFragment
+import me.timschneeberger.rootlessjamesdsp.fragment.DeviceProfilesCardFragment
+import me.timschneeberger.rootlessjamesdsp.preference.DropDownPreference
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
+import me.timschneeberger.rootlessjamesdsp.utils.RoutingObserver
+import me.timschneeberger.rootlessjamesdsp.utils.preferences.Preferences
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.registerLocalReceiver
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.unregisterLocalReceiver
@@ -26,6 +33,9 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.core.context.startKoin
+import org.koin.core.context.stopKoin
+import org.koin.dsl.module
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
@@ -45,12 +55,21 @@ class PinnedOutputControlTest {
     private val app: Application get() = RuntimeEnvironment.getApplication()
     private val prefs get() = app.getSharedPreferences(Constants.PREF_OUTPUT, Context.MODE_PRIVATE)
     private var broadcasts = 0
+    private lateinit var routingObserver: RoutingObserver
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) { broadcasts++ }
     }
 
     @Before fun prepare() {
         prefs.edit().clear().commit()
+        stopKoin()
+        val preferences = Preferences(app)
+        routingObserver = RoutingObserver(app)
+        routingObserver.currentDevice = routingObserver.Device("speaker", "", RoutingObserver.DeviceGroup.SPEAKER)
+        startKoin { modules(module {
+            single { preferences.App() }
+            single { routingObserver }
+        }) }
         app.registerLocalReceiver(receiver, IntentFilter(Constants.ACTION_PREFERENCES_UPDATED))
     }
 
@@ -59,6 +78,7 @@ class PinnedOutputControlTest {
         controller?.pause()?.stop()?.destroy()
         app.unregisterLocalReceiver(receiver)
         idle()
+        stopKoin()
     }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -97,11 +117,37 @@ class PinnedOutputControlTest {
         idle()
         assertTrue(scroll.scrollY > 0)
         assertArrayEquals(before, IntArray(2).also(card::getLocationOnScreen))
+        val profile = activity.findViewById<View>(R.id.card_device_profiles)
+        val output = activity.findViewById<View>(R.id.card_output_control)
+        assertSame("Device profile and output share the same card content", profile.parent, output.parent)
+        assertSame(card, (profile.parent as View).parent)
         arrayOf(R.id.output_threshold, R.id.output_release, R.id.output_postgain, R.id.output_balance).forEach {
             assertTrue(slider(activity, it).isShown)
             assertTrue(slider(activity, it).isEnabled)
             assertTrue(slider(activity, it).width > 0)
         }
+    }
+
+    @Test fun compactDeviceProfileKeepsCurrentRouteIconAndMenuWithoutHidingOutput() {
+        val activity = launch()
+        val container = activity.findViewById<View>(R.id.card_device_profiles)
+        val fragment = activity.supportFragmentManager.findFragmentById(R.id.card_device_profiles)
+            as DeviceProfilesCardFragment
+        val summary = container.findViewById<TextView>(android.R.id.summary)
+        assertEquals(routingObserver.currentDevice!!.name, summary.text.toString())
+        assertNotNull(container.findViewById<ImageView>(android.R.id.icon).drawable)
+        val profile = fragment.findPreference<DropDownPreference>(app.getString(R.string.key_profile_active))!!
+        assertNotNull(profile.onMenuItemClick)
+        assertArrayEquals(app.resources.getTextArray(R.array.manange_profiles_menu), profile.entries)
+        val nextDevice = routingObserver.Device("USB DAC", "usb", RoutingObserver.DeviceGroup.USB)
+        routingObserver.currentDevice = nextDevice
+        layout(activity)
+        assertEquals(nextDevice.name, container.findViewById<TextView>(android.R.id.summary).text.toString())
+        assertTrue("The route is a compact single row", container.height <= 64 * activity.resources.displayMetrics.density)
+        container.visibility = View.GONE
+        layout(activity)
+        assertTrue(activity.findViewById<View>(R.id.pinned_output_card).isShown)
+        assertTrue(slider(activity, R.id.output_balance).isShown)
     }
 
     @Test fun existingFloatValuesAndBalanceRestoreAcrossRecreationAndProfileReload() {
@@ -155,6 +201,30 @@ class PinnedOutputControlTest {
         }
     }
 
+    @Test fun doubleTapBalanceResetsPersistsAndKeepsZeroAfterFingerRelease() {
+        prefs.edit().putInt(OutputControlFragment.BALANCE_KEY, 60).commit()
+        val activity = launch()
+        val balance = slider(activity, R.id.output_balance)
+        val x = balance.width * .78f
+        val y = balance.height * .5f
+        val start = SystemClock.uptimeMillis() + 10
+        fun touch(action: Int, down: Long, at: Long) {
+            val event = MotionEvent.obtain(down, at, action, x, y, 0)
+            try { balance.dispatchTouchEvent(event) } finally { event.recycle() }
+        }
+        touch(MotionEvent.ACTION_DOWN, start, start)
+        touch(MotionEvent.ACTION_UP, start, start + 20)
+        touch(MotionEvent.ACTION_DOWN, start + 100, start + 100)
+        touch(MotionEvent.ACTION_UP, start + 100, start + 120)
+        idle()
+        assertEquals(0f, balance.value, 0f)
+        assertEquals(0, prefs.getInt(OutputControlFragment.BALANCE_KEY, -1))
+        assertTrue(broadcasts > 0)
+        controller!!.recreate()
+        layout(controller!!.get())
+        assertEquals(0f, slider(controller!!.get(), R.id.output_balance).value, 0f)
+    }
+
     @Test fun numericInputPreservesSignedFloatPrecisionAndRejectsOutOfRangeValues() {
         val activity = launch()
         activity.findViewById<View>(R.id.output_threshold)
@@ -187,6 +257,7 @@ class PinnedOutputControlTest {
             findViewById<LinearLayout>(R.id.card_container).addView(View(this),
                 LinearLayout.LayoutParams(-1, (1800 * resources.displayMetrics.density).roundToInt()))
             if (savedInstanceState == null) supportFragmentManager.beginTransaction()
+                .add(R.id.card_device_profiles, DeviceProfilesCardFragment.newInstance())
                 .add(R.id.card_output_control, OutputControlFragment()).commitNow()
         }
     }

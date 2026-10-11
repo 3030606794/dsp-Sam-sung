@@ -9,8 +9,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.fragment.app.FragmentActivity
 import androidx.preference.Preference
-import androidx.preference.SeekBarPreference
-import androidx.preference.SwitchPreferenceCompat
+import me.timschneeberger.rootlessjamesdsp.preference.SwitchPreferenceGroup
+
 import com.google.android.material.button.MaterialButtonToggleGroup
 import me.timschneeberger.rootlessjamesdsp.R
 import org.junit.After
@@ -85,14 +85,14 @@ class FusionPreferenceFragmentTest {
         val tone = tone(activity)
         assertNotNull(viper.view)
         assertNotNull(tone.view)
-        assertTrue(viper.listView.adapter!!.itemCount > 0)
+        assertEquals(ViperParameters.groups.size, viper.effectFragments.size)
         assertTrue(tone.listView.adapter!!.itemCount > 0)
         listOf("fusion_james_enabled", "fusion_viper_enabled", "fusion_status", "v_pan", "v_eq_0", "v_speaker").forEach {
             assertNull("Removed controls must not appear on screen", viper.findPreference<Preference>(it))
         }
 
         ViperParameters.groups.flatMap { it.controls }.forEach { definition ->
-            val control = viper.findPreference<SeekBarPreference>(definition.key)!!
+            val control = viper.findPreference<ViperSliderPreference>(definition.key)!!
             assertNotNull("Preference must be attached before consulting its manager", control.preferenceManager)
             assertEquals(definition.min, control.min)
             assertEquals(definition.max, control.max)
@@ -100,7 +100,7 @@ class FusionPreferenceFragmentTest {
             assertEquals(definition.label(definition.default), control.summary.toString())
         }
         ToneController.KEYS.forEach {
-            val control = tone.findPreference<SeekBarPreference>(it)!!
+            val control = tone.findPreference<ToneSliderPreference>(it)!!
             assertEquals(-100, control.min)
             assertEquals(100, control.max)
             assertEquals(0, control.value)
@@ -130,12 +130,12 @@ class FusionPreferenceFragmentTest {
         val tone = tone(activity)
         assertNull(viper.findPreference<Preference>("v_pan"))
         assertNull(viper.findPreference<Preference>("v_eq_0"))
-        assertEquals(73, viper.findPreference<SeekBarPreference>("v_reverb_size")!!.value)
-        assertTrue(viper.findPreference<SeekBarPreference>("v_reverb_size")!!.isVisible)
-        assertEquals("强", viper.findPreference<SeekBarPreference>("v_analog_mode")!!.summary.toString())
-        assertEquals(-37, tone.findPreference<SeekBarPreference>(ToneController.KEYS[0])!!.value)
-        assertEquals(-40, tone.findPreference<SeekBarPreference>(ToneController.KEYS[0])!!.min)
-        assertEquals(40, tone.findPreference<SeekBarPreference>(ToneController.KEYS[0])!!.max)
+        assertEquals(73, viper.findPreference<ViperSliderPreference>("v_reverb_size")!!.value)
+        assertFalse(viper.findPreference<ViperSliderPreference>("v_reverb_size")!!.isVisible)
+        assertEquals("强", viper.findPreference<ViperSliderPreference>("v_analog_mode")!!.summary.toString())
+        assertEquals(-37, tone.findPreference<ToneSliderPreference>(ToneController.KEYS[0])!!.value)
+        assertEquals(-40, tone.findPreference<ToneSliderPreference>(ToneController.KEYS[0])!!.min)
+        assertEquals(40, tone.findPreference<ToneSliderPreference>(ToneController.KEYS[0])!!.max)
         assertEquals(29, ToneController.payload(application)[10])
     }
 
@@ -147,8 +147,8 @@ class FusionPreferenceFragmentTest {
             .commit()
         val activity = launch()
         val fragment = tone(activity)
-        val expand = fragment.findPreference<Preference>(TonePreferenceFragment.EXPAND)!!
-        assertTrue(expand.onPreferenceClickListener!!.onPreferenceClick(expand))
+        val expand = fragment.findPreference<SwitchPreferenceGroup>(ToneController.ENABLED)!!
+        expand.setExpanded(true)
         layout(activity)
         val range = fragment.findPreference<ToneRangePreference>(ToneController.RANGE)!!
         // Exercise the inline button view; range changes must not open a dialog.
@@ -158,10 +158,10 @@ class FusionPreferenceFragmentTest {
         layout(activity)
         assertEquals(20, range.range)
         assertEquals("20", ToneController.preferences(application).getString(ToneController.RANGE, null))
-        assertEquals(-20, fragment.findPreference<SeekBarPreference>(ToneController.KEYS[0])!!.value)
-        assertEquals(20, fragment.findPreference<SeekBarPreference>(ToneController.KEYS[1])!!.value)
+        assertEquals(-20, fragment.findPreference<ToneSliderPreference>(ToneController.KEYS[0])!!.value)
+        assertEquals(20, fragment.findPreference<ToneSliderPreference>(ToneController.KEYS[1])!!.value)
         ToneController.KEYS.forEach {
-            val slider = fragment.findPreference<SeekBarPreference>(it)!!
+            val slider = fragment.findPreference<ToneSliderPreference>(it)!!
             assertEquals(-20, slider.min)
             assertEquals(20, slider.max)
         }
@@ -169,7 +169,7 @@ class FusionPreferenceFragmentTest {
         assertTrue(reset.onPreferenceClickListener!!.onPreferenceClick(reset))
         layout(activity)
         ToneController.KEYS.forEach {
-            val slider = fragment.findPreference<SeekBarPreference>(it)!!
+            val slider = fragment.findPreference<ToneSliderPreference>(it)!!
             assertEquals(-100, slider.min)
             assertEquals(100, slider.max)
             assertEquals(0, slider.value)
@@ -182,22 +182,22 @@ class FusionPreferenceFragmentTest {
             .putInt(ToneController.KEYS[0], 17).commit()
         val activity = launch()
         val fragment = tone(activity)
-        val toggle = fragment.findPreference<SwitchPreferenceCompat>(ToneController.ENABLED)!!
+        val toggle = fragment.findPreference<SwitchPreferenceGroup>(ToneController.ENABLED)!!
         assertNull(toggle.summary)
-        val slider = fragment.findPreference<SeekBarPreference>(ToneController.KEYS[0])!!
+        val slider = fragment.findPreference<ToneSliderPreference>(ToneController.KEYS[0])!!
         assertFalse(slider.isVisible)
-        assertTrue(toggle.callChangeListener(true))
-        toggle.isChecked = true
+        toggle.setValue(true)
+        toggle.setExpanded(true)
         layout(activity)
         assertTrue(slider.isVisible)
         val before = ToneController.payload(application)
-        val expand = fragment.findPreference<Preference>(TonePreferenceFragment.EXPAND)!!
-        expand.onPreferenceClickListener!!.onPreferenceClick(expand)
+        val expand = fragment.findPreference<SwitchPreferenceGroup>(ToneController.ENABLED)!!
+        expand.setExpanded(!expand.isExpanded)
         layout(activity)
         assertFalse(slider.isVisible)
         assertTrue(toggle.isChecked)
         assertArrayEquals(before, ToneController.payload(application))
-        expand.onPreferenceClickListener!!.onPreferenceClick(expand)
+        expand.setExpanded(!expand.isExpanded)
         layout(activity)
         assertTrue(slider.isVisible)
         assertEquals(17, slider.value)
@@ -232,9 +232,9 @@ class FusionPreferenceFragmentTest {
             .replace(PreferenceHostActivity.TONE_ID, TonePreferenceFragment(), "tone")
             .commitNow()
         layout(activity)
-        assertEquals(24, viper(activity).findPreference<SeekBarPreference>("v_reverb_wet")!!.value)
-        assertTrue(viper(activity).findPreference<SeekBarPreference>("v_reverb_wet")!!.isVisible)
-        assertEquals(-18, tone(activity).findPreference<SeekBarPreference>(ToneController.KEYS[4])!!.value)
+        assertEquals(24, viper(activity).findPreference<ViperSliderPreference>("v_reverb_wet")!!.value)
+        assertFalse(viper(activity).findPreference<ViperSliderPreference>("v_reverb_wet")!!.isVisible)
+        assertEquals(-18, tone(activity).findPreference<ToneSliderPreference>(ToneController.KEYS[4])!!.value)
         assertNotNull(viper(activity).view)
         assertNotNull(tone(activity).view)
     }

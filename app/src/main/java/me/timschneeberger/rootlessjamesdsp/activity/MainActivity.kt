@@ -165,6 +165,7 @@ class MainActivity : BaseActivity() {
         // Setup views
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
+        supportActionBar?.setTitle(R.string.jamesdsp)
 
         actionBar?.setDisplayHomeAsUpEnabled(true)
         actionBar?.setHomeButtonEnabled(true)
@@ -177,12 +178,13 @@ class MainActivity : BaseActivity() {
         }
 
         // Load main fragment
-        dspFragment = DspFragment.newInstance()
-        if(!hasLoadFailed)
+        val restoredDsp = supportFragmentManager.findFragmentById(R.id.dsp_fragment_container) as? DspFragment
+        dspFragment = restoredDsp ?: DspFragment.newInstance()
+        if(!hasLoadFailed && restoredDsp == null)
             supportFragmentManager.beginTransaction()
                 .replace(R.id.dsp_fragment_container, dspFragment)
                 .commit()
-        else
+        else if(hasLoadFailed)
             showLibraryLoadError()
 
         // Rootless: Check permissions and launch onboarding if required

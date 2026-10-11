@@ -18,6 +18,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
+import me.timschneeberger.rootlessjamesdsp.utils.SliderDoubleTapReset
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.dpToPx
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.registerLocalReceiver
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
@@ -112,6 +113,9 @@ class OutputControlFragment : Fragment(R.layout.fragment_output_control) {
             }
         }
         control.valueRow.setOnClickListener { showValueDialog(control) }
+        if (key == BALANCE_KEY) {
+            SliderDoubleTapReset.install(control.slider, 0f) { saveValue(control, 0f) }
+        }
     }
 
     private fun reloadValues() {

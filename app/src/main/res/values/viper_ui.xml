@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item type="id" name="viper_effect_spectrum" />
+    <item type="id" name="viper_effect_field" />
+    <item type="id" name="viper_effect_diff" />
+    <item type="id" name="viper_effect_reverb" />
+    <item type="id" name="viper_effect_dynamic" />
+    <item type="id" name="viper_effect_tube" />
+    <item type="id" name="viper_effect_bass" />
+    <item type="id" name="viper_effect_clarity" />
+    <item type="id" name="viper_effect_cure" />
+    <item type="id" name="viper_effect_analog" />
+    <string name="viper_slider_integer_range">请输入 %1$d 到 %2$d 之间的整数</string>
+</resources>
