@@ -7,6 +7,21 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization") version "2.1.0"
 }
 
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        // Refine visits all component dependencies, including the unit-test runtime.
+        // These signed security-provider JARs contain no hidden Android API bridges;
+        // bytecode rewriting breaks their signed class digests before Robolectric starts.
+        // AGP instrumentation uses slash-separated class globs, without .class suffixes.
+        variant.components.forEach { component ->
+            component.instrumentation.excludes.addAll(
+                "org/conscrypt/**",
+                "org/bouncycastle/**",
+            )
+        }
+    }
+}
+
 android {
 
     val SUPPORTED_ABIS = setOf("armeabi-v7a", "arm64-v8a")

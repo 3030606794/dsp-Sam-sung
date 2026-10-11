@@ -1,6 +1,6 @@
 # DSP Fusion 0.1.0-alpha2：与旧版的兼容性
 
-alpha2 是应用启动修复版，兼容现有 0.1.0-alpha1 驱动。已经安装融合驱动的用户只需覆盖升级 APK，无需卸载、清除设置或重新刷模块。以下首次安装步骤仅适用于尚未安装融合驱动的用户。
+alpha2 同时修复应用启动与驱动文件标签问题，音频参数协议及算法不变。已经安装融合版的用户可覆盖升级 APK 和驱动模块，然后重启；无需卸载或清除设置。以下首次安装步骤仅适用于尚未安装融合驱动的用户。
 
 这是一套可自行安装测试的初版：一个 DSP Fusion APK、一个 Magisk 模块、一个系统音效库和一个公开音效实例。库内依次运行 JamesDSP → 十项听感调节 → ViPER RE。没有安装到你的手机进行实测。
 
@@ -8,7 +8,7 @@ alpha2 是应用启动修复版，兼容现有 0.1.0-alpha1 驱动。已经安�
 
 1. 在旧 JamesDSP/ViperFX 中导出想保留的预设，保留原 APK 和模块安装包。卸载应用会删除它的私有设置。
 2. 在 Magisk 禁用 JamesDSP Manager (`ainur_jamesdsp`)、ViPER4Android RE Fork、ViPER AIDL，以及 Audio Modification Library Ryuki (`aml`)，然后先重启一次，让旧模块挂载退出。AIDL 原本已禁用，保持禁用。新模块自行生成音效配置，不依赖 AML；让旧 AML 继续挂载旧配置可能覆盖新模块。
-3. 刷入 `DSP-Fusion-Driver-0.1.0-alpha1.zip`，重启。安装 `DSP-Fusion-0.1.0-alpha2.apk`，按应用提示启用音效。旧应用可以按你的计划卸载。首次测试从较低音量和单项效果开始。
+3. 刷入 `DSP-Fusion-Driver-0.1.0-alpha2.zip`，重启。安装 `DSP-Fusion-0.1.0-alpha2.apk`，按应用提示启用音效。旧应用可以按你的计划卸载。首次测试从较低音量和单项效果开始。
 4. 如需回退，禁用 DSP Fusion 模块、重新启用原 JamesDSP/Viper/AML 模块，再重启并安装原 APK、导入原预设。无需删除音乐文件或恢复系统分区。
 
 安装器只修改模块目录里的配置副本，通过 Magisk 挂载；不直接写系统分区。检测到上述旧模块仍启用时会停止安装并明确显示名称。

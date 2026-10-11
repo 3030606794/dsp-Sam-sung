@@ -41,6 +41,7 @@ class InstallerFixtures(unittest.TestCase):
             file.parent.mkdir(parents=True)
             file.write_bytes(b"fixture driver file")
         self.sources = {}
+        self.permissions = Path(self.temp.name) / "permissions.tsv"
         self.script = Path(self.temp.name) / "customize.sh"
         redirected = INSTALLER.replace('CONFIG_BASE=""', f'CONFIG_BASE="{self.base.as_posix()}"', 1)
         self.script.write_text(redirected, encoding="utf-8", newline="\n")
@@ -56,14 +57,20 @@ class InstallerFixtures(unittest.TestCase):
         return file
 
     def install(self, arch="arm64", api="35", success=True):
-        env = dict(os.environ, MODPATH=self.module.as_posix(), ARCH=arch, API=api)
+        self.permissions.write_text("", encoding="utf-8")
+        env = dict(os.environ, MODPATH=self.module.as_posix(), ARCH=arch, API=api,
+                   PERMISSION_LOG=self.permissions.as_posix())
         if os.name == "nt":
             env["PATH"] = "C:/Program Files/Git/usr/bin;" + env.get("PATH", "")
         wrapper = '''
 ui_print() { printf "%s\\n" "$*"; }
 abort() { printf "ABORT: %s\\n" "$*"; exit 1; }
-set_perm_recursive() { :; }
-set_perm() { :; }
+set_perm_recursive() {
+  printf "recursive\\t%s\\t%s\\n" "$1" "${6:-u:object_r:system_file:s0}" >> "$PERMISSION_LOG"
+}
+set_perm() {
+  printf "single\\t%s\\t%s\\n" "$1" "${5:-u:object_r:system_file:s0}" >> "$PERMISSION_LOG"
+}
 . "$1"
 '''
         result = subprocess.run([SH, "-c", wrapper, "fixture", self.script.as_posix()],
@@ -75,6 +82,16 @@ set_perm() { :; }
         for file, original in self.sources.items():
             self.assertEqual(file.read_bytes(), original, f"Installer edited live fixture {file}")
         return result
+
+    def context(self, file):
+        """Replay permission helpers in order, including later recursive overrides."""
+        context = None
+        for line in self.permissions.read_text(encoding="utf-8").splitlines():
+            kind, target, label = line.split("\t")
+            target = Path(target)
+            if file == target or (kind == "recursive" and target in file.parents):
+                context = label
+        return context
 
     def output(self, logical):
         mapped = logical if logical.startswith("/system/") else "/system" + logical
@@ -126,6 +143,20 @@ name='dsp_fusion' library='old' uuid='old'/></effects></audio_effects_conf>"""
             self.check_xml(self.output(path))
         self.assertFalse(self.output("/vendor/etc/audio_effects_haptic.xml").exists())
 
+    def test_vendor_driver_and_configs_receive_hal_accessible_labels(self):
+        for path in ("/vendor/etc/audio_effects.xml", "/vendor/etc/sub dir/audio_effects_extra.xml",
+                     "/system/etc/audio_effects.xml", "/product/etc/audio_effects.xml"):
+            self.config(path)
+        self.install()
+        for abi in ("lib", "lib64"):
+            directory = self.module / f"system/vendor/{abi}/soundfx"
+            self.assertEqual(self.context(directory), "u:object_r:vendor_file:s0")
+            self.assertEqual(self.context(directory / "libdspfusion.so"), "u:object_r:vendor_file:s0")
+        for path in ("/vendor/etc/audio_effects.xml", "/vendor/etc/sub dir/audio_effects_extra.xml"):
+            self.assertEqual(self.context(self.output(path)), "u:object_r:vendor_configs_file:s0")
+        for path in ("/system/etc/audio_effects.xml", "/product/etc/audio_effects.xml"):
+            self.assertEqual(self.context(self.output(path)), "u:object_r:system_file:s0")
+
     def test_odm_only_configuration_is_not_claimed_supported(self):
         self.config("/odm/etc/audio_effects.xml")
         result = self.install(success=False)
@@ -173,6 +204,9 @@ name='dsp_fusion' library='old' uuid='old'/></effects></audio_effects_conf>"""
         self.assertIn("path /vendor/lib/soundfx/libdspfusion.so", self.output(path).read_text())
         self.assertFalse((self.module / "system/vendor/lib64").exists())
         self.assertTrue((self.module / "system/vendor/lib/soundfx/libdspfusion.so").exists())
+        self.assertEqual(self.context(self.module / "system/vendor/lib/soundfx/libdspfusion.so"),
+                         "u:object_r:vendor_file:s0")
+        self.assertEqual(self.context(self.output(path)), "u:object_r:vendor_configs_file:s0")
 
     def test_invalid_config_does_not_become_systemless_override(self):
         self.config("/vendor/etc/audio_effects.xml", "<audio_effects_conf><libraries></effects></audio_effects_conf>")

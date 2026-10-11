@@ -114,7 +114,7 @@ patch_conf() {
   }' "$1" > "$2"
 }
 
-ui_print "DSP Fusion 0.1.0-alpha1"
+ui_print "DSP Fusion 0.1.0-alpha2"
 ui_print "One module / one effect / one application"
 [ "$API" -ge 26 ] || abort "Android 8.0 or newer is required."
 case "$ARCH" in
@@ -174,6 +174,13 @@ done < "$LIST"
 rm -f "$LIST" "$TMP"
 [ "$PATCHED" -gt 0 ] || abort "No supported audio_effects config found; no changes were applied to the system."
 set_perm_recursive "$MODPATH" 0 0 0755 0644
+# Vendor audio HALs cannot load libraries labelled system_file on enforcing ROMs.
+# Apply partition labels after the generic module permissions; bind mounts retain
+# the source inode's label. This replaces the relabelling previously done by AML.
+set_perm_recursive "$MODPATH/system/vendor" 0 0 0755 0644 u:object_r:vendor_file:s0 || abort "Cannot label the vendor audio driver."
+if [ -d "$MODPATH/system/vendor/etc" ]; then
+  set_perm_recursive "$MODPATH/system/vendor/etc" 0 2000 0755 0644 u:object_r:vendor_configs_file:s0 || abort "Cannot label the vendor audio configurations."
+fi
 set_perm "$MODPATH/action.sh" 0 0 0755
 ui_print "Patched $PATCHED systemless audio configurations."
 ui_print "Reboot, then install/open the DSP Fusion APK."
