@@ -337,12 +337,7 @@
     <string name="misc_permission_header">الصلاحيات الاختيارية</string>
     <string name="assets">مصادر</string>
     <string name="network_services">خدمات الشبكات</string>
-    <string name="network_autoeq_api_url">عنوان خلفيةAutoEQ API التلقائي</string>
     <string name="network_invalid_url">تنسيق الرابط غير صالح</string>
-    <string name="network_autoeq_conntest_running">اختبار الاتصال بالخادم…</string>
-    <string name="network_autoeq_conntest_done">تم اختبار الاتصال بنجاح</string>
-    <string name="network_autoeq_conntest_fail">فشل اختبار الاتصال</string>
-    <string name="network_autoeq_conntest_fail_summary">لم يستجب الخادم بشكل صحيح. تأكد من إعداد البرنامج في https://github.com/ThePBone/AutoEqApi بشكل صحيح على الخادم.\n\nخطأ في الشبكة: %1$s\n\nهل تريد استعادة هذا الإعداد إلى القيمة الافتراضية؟</string>
     <string name="about_settings">عن التطبيق</string>
     <string name="about_settings_summary">الاعتمادات، الدعم، التحديثات</string>
     <string name="privacy">الخصوصية</string>
@@ -463,8 +458,6 @@
     <string name="geq_gain">قين</string>
     <string name="geq_frequency">التردد</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">فشل الاتصال بالخادم. %1$s</string>
-    <string name="geq_api_network_error_details_code">استجاب الخادم برمز الخطأ: %1$d</string>
     <string name="autoeq_search">بحث AutoEQ</string>
     <string name="autoeq_enter_model">أدخل نموذج سماعة الرأس الخاص بك…</string>
     <string name="autoeq_partial_results_warning">عرض النتائج %1$d الأولى. يرجى ضبط البحث الخاص بك للحصول على المزيد من النتائج ذات الصلة.</string>

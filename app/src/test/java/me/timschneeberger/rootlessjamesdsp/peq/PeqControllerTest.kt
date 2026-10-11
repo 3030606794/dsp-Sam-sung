@@ -32,57 +32,49 @@ class PeqControllerTest {
     }
 
     @Test fun freshEditorIsNeutralAndNeverEnablesItself() {
-        assertTrue(PeqController.isParametric(app))
         val output = packet()
         assertEquals(1, output[0])
         assertEquals(0, output[1])
         assertEquals(10, output[2])
-        PeqController.useParametric(app)
         assertFalse(prefs.getBoolean(enableKey, false))
-        assertEquals(0, packet()[1])
     }
 
-    @Test fun oldCurveSurvivesUpgradeEditingAndBothModeSwitches() {
+    @Test fun retiredCurveModeCannotBypassOrReplaceParametricBank() {
         val curve = "GraphicEQ: 100 -3; 1000 6; 12000 -2;"
-        prefs.edit().putString(nodesKey, curve).putBoolean(enableKey, true).commit()
-        assertFalse(PeqController.isParametric(app))
+        prefs.edit().putString(nodesKey, curve).putString("fusion_peq_mode", "legacy")
+            .putBoolean(enableKey, true).commit()
         val state = PeqModel.defaultState(170).let {
-            it.copy(bands = it.bands.mapIndexed { i, band -> band.copy(gain = if (i == 169) 4.0 else 0.0) })
+            it.copy(bands = it.bands.mapIndexed { i, band -> band.copy(
+                gain = if (i == 169) 100.0 else 0.0, q = 100.0) })
         }
         assertTrue(PeqRepository(app).save(state))
-        assertEquals(0, packet()[1])
-        assertFalse(PeqController.isParametric(app))
-        assertEquals(curve, prefs.getString(nodesKey, null))
-
-        PeqController.useParametric(app)
         val active = packet()
         assertEquals(1, active[1])
         assertEquals(170, active[2])
-        assertEquals(4000, active[3 + 169 * 5 + 3])
-        PeqController.useLegacy(app)
-        assertEquals(0, packet()[1])
-        assertTrue(prefs.getBoolean(enableKey, false))
+        assertEquals(100000, active[3 + 169 * 5 + 3])
+        assertEquals(100000, active[3 + 169 * 5 + 4])
         assertEquals(curve, prefs.getString(nodesKey, null))
         assertEquals(state, PeqRepository(app).load())
     }
 
-    @Test fun displaySettingsDoNotChangeTheDriverPacketOrEffectSwitch() {
+    @Test fun displaySettingsDoNotChangeDriverPacketOrEffectSwitch() {
         val state = PeqModel.defaultState().let { it.copy(bands = it.bands.map { b -> b.copy(gain = 17.3) }) }
         PeqRepository(app).save(state)
         val before = packet()
-        PeqRepository(app).save(state.copy(gainRange = 6.0, gainStep = 0.25))
+        PeqRepository(app).save(state.copy(gainRange = 100.0, gainStep = 1.5,
+            showQSlider = true, showFrequencySlider = true))
         assertArrayEquals(before, packet())
         assertFalse(prefs.getBoolean(enableKey, false))
     }
 
-    @Test fun importingALegacyCurveDoesNotSilentlyTakeOverTheSelectedParametricMode() {
-        assertTrue(PeqController.isParametric(app))
-        prefs.edit().putString(nodesKey, "GraphicEQ: 100 4; 1000 -6;").commit()
-        assertTrue(PeqController.hasLegacyCurve(app))
-        assertTrue(PeqController.isParametric(app))
-        PeqController.useLegacy(app)
-        assertFalse(PeqController.isParametric(app))
-        assertFalse(prefs.getBoolean(enableKey, false))
+    @Test fun onlyTheExistingEffectSwitchActivatesParametricBank() {
+        PeqRepository(app).save(PeqModel.defaultState())
+        assertEquals(0, packet()[1])
+        prefs.edit().putBoolean(enableKey, true).commit()
+        assertEquals(1, packet()[1])
+        prefs.edit().putString(nodesKey, "GraphicEQ: 100 4; 1000 -6;")
+            .putBoolean(enableKey, false).commit()
+        assertEquals(0, packet()[1])
     }
 
     @Test fun invalidSavedDataIsNotOverwrittenDuringSynchronizationAndFailuresPropagate() {

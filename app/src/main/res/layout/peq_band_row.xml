@@ -38,5 +38,21 @@
                 android:layout_height="48dp" android:minWidth="0dp" android:padding="0dp"
                 android:text="+" android:textSize="24sp" android:contentDescription="@string/peq_gain_increase" />
         </LinearLayout>
+        <LinearLayout android:id="@+id/peq_q_controls" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+            <TextView android:id="@+id/peq_q_value" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodyMedium" />
+            <com.google.android.material.slider.Slider android:id="@+id/peq_q_slider"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:contentDescription="@string/peq_quality" app:labelBehavior="floating" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/peq_frequency_controls" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+            <TextView android:id="@+id/peq_frequency_value" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:textAppearance="?attr/textAppearanceBodyMedium" />
+            <com.google.android.material.slider.Slider android:id="@+id/peq_frequency_slider"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:contentDescription="@string/peq_frequency" app:labelBehavior="floating" />
+        </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

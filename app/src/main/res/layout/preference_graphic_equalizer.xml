@@ -35,15 +35,9 @@
                 style="@style/PreferenceSummaryTextStyle"/>
         </LinearLayout>
 
-    <me.timschneeberger.rootlessjamesdsp.view.GraphicEqualizerSurface
-        android:id="@+id/layout_equalizer"
-        android:layout_width="match_parent"
-        android:layout_height="256dp" />
-
     <me.timschneeberger.rootlessjamesdsp.peq.PeqResponseView
         android:id="@+id/layout_peq"
         android:layout_width="match_parent"
-        android:layout_height="180dp"
-        android:visibility="gone" />
+        android:layout_height="180dp" />
 
 </LinearLayout>

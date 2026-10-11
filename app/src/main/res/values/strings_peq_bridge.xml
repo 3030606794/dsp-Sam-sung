@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="fusion_peq_title">参数均衡器</string>
-    <string name="fusion_peq_legacy">旧曲线</string>
-    <string name="fusion_peq_use_legacy">使用此曲线</string>
     <string name="fusion_peq_band_count">%1$d 个频段 · 点击调节</string>
-    <string name="fusion_peq_legacy_count">旧曲线 · %1$d 个节点</string>
 </resources>

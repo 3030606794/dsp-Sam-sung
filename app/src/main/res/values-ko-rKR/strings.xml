@@ -337,12 +337,7 @@
     <string name="misc_permission_header">선택적 권한</string>
     <string name="assets">에셋</string>
     <string name="network_services">네트워크 서비스</string>
-    <string name="network_autoeq_api_url">AutoEQ API 백엔드 URL</string>
     <string name="network_invalid_url">잘못된 URL 형식</string>
-    <string name="network_autoeq_conntest_running">서버에 연결 테스트 중...</string>
-    <string name="network_autoeq_conntest_done">연결 테스트 성공</string>
-    <string name="network_autoeq_conntest_fail">연결 테스트 실패</string>
-    <string name="network_autoeq_conntest_fail_summary">서버가 제대로 응답하지 않았습니다. https://github.com/ThePBone/AutoEqApi 의 소프트웨어가 서버에서 올바르게 설정되었는지 확인하세요.\n\n 네트워크 오류:%1$s\n\n이 설정을 기본값으로 되돌리시겠습니까?</string>
     <string name="about_settings">정보</string>
     <string name="about_settings_summary">크레딧, 지원, 업데이트</string>
     <string name="privacy">개인 정보 보호</string>
@@ -463,8 +458,6 @@
     <string name="geq_gain">게인</string>
     <string name="geq_frequency">주파수</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">서버 연결 실패. %1$s</string>
-    <string name="geq_api_network_error_details_code">서버에서 오류 코드로 응답했습니다:%1$d</string>
     <string name="autoeq_search">AutoEQ 검색</string>
     <string name="autoeq_enter_model">헤드폰 모델 입력...</string>
     <string name="autoeq_partial_results_warning">첫 번째 %1$d 결과를 보여줍니다. 더 많은 관련 결과를 얻기 위해 검색을 자세히 조정해 주세요.</string>

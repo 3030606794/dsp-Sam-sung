@@ -337,12 +337,7 @@
     <string name="misc_permission_header">Quyền tùy chọn</string>
     <string name="assets">Tài sản</string>
     <string name="network_services">Dịch vụ mạng</string>
-    <string name="network_autoeq_api_url">EQTựđộng API phụ trợ URL</string>
     <string name="network_invalid_url">Định dạng URL không hợp lệ</string>
-    <string name="network_autoeq_conntest_running">Đang kiểm tra kết nối với máy chủ…</string>
-    <string name="network_autoeq_conntest_done">Kiểm tra kết nối thành công</string>
-    <string name="network_autoeq_conntest_fail">Kiểm tra kết nối thất bại</string>
-    <string name="network_autoeq_conntest_fail_summary">Máy chủ không phản hồi chính xác. Đảm bảo phần mềm tại https://github.com/ThePBone/AutoEqApi được thiết lập chính xác trên máy chủ.\n\nLỗi mạng: %1$s\n\nBạn có muốn khôi phục cài đặt này về giá trị mặc định không?</string>
     <string name="about_settings">Thông tin</string>
     <string name="about_settings_summary">Tín dụng, hỗ trợ, các cập nhật</string>
     <string name="privacy">Quyền riêng tư</string>
@@ -463,8 +458,6 @@
     <string name="geq_gain">Thêm</string>
     <string name="geq_frequency">Tần số</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">Không kết nối được với máy chủ. %1$s</string>
-    <string name="geq_api_network_error_details_code">Máy chủ đã phản hồi với mã lỗi: %1$d</string>
     <string name="autoeq_search">Tìm AutoEQ</string>
     <string name="autoeq_enter_model">Nhập mẫu tai nghe của bạn…</string>
     <string name="autoeq_partial_results_warning">Hiển thị kết quả %1$d đầu tiên. Vui lòng tinh chỉnh tìm kiếm của bạn để có được kết quả phù hợp hơn.</string>

@@ -2,7 +2,7 @@ package me.timschneeberger.rootlessjamesdsp.peq
 
 import kotlin.math.roundToInt
 
-/** Fusion driver protocol 3, SET 1250. Values use Hz/dB/Q multiplied by 1000. */
+/** Fusion SET 1250. Values use Hz/dB/Q multiplied by 1000; display preferences never enter this packet. */
 object PeqProtocol {
     const val PARAMETER = 1250
     const val SCHEMA = 1

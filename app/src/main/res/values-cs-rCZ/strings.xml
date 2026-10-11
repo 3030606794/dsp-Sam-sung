@@ -334,12 +334,7 @@
     <string name="misc_permission_header">Volitelná oprávnění</string>
     <string name="assets">Assety</string>
     <string name="network_services">Síťové služby</string>
-    <string name="network_autoeq_api_url">URL adresa backendu AutoEQ API</string>
     <string name="network_invalid_url">Neplatný formát URL</string>
-    <string name="network_autoeq_conntest_running">Testování připojení k serveru…</string>
-    <string name="network_autoeq_conntest_done">Test připojení proběhl úspěšně</string>
-    <string name="network_autoeq_conntest_fail">Test připojení se nezdařil</string>
-    <string name="network_autoeq_conntest_fail_summary">Server nereagoval správně. Ujistěte se, že software na https://github.com/ThePBone/AutoEqApi je správně nastaven na serveru.\n\nChyba sítě: %1$s\n\nChcete obnovit toto nastavení na výchozí hodnotu?</string>
     <string name="about_settings">O Aplikaci</string>
     <string name="about_settings_summary">Poděkování, podpora, aktualizace</string>
     <string name="privacy">Ochrana soukromí</string>
@@ -460,8 +455,6 @@
     <string name="geq_gain">Zesílení</string>
     <string name="geq_frequency">Frekvence</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">Připojení k serveru selhalo. %1$s</string>
-    <string name="geq_api_network_error_details_code">Server odpověděl chybovým kódem: %1$d</string>
     <string name="autoeq_search">Hledání AutoEQ</string>
     <string name="autoeq_enter_model">Zadejte model vašich sluchátek…</string>
     <string name="autoeq_partial_results_warning">Zobrazení prvních %1$d výsledků. Dolaďte prosím své hledání pro získání relevantnějších výsledků.</string>

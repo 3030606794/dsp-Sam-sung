@@ -337,12 +337,7 @@
     <string name="misc_permission_header">Permissions optionnelles</string>
     <string name="assets">Assets</string>
     <string name="network_services">Services réseaux</string>
-    <string name="network_autoeq_api_url">URL du backend de l\'API AutoEQ</string>
     <string name="network_invalid_url">Format d\'URL invalide</string>
-    <string name="network_autoeq_conntest_running">Test de la connexion au serveur…</string>
-    <string name="network_autoeq_conntest_done">Le test de connexion a réussi</string>
-    <string name="network_autoeq_conntest_fail">Le test de connexion a échoué</string>
-    <string name="network_autoeq_conntest_fail_summary">Le serveur n\'a pas répondu correctement. Assurez-vous que le logiciel sur https://github.com/ThePBone/AutoEqApi est correctement configuré sur le serveur.\n\nErreur de réseau : %1$s\n\nVoulez-vous restaurer ce paramètre à la valeur par défaut ?</string>
     <string name="about_settings">À propos</string>
     <string name="about_settings_summary">Crédits, support et mises à jour</string>
     <string name="privacy">Confidentialité</string>
@@ -463,8 +458,6 @@
     <string name="geq_gain">Gain</string>
     <string name="geq_frequency">Fréquence</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">Impossible de se connecter au serveur. %1$s</string>
-    <string name="geq_api_network_error_details_code">Le serveur répond avec le code d\'erreur : %1$d</string>
     <string name="autoeq_search">Recherche AutoEQ</string>
     <string name="autoeq_enter_model">Entrez votre modèle d\'écouteurs…</string>
     <string name="autoeq_partial_results_warning">Affichage des premiers résultats %1$d . Veuillez affiner votre recherche pour obtenir des résultats plus pertinents.</string>

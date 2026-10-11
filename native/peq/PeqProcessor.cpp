@@ -11,41 +11,41 @@ constexpr double pi=3.1415926535897932384626433832795;
 constexpr double stateCeiling=1e100,outputCeiling=1e6;
 double input(float x) { return std::isfinite(x)?double(x):0.; }
 float output(double x) { return std::isfinite(x)?float(std::clamp(x,-outputCeiling,outputCeiling)):0.f; }
+double boundedState(double x) {
+    // Each section keeps its filtered output on overflow; it never substitutes
+    // dry input. Bounding both states and output prevents 170 stacked +100 dB
+    // bands from exceeding double's exponent range. Ordinary audio is untouched.
+    return std::isnan(x)?0.:std::clamp(x,-stateCeiling,stateCeiling);
+}
 }
 
 bool PeqProcessor::design(const Band& band,uint32_t rate,Coeff& c) {
     const double hz=band.frequency/1000.;
     if(!band.enabled || hz>=rate*.5 || (band.type<=HighShelf && band.gain==0)) return false;
-    const double w=2*pi*hz/rate,cs=std::cos(w),sn=std::sin(w);
-    const double alpha=sn/(2*(band.q/1000.)),a=std::pow(10.,band.gain/40000.);
-    double b0=1,b1=0,b2=0,a0=1,a1=-2*cs,a2=1-alpha;
-    // Independent implementation of the standard transfer functions:
-    // https://www.w3.org/TR/audio-eq-cookbook/ . Shelves use Q, not slope S.
+    double g=std::tan(pi*hz/rate),k=1000./band.q;
+    const double a=std::pow(10.,band.gain/40000.);
+    double high=1,mid=k,low=1;
+    // RBJ transfer functions expressed as high/band/low state-variable outputs.
+    // Shelves still use Q, not slope S; band-pass has unity center gain.
+    // Trapezoidal integration is algebraically equivalent to the bilinear RBJ
+    // biquad, without forming 1 +/- a1 + a2 (which can round to zero at Nyquist).
+    // References: https://www.w3.org/TR/audio-eq-cookbook/
+    // https://cytomic.com/files/dsp/SvfLinearTrapAllOutputs.pdf
     switch(band.type) {
-        case Peak:
-            b0=1+alpha*a;b1=-2*cs;b2=1-alpha*a;
-            a0=1+alpha/a;a2=1-alpha/a;break;
-        case LowShelf: {
-            const double t=2*std::sqrt(a)*alpha;
-            b0=a*((a+1)-(a-1)*cs+t);b1=2*a*((a-1)-(a+1)*cs);b2=a*((a+1)-(a-1)*cs-t);
-            a0=(a+1)+(a-1)*cs+t;a1=-2*((a-1)+(a+1)*cs);a2=(a+1)+(a-1)*cs-t;break;
-        }
-        case HighShelf: {
-            const double t=2*std::sqrt(a)*alpha;
-            b0=a*((a+1)+(a-1)*cs+t);b1=-2*a*((a-1)+(a+1)*cs);b2=a*((a+1)+(a-1)*cs-t);
-            a0=(a+1)-(a-1)*cs+t;a1=2*((a-1)-(a+1)*cs);a2=(a+1)-(a-1)*cs-t;break;
-        }
-        case LowPass:b0=(1-cs)*.5;b1=1-cs;b2=b0;a0=1+alpha;break;
-        case HighPass:b0=(1+cs)*.5;b1=-1-cs;b2=b0;a0=1+alpha;break;
-        case Notch:b0=1;b1=-2*cs;b2=1;a0=1+alpha;break;
-        case BandPass:b0=alpha;b1=0;b2=-alpha;a0=1+alpha;break;
+        case Peak: mid=k*a;k/=a;break;
+        case LowShelf: g/=std::sqrt(a);mid=k*a;low=a*a;break;
+        case HighShelf:g*=std::sqrt(a);high=a*a;mid=k*a;break;
+        case LowPass:high=0;mid=0;break;
+        case HighPass:mid=0;low=0;break;
+        case Notch:mid=0;break;
+        case BandPass:high=0;low=0;break;
         default:return false;
     }
-    c={b0/a0,b1/a0,b2/a0,a1/a0,a2/a0};
-    // The normalized second-order denominator must remain strictly Schur stable.
-    return std::isfinite(c.b0)&&std::isfinite(c.b1)&&std::isfinite(c.b2)&&
-        std::isfinite(c.a1)&&std::isfinite(c.a2)&&std::abs(c.a2)<1 &&
-        1+c.a1+c.a2>0 && 1-c.a1+c.a2>0;
+    const double inverse=1/(1+g*(g+k));
+    c={inverse,(g+k)*inverse,g*inverse,g*(g+k)*inverse,g*g*inverse,high,mid,low};
+    // Validated frequencies below Nyquist give finite g>0 and damping k>0.
+    // Every such band is retained; there is no rounded Schur test or pole clamp.
+    return true;
 }
 
 PeqProcessor::Prepared PeqProcessor::prepare(const Settings& settings) const {
@@ -64,7 +64,7 @@ bool PeqProcessor::setParameters(const int32_t* words,size_t count) {
     for(size_t i=0;i<next.count;++i) {
         const auto* p=words+3+i*5;
         if(p[0]<Peak || p[0]>BandPass || (p[1]!=0&&p[1]!=1) ||
-           p[2]<20000 || p[2]>20000000 || p[3]<-24000 || p[3]>24000 || p[4]<100 || p[4]>30000) return false;
+           p[2]<20000 || p[2]>20000000 || p[3]<-100000 || p[3]>100000 || p[4]<100 || p[4]>100000) return false;
         next.bands[i]={p[0],p[1],p[2],p[3],p[4]};
     }
     std::lock_guard<std::mutex> lock(updateMutex_);
@@ -107,15 +107,16 @@ void PeqProcessor::adoptPending() {
 void PeqProcessor::Bank::tick(double& left,double& right) {
     for(size_t i=0;i<filters.count;++i) {
         const auto& c=filters.coefficients[i];auto& s=states[i];
-        double l=c.b0*left+s.l1,r=c.b0*right+s.r1;
-        const double l1=c.b1*left-c.a1*l+s.l2,r1=c.b1*right-c.a1*r+s.r2;
-        const double l2=c.b2*left-c.a2*l,r2=c.b2*right-c.a2*r;
-        if(!std::isfinite(l1)||!std::isfinite(l2)||!std::isfinite(r1)||!std::isfinite(r2)||
-           std::abs(l)>stateCeiling || std::abs(r)>stateCeiling) {
-            s={};l=std::clamp(std::isfinite(left)?left:0.,-outputCeiling,outputCeiling);
-            r=std::clamp(std::isfinite(right)?right:0.,-outputCeiling,outputCeiling);
-        } else s={l1,l2,r1,r2};
-        left=l;right=r;
+        const auto channel=[&c](double x,double& s1,double& s2) {
+            const double delta=x-s2;
+            const double step1=c.step1*delta-c.feedback1*s1;
+            const double step2=c.step2*delta+c.step1*s1;
+            const double high=c.highInput*delta-c.highState*s1;
+            const double band=s1+step1,low=s2+step2;
+            s1=boundedState(s1+2*step1);s2=boundedState(s2+2*step2);
+            return boundedState(c.mixHigh*high+c.mixBand*band+c.mixLow*low);
+        };
+        left=channel(left,s.l1,s.l2);right=channel(right,s.r1,s.r2);
     }
 }
 

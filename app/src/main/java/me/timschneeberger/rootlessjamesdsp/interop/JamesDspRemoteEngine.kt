@@ -47,7 +47,6 @@ class JamesDspRemoteEngine(
     }
 
     private val fusionPackets = mutableMapOf<Int, IntArray>()
-    private var lastParametricMode: Boolean? = null
     private var legacyCurveDisabled = false
     @Volatile private var graphicEqNeedsRetry = false
     @Volatile private var convolverFailure: String? = null
@@ -114,7 +113,6 @@ class JamesDspRemoteEngine(
             effect?.release()
             fusionPackets.clear()
             legacyCurveDisabled = false
-            lastParametricMode = null
             clearCache()
             effect = createEffect()
             effect?.enabled = wasEnabled
@@ -136,11 +134,10 @@ class JamesDspRemoteEngine(
         }
 
         checkEngine()
-        val parametricMode = PeqController.isParametric(context)
-        val targets = if (lastParametricMode != parametricMode || graphicEqNeedsRetry)
+        val targets = if (graphicEqNeedsRetry)
             (forceUpdateNamespaces ?: emptyArray()) + Constants.PREF_GEQ
         else forceUpdateNamespaces
-        if (syncFusionPreferences()) lastParametricMode = parametricMode
+        syncFusionPreferences()
         super.syncWithPreferences(targets)
     }
 
@@ -322,23 +319,9 @@ class JamesDspRemoteEngine(
 
     @Synchronized
     override fun setGraphicEqInternal(enable: Boolean, bands: String): Boolean {
-        val legacyEnabled = enable && !PeqController.isParametric(context)
-        // Bypass PEQ explicitly for the reverse handoff; do not depend on an
-        // earlier asynchronous preference update having reached the driver.
-        if (legacyEnabled && !sendFusionParameter(PeqController.PARAMETER, intArrayOf(1, 0, 0))) {
-            graphicEqNeedsRetry = true
-            return false
-        }
-        val prevCrc = this.graphicEqHash
-        val currentCrc = bands.crc()
-
-        Timber.i("GraphicEQ hash before: $prevCrc, current: $currentCrc")
-        if (prevCrc != currentCrc && legacyEnabled) {
-            effect.setParameterCharBuffer(12001, 10006, bands)
-            effect.setParameter(25000, currentCrc) // Commit hash
-        }
-
-        return writeLegacyEnable(legacyEnabled)
+        // The old curve/AutoEQ processor is retired. Imported legacy strings
+        // remain in the profile archive only and cannot take over this switch.
+        return writeLegacyEnable(false)
     }
 
     override fun setLiveprogInternal(enable: Boolean, name: String, script: String): Boolean {
@@ -399,7 +382,7 @@ class JamesDspRemoteEngine(
         private const val FUSION_PROTOCOL = 131080
         private const val FUSION_CAPABILITIES = 131081
         private const val FUSION_BALANCE = 131074
-        private const val REQUIRED_PROTOCOL = 3
+        private const val REQUIRED_PROTOCOL = 4
 
         fun isPluginInstalled(): PluginState {
             // AIDL can omit custom effects from queryEffects. Probe the unique UUID and handshake.

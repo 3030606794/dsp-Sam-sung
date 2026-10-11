@@ -9,7 +9,8 @@ data class PeqLoadResult(
     val state: PeqState,
     val hasSavedState: Boolean,
     val corrupt: Boolean,
-    val error: String? = null
+    val error: String? = null,
+    val oldGeneratedDistribution: Boolean = false
 )
 
 /** Stored with existing graphic EQ presets, without replacing its legacy nodes or enable key. */
@@ -25,7 +26,8 @@ class PeqRepository(private val preferences: SharedPreferences) {
         if (!hasSavedState()) return PeqLoadResult(PeqModel.defaultState(), false, false)
         return try {
             val encoded = requireNotNull(preferences.getString(KEY_STATE, null)) { "Missing PEQ state" }
-            PeqLoadResult(importJson(encoded), true, false)
+            val state = importJson(encoded)
+            PeqLoadResult(state, true, false, oldGeneratedDistribution = PeqModel.isOldGeneratedDistribution(state))
         } catch (failure: RuntimeException) {
             // Keep the original payload available for diagnosis or manual recovery.
             PeqLoadResult(PeqModel.defaultState(), true, true, failure.message ?: "Invalid PEQ state")
@@ -48,6 +50,8 @@ class PeqRepository(private val preferences: SharedPreferences) {
                 put("schema", SCHEMA)
                 put("gainRange", state.gainRange)
                 put("gainStep", state.gainStep)
+                put("showQSlider", state.showQSlider)
+                put("showFrequencySlider", state.showFrequencySlider)
                 put("bands", buildJsonArray {
                     state.bands.forEach { band -> add(buildJsonObject {
                         put("id", band.id)
@@ -56,6 +60,7 @@ class PeqRepository(private val preferences: SharedPreferences) {
                         put("frequency", band.frequency)
                         put("gain", band.gain)
                         put("q", band.q)
+                        put("qualityDisplay", band.qualityDisplay.name)
                     }) }
                 })
             }.toString()
@@ -81,11 +86,18 @@ class PeqRepository(private val preferences: SharedPreferences) {
                     require(enabled != null && !enabled.isString && enabled.booleanOrNull != null) {
                         "enabled must be a boolean"
                     }
+                    val qualityDisplay = if (band.containsKey("qualityDisplay")) {
+                        val name = band.text("qualityDisplay")
+                        PeqQualityDisplay.entries.firstOrNull { it.name == name }
+                            ?: throw IllegalArgumentException("Unknown quality display: $name")
+                    } else PeqQualityDisplay.Q
                     PeqBand(band.text("id"), type, enabled.boolean, band.number("frequency"),
-                        band.number("gain"), band.number("q"))
+                        band.number("gain"), band.number("q"), qualityDisplay)
                 },
                 gainRange = root.number("gainRange"),
-                gainStep = root.number("gainStep")
+                gainStep = root.number("gainStep"),
+                showQSlider = root.optionalBoolean("showQSlider", false),
+                showFrequencySlider = root.optionalBoolean("showFrequencySlider", false)
             ))
         }
 
@@ -99,6 +111,13 @@ class PeqRepository(private val preferences: SharedPreferences) {
             val value = this[key] as? JsonPrimitive
             require(value != null && !value.isString) { "$key must be a number" }
             return requireNotNull(value.doubleOrNull?.takeIf { it.isFinite() }) { "$key must be a finite number" }
+        }
+
+        private fun JsonObject.optionalBoolean(key: String, default: Boolean): Boolean {
+            if (!containsKey(key)) return default
+            val value = this[key] as? JsonPrimitive
+            require(value != null && !value.isString && value.booleanOrNull != null) { "$key must be a boolean" }
+            return value.boolean
         }
     }
 }

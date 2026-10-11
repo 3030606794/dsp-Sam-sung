@@ -50,13 +50,11 @@ class PeqPresetIntegrationTest {
         return preset to metadata
     }
 
-    @Test fun selectedNeutralPeqWithoutJsonRequiresNewAppAndPreservesLegacyCurve() {
+    @Test fun neutralBankRequiresAlpha7EvenWithoutJson() {
         prefs.edit().putString(nodesKey, legacyCurve).putBoolean(enabledKey, true).commit()
-        assertFalse(PeqController.isParametric(app))
-        PeqController.useParametric(app)
         assertFalse(PeqRepository(app).hasSavedState())
         val (preset, metadata) = export()
-        assertEquals("1006", metadata[Preset.META_MIN_VERSION_CODE])
+        assertEquals("1007", metadata[Preset.META_MIN_VERSION_CODE])
         val folder = temporary.newFolder()
         Tar.Reader(preset.file().inputStream()).extract(folder)
         val document = DocumentBuilderFactory.newInstance().newDocumentBuilder()
@@ -65,41 +63,41 @@ class PeqPresetIntegrationTest {
         val exported = (0 until strings.length).associate { index ->
             strings.item(index).let { it.attributes.getNamedItem("name").nodeValue to it.textContent }
         }
-        assertEquals(PeqController.PARAMETRIC, exported[PeqController.MODE_KEY])
         assertEquals(legacyCurve, exported[nodesKey])
         assertFalse(exported.containsKey(PeqRepository.KEY_STATE))
     }
 
-    @Test fun unchangedLegacyOnlyPresetKeepsItsOlderAppCompatibility() {
+    @Test fun retiredModeIsArchivedButCannotLowerRequiredVersion() {
         prefs.edit().putString(nodesKey, legacyCurve).putBoolean(enabledKey, true)
-            .putString(PeqController.MODE_KEY, PeqController.LEGACY).commit()
-        assertEquals(Preset.MIN_VERSION_CODE, export().second[Preset.META_MIN_VERSION_CODE])
+            .putString("fusion_peq_mode", "legacy").commit()
+        assertEquals("1007", export().second[Preset.META_MIN_VERSION_CODE])
     }
 
-    @Test fun savedPeqIsProtectedEvenWhenLegacyModeIsCurrentlySelected() {
-        prefs.edit().putString(PeqController.MODE_KEY, PeqController.LEGACY).commit()
-        PeqRepository(app).save(PeqModel.defaultState())
-        assertEquals("1006", export().second[Preset.META_MIN_VERSION_CODE])
+    @Test fun savedExtremePeqIsProtectedAgainstOlderImporters() {
+        val state = PeqModel.defaultState(1).let { it.copy(
+            bands = it.bands.map { b -> b.copy(gain = 100.0, q = 100.0) },
+            gainRange = 100.0, gainStep = 2.0, showQSlider = true, showFrequencySlider = true) }
+        assertTrue(PeqRepository(app).save(state))
+        assertEquals("1007", export().second[Preset.META_MIN_VERSION_CODE])
     }
 
-    @Test fun profileArchiveRestoresAll170BandsModeDisplaySettingsAndUnchangedLegacyNodes() {
+    @Test fun profileArchiveRestoresAll170BandsDisplayControlsAndUnchangedLegacyNodes() {
         val original = PeqModel.defaultState(170).let { state -> state.copy(
             bands = state.bands.mapIndexed { index, band -> band.copy(
                 type = PeqFilterType.entries[index % 7], enabled = index % 2 == 0,
-                gain = 22.123, q = 0.345 + index * 0.01) },
-            gainRange = 6.0, gainStep = 0.25) }
+                gain = if (index % 2 == 0) 100.0 else -100.0, q = 100.0) },
+            gainRange = 100.0, gainStep = 1.5, showQSlider = true, showFrequencySlider = true) }
         PeqRepository(app).save(original)
-        prefs.edit().putString(PeqController.MODE_KEY, PeqController.PARAMETRIC)
+        prefs.edit()
             .putString(nodesKey, legacyCurve).putBoolean(enabledKey, true).commit()
         val (preset, _) = export()
 
         PeqRepository(app).save(PeqModel.defaultState(1))
-        prefs.edit().putString(PeqController.MODE_KEY, PeqController.LEGACY)
+        prefs.edit()
             .putString(nodesKey, "GraphicEQ: 500 -12;").putBoolean(enabledKey, false).commit()
         Preset.load(app, preset.file().inputStream())
 
         assertEquals(original, PeqRepository(app).load())
-        assertTrue(PeqController.isParametric(app))
         assertEquals(legacyCurve, prefs.getString(nodesKey, null))
         assertTrue(prefs.getBoolean(enabledKey, false))
     }

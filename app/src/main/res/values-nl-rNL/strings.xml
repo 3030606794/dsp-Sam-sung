@@ -337,12 +337,7 @@
     <string name="misc_permission_header">Optionele machtigingen</string>
     <string name="assets">Assets</string>
     <string name="network_services">Netwerk services</string>
-    <string name="network_autoeq_api_url">AutoEQ API backend URL</string>
     <string name="network_invalid_url">Ongeldig URL formaat</string>
-    <string name="network_autoeq_conntest_running">Testen van verbinding met server…</string>
-    <string name="network_autoeq_conntest_done">Verbindingstest geslaagd</string>
-    <string name="network_autoeq_conntest_fail">Verbindingstest mislukt</string>
-    <string name="network_autoeq_conntest_fail_summary">Server heeft niet juist gereageerd. Zorg ervoor dat de software op https://github.com/ThePBone/AutoEqApi correct is ingesteld op de server.\n\nNetwerkfout: %1$s\n\nWilt u deze instelling herstellen naar de standaardwaarde?</string>
     <string name="about_settings">Over</string>
     <string name="about_settings_summary">Credit, ondersteuning, updates</string>
     <string name="privacy">Privacy</string>
@@ -463,8 +458,6 @@
     <string name="geq_gain">Versterking</string>
     <string name="geq_frequency">Frequentie</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">Kan geen verbinding maken met de server. %1$s</string>
-    <string name="geq_api_network_error_details_code">Server reageerde met foutcode: %1$d</string>
     <string name="autoeq_search">AutoEQ zoeken</string>
     <string name="autoeq_enter_model">Voer uw hoofdtelefoon model in…</string>
     <string name="autoeq_partial_results_warning">Toont de eerste %1$d resultaten. Pas uw zoekopdracht aan om meer relevante resultaten te krijgen.</string>

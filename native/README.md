@@ -10,7 +10,7 @@ The old drivers' `AELI` symbols are renamed internally; the linker exports only 
 |---|---|
 | Implementation UUID | `30306067-9400-4d53-9000-000000000001` |
 | Type UUID | `30306067-9400-4d53-9000-000000000000` |
-| Control protocol | 3 |
+| Control protocol | 4 |
 | Capabilities | 15: James = 1, ViPER = 2, listening controls = 4, PEQ = 8 |
 | Channels | Stereo only |
 | External PCM formats | float, signed 16-bit, signed 32-bit, packed signed 24-bit, signed 8.24 |
@@ -29,7 +29,7 @@ Use Android `EFFECT_CMD_SET_PARAM` / `EFFECT_CMD_GET_PARAM`, `effect_param_t.psi
 | 131073 | SET/GET | ViPER stage enable, int32 0 or 1 |
 | 131074 | SET/GET | Unified balance, int32 −100 (left) to +100 (right), 0 centered |
 | 1250 | SET | PEQ snapshot, schema 1; see [`peq/README.md`](peq/README.md) |
-| 131080 | GET | Protocol version, int32 = 3 |
+| 131080 | GET | Protocol version, int32 = 4 |
 | 131081 | GET | Capability bits, int32 = 15 |
 | 196608 | SET | 44 bytes: int32 enable followed by ten int32 controls |
 
@@ -41,7 +41,7 @@ Legacy James GET 20001 reports the James engine's internal processing rate, not 
 
 ViPER controls use their original 32-bit integer protocol. IDs 65570/65571 (dynamic-system frequency pairs) and 65572 (side gains) take two int32 values. Reverb IDs 65560–65564 use integer percentages 0–100; their meanings are room size, width, damping, wet, dry. Differential delay is hundredths of a millisecond. The application's `ViperParameters.kt` is the UI range and encoding specification.
 
-Since protocol 2, ViPER's ten-band EQ, speaker optimization, and output volume/pan/limiter algorithms are removed. Their old IDs 65551, 65552, 65586, 65587, 65588, and 65603 return `-ENOSYS`, including when disabling them. Output limiting uses the retained James controls; balance uses 131074 and remains independent of the ViPER stage. The current application requires the matching protocol-3 driver.
+Since protocol 2, ViPER's ten-band EQ, speaker optimization, and output volume/pan/limiter algorithms are removed. Their old IDs 65551, 65552, 65586, 65587, 65588, and 65603 return `-ENOSYS`, including when disabling them. Output limiting uses the retained James controls; balance uses 131074 and remains independent of the ViPER stage. Protocol 4 expands PEQ to ±100 dB and Q 100 with the same schema-1 packet layout. The current application requires the matching protocol-4 driver; install its APK and module together.
 
 Incomplete upstream paths return `-ENOSYS`: native ViPER IR upload/convolution, headphone VHE, AGC, FET compressor, and native ViPER DDC coefficient upload. VHE disable is accepted. User DDC and IR processing are provided by the existing JamesDSP controls. The main ViPER environment/field-surround control is implemented and is distinct from the incomplete VHE path.
 
@@ -54,7 +54,7 @@ Incomplete upstream paths return `-ENOSYS`: native ViPER IR upload/convolution, 
 - The removed ViPER limiter no longer adds its approximately 255-sample delay. The final clamp prevents nonfinite/over-range processed output; ACCUMULATE still honors the host's mixing semantics.
 - ViPER reverb retains its original fixed sample delays. Its time behavior changes with sample rate. The unified processing order, floating-point toolchain and corrected upstream bugs can also cause differences from separately installed old binaries.
 
-Local upstream corrections include effect-handle disposal, deterministic reverb initialization, PConv pointer ownership, stereo buffer lengths/offsets, and the tube simulator's skipped frames and unintended reset disable. Crossfeed mode 0 initializes the filter that it actually processes. AnalogX no longer inserts 250 ms of silence after reset. Algorithm additions are kept in `fusion/` and `tone/`; changes to vendored code should remain small and reviewable.
+Local upstream corrections include effect-handle disposal, deterministic reverb initialization, PConv pointer ownership, stereo buffer lengths/offsets, and the tube simulator's skipped frames and unintended reset disable. Crossfeed mode 0 initializes the filter that it actually processes. AnalogX no longer inserts 250 ms of silence after reset. Algorithm additions are kept in `fusion/`, `tone/` and `peq/`; changes to vendored code should remain small and reviewable.
 
 ## Build and test
 

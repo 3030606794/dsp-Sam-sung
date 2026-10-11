@@ -57,7 +57,7 @@ int main() {
     effect_descriptor_t instanceDescriptor{};
     assert((*h)->get_descriptor(h,&instanceDescriptor)==0);
     assert(instanceDescriptor.memoryUsage==descriptor.memoryUsage);
-    assert(get(h,131080)==3 && get(h,131081)==15);
+    assert(get(h,131080)==4 && get(h,131081)==15);
     assert(get(h,20002)>0 && get(h,20001)==48000);
     assert(set(h,131072,0)==0 && set(h,131073,0)==0);
     assert(cmd(h,EFFECT_CMD_ENABLE)==0);

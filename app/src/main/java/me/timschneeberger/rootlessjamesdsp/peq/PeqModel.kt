@@ -1,6 +1,7 @@
 package me.timschneeberger.rootlessjamesdsp.peq
 
 import java.util.UUID
+import kotlin.math.abs
 import kotlin.math.pow
 
 enum class PeqFilterType(val wireId: Int, val usesGain: Boolean) {
@@ -8,31 +9,36 @@ enum class PeqFilterType(val wireId: Int, val usesGain: Boolean) {
     LOW_PASS(3, false), HIGH_PASS(4, false), NOTCH(5, false), BAND_PASS(6, false)
 }
 
+enum class PeqQualityDisplay { Q, BW }
+
 data class PeqBand(
     val id: String = UUID.randomUUID().toString(),
     val type: PeqFilterType = PeqFilterType.PEAK,
     val enabled: Boolean = true,
     val frequency: Double = 1000.0,
     val gain: Double = 0.0,
-    val q: Double = 0.7071067811865476
+    val q: Double = 0.7071067811865476,
+    val qualityDisplay: PeqQualityDisplay = PeqQualityDisplay.Q
 )
 
 /** The effect's enable switch stays in the existing key_geq_enable preference. */
 data class PeqState(
     val bands: List<PeqBand>,
     val gainRange: Double = 18.0,
-    val gainStep: Double = 0.1
+    val gainStep: Double = 0.1,
+    val showQSlider: Boolean = false,
+    val showFrequencySlider: Boolean = false
 )
 
 object PeqModel {
     const val MAX_BANDS = 170
     const val MIN_FREQUENCY = 20.0
     const val MAX_FREQUENCY = 20000.0
-    const val MAX_GAIN = 24.0
+    const val MAX_GAIN = 100.0
     const val MIN_Q = 0.1
-    const val MAX_Q = 30.0
-    val GAIN_RANGES = listOf(6.0, 12.0, 18.0, 24.0)
-    val GAIN_STEPS = listOf(0.1, 0.25, 0.5, 1.0)
+    const val MAX_Q = 100.0
+    val GAIN_RANGES = listOf(6.0, 12.0, 18.0, 24.0, 36.0, 48.0, 60.0, 80.0, 100.0)
+    val GAIN_STEPS = listOf(0.1, 0.25, 0.5, 1.0, 1.5, 2.0)
 
     fun validateBand(band: PeqBand): PeqBand {
         require(band.id.isNotBlank() && band.id.length <= 128 && band.id.none { it.isISOControl() }) {
@@ -42,9 +48,9 @@ object PeqModel {
             "Frequency must be between 20 and 20000 Hz"
         }
         require(band.gain.isFinite() && band.gain in -MAX_GAIN..MAX_GAIN) {
-            "Gain must be between -24 and 24 dB"
+            "Gain must be between -100 and 100 dB"
         }
-        require(band.q.isFinite() && band.q in MIN_Q..MAX_Q) { "Q must be between 0.1 and 30" }
+        require(band.q.isFinite() && band.q in MIN_Q..MAX_Q) { "Q must be between 0.1 and 100" }
         return band
     }
 
@@ -59,25 +65,51 @@ object PeqModel {
 
     fun defaultState(count: Int = 10): PeqState {
         require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
-        val tenBandFrequencies = listOf(31.5, 63.0, 125.0, 250.0, 500.0, 1000.0,
-            2000.0, 4000.0, 8000.0, 16000.0)
         return PeqState(List(count) { index ->
-            PeqBand(id = "default-${index + 1}", frequency =
-                if (count == 10) tenBandFrequencies[index] else distributedFrequency(index, count))
+            PeqBand(id = "default-${index + 1}", frequency = distributedFrequency(index, count))
         })
     }
 
-    /** Existing bands, ids and gains are retained exactly; shrinking is confirmed by the UI. */
+    /** Count changes redistribute frequencies; all retained bands keep their other parameters. */
     fun resize(state: PeqState, count: Int): PeqState {
         validate(state)
         require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
-        if (count <= state.bands.size) return state.copy(bands = state.bands.take(count))
-        return state.copy(bands = state.bands + List(count - state.bands.size) { offset ->
-            PeqBand(frequency = distributedFrequency(state.bands.size + offset, count))
+        if (count == state.bands.size) return state
+        val retained = state.bands.take(count)
+        val bands = retained + List((count - retained.size).coerceAtLeast(0)) { PeqBand() }
+        return redistribute(state.copy(bands = bands))
+    }
+
+    /** Explicitly requested operation: overwrite only the frequencies, including manually set ones. */
+    fun redistribute(state: PeqState): PeqState {
+        validate(state)
+        return state.copy(bands = state.bands.mapIndexed { index, band ->
+            band.copy(frequency = distributedFrequency(index, state.bands.size))
         })
     }
 
+    /**
+     * Conservative alpha6 detection. There was no stored provenance, so recognize only a
+     * complete untouched default prefix, optionally followed by one generated expansion.
+     * Complex edit/resize histories remain unchanged and can be redistributed explicitly.
+     */
+    fun isOldGeneratedDistribution(state: PeqState): Boolean {
+        val count = state.bands.size
+        if (count !in 1..MAX_BANDS) return false
+        val oldTen = listOf(31.5, 63.0, 125.0, 250.0, 500.0, 1000.0,
+            2000.0, 4000.0, 8000.0, 16000.0)
+        return state.bands.withIndex().all { (index, band) ->
+            if (index < 10) band.id == "default-${index + 1}" &&
+                frequencyMatches(band.frequency, oldTen[index])
+            else frequencyMatches(band.frequency, distributedFrequency(index, count))
+        }
+    }
+
     private fun distributedFrequency(index: Int, count: Int): Double =
-        if (count <= 1) 1000.0 else MIN_FREQUENCY *
-            (MAX_FREQUENCY / MIN_FREQUENCY).pow(index.toDouble() / (count - 1))
+        if (count <= 1) (MIN_FREQUENCY * MAX_FREQUENCY).pow(0.5)
+        else if (index == count - 1) MAX_FREQUENCY
+        else MIN_FREQUENCY * (MAX_FREQUENCY / MIN_FREQUENCY).pow(index.toDouble() / (count - 1))
+
+    private fun frequencyMatches(actual: Double, expected: Double): Boolean =
+        actual.isFinite() && abs(actual - expected) <= maxOf(1e-10, abs(expected) * 1e-12)
 }

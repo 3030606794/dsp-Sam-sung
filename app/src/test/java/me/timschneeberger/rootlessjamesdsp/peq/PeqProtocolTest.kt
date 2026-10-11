@@ -23,14 +23,22 @@ class PeqProtocolTest {
 
     @Test fun limitsRoundWithoutOverflowAndInvalidInputDoesNotBecomeAPacket() {
         val extremes = PeqState(listOf(
-            PeqBand("minimum", frequency = 20.0, gain = -24.0, q = 0.1),
-            PeqBand("maximum", frequency = 20000.0, gain = 24.0, q = 30.0)
+            PeqBand("minimum", frequency = 20.0, gain = -100.0, q = 0.1),
+            PeqBand("maximum", frequency = 20000.0, gain = 100.0, q = 100.0)
         ))
-        assertArrayEquals(intArrayOf(1, 1, 2, 0, 1, 20000, -24000, 100,
-            0, 1, 20000000, 24000, 30000), PeqProtocol.payload(extremes, true))
+        assertArrayEquals(intArrayOf(1, 1, 2, 0, 1, 20000, -100000, 100,
+            0, 1, 20000000, 100000, 100000), PeqProtocol.payload(extremes, true))
         assertArrayEquals(intArrayOf(1, 0, 0), PeqProtocol.payload(PeqState(emptyList()), false))
         assertThrows(IllegalArgumentException::class.java) {
             PeqProtocol.payload(PeqState(listOf(PeqBand(q = Double.NaN))), true)
         }
+    }
+
+    @Test fun displayModeAndSliderVisibilityCannotChangeSound() {
+        val state = PeqModel.defaultState().let { it.copy(bands = it.bands.map { band ->
+            band.copy(gain = 100.0, q = 100.0) }) }
+        val displayed = state.copy(showFrequencySlider = true, showQSlider = true, gainRange = 100.0,
+            gainStep = 2.0, bands = state.bands.map { it.copy(qualityDisplay = PeqQualityDisplay.BW) })
+        assertArrayEquals(PeqProtocol.payload(state, true), PeqProtocol.payload(displayed, true))
     }
 }

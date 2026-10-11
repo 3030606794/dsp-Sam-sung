@@ -6,10 +6,7 @@ import android.system.ErrnoException
 import me.timschneeberger.rootlessjamesdsp.BuildConfig
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.backup.BackupManager
-import me.timschneeberger.rootlessjamesdsp.interop.PreferenceCache
 import me.timschneeberger.rootlessjamesdsp.liveprog.EelParser
-import me.timschneeberger.rootlessjamesdsp.peq.PeqController
-import me.timschneeberger.rootlessjamesdsp.peq.PeqRepository
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.broadcastPresetLoadEvent
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
@@ -62,12 +59,6 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
 
         Timber.d("Saving preset $name to ${targetFile.path}")
 
-        // Even an untouched neutral PEQ bank can replace a preserved legacy curve.
-        // Older apps ignore the mode and would enable that curve again on import.
-        val requiresParametricSupport = PeqRepository(ctx).hasSavedState() ||
-            PreferenceCache.getPreferences(ctx, Constants.PREF_GEQ).all[PeqController.MODE_KEY] ==
-            PeqController.PARAMETRIC
-
         // Create a TarOutputStream
         try {
             Tar.Composer(targetFile).use { c ->
@@ -76,7 +67,9 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                     META_APP_VERSION to BuildConfig.VERSION_NAME,
                     META_APP_FLAVOR to BuildConfig.FLAVOR,
                     META_LIVEPROG_INCLUDED to false.toString(),
-                    META_MIN_VERSION_CODE to if (requiresParametricSupport) "1006" else MIN_VERSION_CODE
+                    // Older apps cannot preserve Q100/gain100 or the retired
+                    // curve selection semantics, even for an untouched bank.
+                    META_MIN_VERSION_CODE to "1007"
                 )
 
                 currentPath(ctx)

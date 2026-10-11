@@ -191,8 +191,21 @@ void testPeqProtocolAndChainOrder() {
     const auto limited=engine.render(input,960);
     // If PEQ ran after James, the +12 dB peak could escape the -6 dB limiter.
     for(float s:limited) assert(std::isfinite(s)&&std::abs(s)<=.502f);
+    auto extreme=peq;extreme[6]=100000;extreme[7]=100000;
+    assert(engine.raw(1250,extreme.data(),sizeof(extreme))==0);
+    const auto extremeLimited=engine.render(input,960);
+    for(float s:extremeLimited) assert(std::isfinite(s)&&std::abs(s)<=.502f);
+    extreme[6]=-100000;assert(engine.raw(1250,extreme.data(),sizeof(extreme))==0);
+    extreme[7]=100001;assert(engine.raw(1250,extreme.data(),sizeof(extreme))==-EINVAL);
+    extreme[7]=100000;extreme[6]=-100001;
+    assert(engine.raw(1250,extreme.data(),sizeof(extreme))==-EINVAL);
+    std::vector<int32_t> full{1,1,170};
+    for(int i=0;i<170;++i) full.insert(full.end(),{i%3,1,1000000,100000,100000});
+    assert(full.size()==853 && engine.raw(1250,full.data(),uint32_t(full.size()*4))==0);
+    const auto fullLimited=engine.render(input,960);
+    for(float s:fullLimited) assert(std::isfinite(s)&&std::abs(s)<=.502f);
     const std::array<int32_t,3> off{1,0,0};assert(engine.raw(1250,off.data(),sizeof(off))==0);
-    std::puts("PEQ wire validation, independent stage and placement before James limiter passed.");
+    std::puts("PEQ +/-100 dB/Q100 wire validation, independent stage and placement before James limiter passed.");
 }
 void testAnalogAndTube() {
     const auto input=signal(16384);

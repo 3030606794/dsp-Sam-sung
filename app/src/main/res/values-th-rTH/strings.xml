@@ -338,12 +338,7 @@
     <string name="misc_permission_header">สิทธิ์เพิ่มเติม</string>
     <string name="assets">สินทรัพย์</string>
     <string name="network_services">บริการเครือข่าย</string>
-    <string name="network_autoeq_api_url">URL แบ็กเอนด์ AutoEQ API</string>
     <string name="network_invalid_url">รูปแบบ URL ไม่ถูกต้อง</string>
-    <string name="network_autoeq_conntest_running">กำลังทดสอบการเชื่อมต่อกับเซิร์ฟเวอร์…</string>
-    <string name="network_autoeq_conntest_done">การทดสอบการเชื่อมต่อสำเร็จ!</string>
-    <string name="network_autoeq_conntest_fail">การทดสอบการเชื่อมต่อล้มเหลว</string>
-    <string name="network_autoeq_conntest_fail_summary">เซิร์ฟเวอร์ตอบสนองไม่ถูกต้อง  ตรวจสอบว่าซอฟต์แวร์ที่ https://github.com/ThePBone/AutoEqApi ได้รับการตั้งค่าอย่างถูกต้องบนเซิร์ฟเวอร์\n\nข้อผิดพลาดของเครือข่าย: %1$s\n\nคุณต้องการคืนค่าการตั้งค่านี้เป็นค่าเริ่มต้นหรือไม่</string>
     <string name="about_settings">เกี่ยวกับเรา</string>
     <string name="about_settings_summary">เครดิต การสนับสนุน การอัปเดต</string>
     <string name="privacy">ความเป็นส่วนตัว</string>
@@ -464,8 +459,6 @@
     <string name="geq_gain">ได้รับ</string>
     <string name="geq_frequency">ความถี่</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์</string>
-    <string name="geq_api_network_error_details_code">เซิร์ฟเวอร์ตอบกลับด้วยรหัสข้อผิดพลาด: %1$d</string>
     <string name="autoeq_search">ค้นหา AutoEQ</string>
     <string name="autoeq_enter_model">ใส่รุ่นหูฟังของคุณ…</string>
     <string name="autoeq_partial_results_warning">กำลังแสดงผลลัพธ์ %1$d แรก  โปรดปรับแต่งการค้นหาของคุณอย่างละเอียดเพื่อให้ได้ผลลัพธ์ที่เกี่ยวข้องมากขึ้น</string>

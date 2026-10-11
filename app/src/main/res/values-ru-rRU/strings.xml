@@ -337,12 +337,7 @@
     <string name="misc_permission_header">Дополнительные разрешения</string>
     <string name="assets">Ресурсы</string>
     <string name="network_services">Сетевые сервисы</string>
-    <string name="network_autoeq_api_url">URL-адрес API-бэкенда AutoEQ</string>
     <string name="network_invalid_url">Неверный формат URL-адреса</string>
-    <string name="network_autoeq_conntest_running">Проверка соединения с сервером…</string>
-    <string name="network_autoeq_conntest_done">Соединение успешно установлено</string>
-    <string name="network_autoeq_conntest_fail">Проверка соединения не удалась</string>
-    <string name="network_autoeq_conntest_fail_summary">Сервер не дал правильного ответа. Убедитесь, что программное обеспечение https://github.com/ThePBone/AutoEqApi настроено правильно на сервере. \n\nОшибка сети: %1$s\n\nВосстановить значения по умолчанию?</string>
     <string name="about_settings">О приложении</string>
     <string name="about_settings_summary">Авторы, поддержка, обновления</string>
     <string name="privacy">Конфиденциальность</string>
@@ -463,8 +458,6 @@
     <string name="geq_gain">Усиление</string>
     <string name="geq_frequency">Частота</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">Не удалось подключиться к серверу. %1$s</string>
-    <string name="geq_api_network_error_details_code">Ошибка сервера: %1$d</string>
     <string name="autoeq_search">Поиск профилей AutoEQ</string>
     <string name="autoeq_enter_model">Введите модель наушников…</string>
     <string name="autoeq_partial_results_warning">Показаны первые %1$d результатов. Пожалуйста, настройте ваш поиск, чтобы получить более релевантные результаты.</string>

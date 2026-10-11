@@ -368,12 +368,7 @@
     <string name="misc_permission_header">Optional permissions</string>
     <string name="assets">Assets</string>
     <string name="network_services">Network services</string>
-    <string name="network_autoeq_api_url">AutoEQ API backend URL</string>
     <string name="network_invalid_url">Invalid URL format</string>
-    <string name="network_autoeq_conntest_running">Testing connection to server…</string>
-    <string name="network_autoeq_conntest_done">Connection test succeeded</string>
-    <string name="network_autoeq_conntest_fail">Connection test failed</string>
-    <string name="network_autoeq_conntest_fail_summary">Server did not respond correctly. Make sure the software at https://github.com/ThePBone/AutoEqApi is correctly set up on the server.\n\nNetwork error: %1$s\n\nDo you want to restore this setting to the default value?</string>
     <string name="about_settings">About</string>
     <string name="about_settings_summary">Credits, support, updates</string>
     <string name="privacy">Privacy</string>
@@ -499,8 +494,6 @@
     <string name="geq_frequency">Frequency</string>
 
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">Failed to connect to server. %1$s</string>
-    <string name="geq_api_network_error_details_code">Server responded with error code: %1$d</string>
     <string name="autoeq_search">AutoEQ search</string>
     <string name="autoeq_enter_model">Enter your headphone model…</string>
     <string name="autoeq_partial_results_warning">Showing the first %1$d results. Please fine-tune your search to get more relevant results.</string>

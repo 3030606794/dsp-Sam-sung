@@ -340,12 +340,7 @@
     <string name="misc_permission_header">任意のアクセス許可</string>
     <string name="assets">アセット</string>
     <string name="network_services">ネットワークサービス</string>
-    <string name="network_autoeq_api_url">AutoEQ API backend URL</string>
     <string name="network_invalid_url">無効なURL形式</string>
-    <string name="network_autoeq_conntest_running">サーバーへの接続をテスト中…</string>
-    <string name="network_autoeq_conntest_done">接続に成功</string>
-    <string name="network_autoeq_conntest_fail">接続に失敗</string>
-    <string name="network_autoeq_conntest_fail_summary">サーバーが正しく応答しませんでした。https://github.com/ThePBone/AutoEqApi のソフトウェアがサーバー上で正しくセットアップされていることを確認してください。\n\nネットワークエラーです： %1$s\n\nこの設定を初期値に戻しますか？</string>
     <string name="about_settings">このアプリについて</string>
     <string name="about_settings_summary">クレジット、サポート、更新情報</string>
     <string name="privacy">プライバシー</string>
@@ -466,8 +461,6 @@
     <string name="geq_gain">ゲイン</string>
     <string name="geq_frequency">周波数</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">サーバー %1$s への接続に失敗しました。</string>
-    <string name="geq_api_network_error_details_code">サーバーがエラーコードを返しました: %1$d</string>
     <string name="autoeq_search">AutoEQ検索</string>
     <string name="autoeq_enter_model">ヘッドフォンのモデルを入力...</string>
     <string name="autoeq_partial_results_warning">最初の %1$d 結果を表示しています。より関連性の高い結果を得るために検索を微調整してください。</string>

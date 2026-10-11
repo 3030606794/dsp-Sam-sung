@@ -71,7 +71,7 @@ class PeqRepositoryTest {
             valid.replace("\"frequency\":1000.0", "\"frequency\":\"1000\""),
             valid.replace("\"frequency\":1000.0", "\"frequency\":1e999"),
             valid.replace("\"gain\":12.0", "\"gain\":NaN"),
-            valid.replace("\"gain\":12.0", "\"gain\":24.1"),
+            valid.replace("\"gain\":12.0", "\"gain\":100.1"),
             valid.replace("\"q\":0.7071067811865476", "\"q\":0"),
             " ".repeat(PeqRepository.MAX_JSON_LENGTH + 1)
         )
@@ -83,5 +83,32 @@ class PeqRepositoryTest {
             repository.save(working.copy(bands = listOf(working.bands[0], working.bands[0])))
         }
         assertEquals(working, repository.load())
+    }
+
+    @Test fun alpha6JsonDefaultsNewDisplayFieldsWithoutChangingOldFrequencies() {
+        val old = """{"schema":1,"gainRange":18.0,"gainStep":0.1,"bands":[
+            {"id":"default-1","type":"PEAK","enabled":true,"frequency":31.5,"gain":7.123,"q":30.0}
+        ]}"""
+        preferences.edit().putString(PeqRepository.KEY_STATE, old).commit()
+        val loaded = repository.loadResult()
+        assertTrue(loaded.oldGeneratedDistribution)
+        assertFalse(loaded.corrupt)
+        assertFalse(loaded.state.showQSlider)
+        assertFalse(loaded.state.showFrequencySlider)
+        assertEquals(PeqQualityDisplay.Q, loaded.state.bands.single().qualityDisplay)
+        assertEquals(31.5, loaded.state.bands.single().frequency, 0.0)
+        assertEquals(old, preferences.getString(PeqRepository.KEY_STATE, null))
+    }
+
+    @Test fun newDisplayOptionsAndExtendedLimitsRoundTripWhileWrongTypesAreRejected() {
+        val state = PeqState(listOf(PeqBand("new", gain = -100.0, q = 100.0,
+            qualityDisplay = PeqQualityDisplay.BW)), 100.0, 1.5, true, true)
+        assertTrue(repository.save(state))
+        assertEquals(state, repository.load())
+        val json = repository.exportJson(state)
+        listOf(json.replace("\"showQSlider\":true", "\"showQSlider\":\"true\""),
+            json.replace("\"qualityDisplay\":\"BW\"", "\"qualityDisplay\":\"UNKNOWN\""))
+            .forEach { malformed -> assertThrows(IllegalArgumentException::class.java) { repository.importJson(malformed) } }
+        assertEquals(state, repository.load())
     }
 }

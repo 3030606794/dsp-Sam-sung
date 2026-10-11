@@ -320,12 +320,7 @@
     <string name="misc_permission_header">İsteğe bağlı izinler</string>
     <string name="assets">Parçalar</string>
     <string name="network_services">Ağ Servisleri</string>
-    <string name="network_autoeq_api_url">AutoEQ API arka uç URL\'si</string>
     <string name="network_invalid_url">Geçersiz URL biçimi</string>
-    <string name="network_autoeq_conntest_running">Sunucu bağlantısı test ediliyor…</string>
-    <string name="network_autoeq_conntest_done">Bağlantı testi başarılı</string>
-    <string name="network_autoeq_conntest_fail">Bağlantı testi başarısız oldu</string>
-    <string name="network_autoeq_conntest_fail_summary">Sunucu doğru yanıt vermedi. https://github.com/ThePBone/AutoEqApi adresindeki yazılımın sunucuda doğru şekilde ayarlandığından emin olun.\n\nAğ hatası: %1$s\n\nBu ayarı varsayılan değere geri yüklemek istiyor musunuz?</string>
     <string name="about_settings">Hakkında</string>
     <string name="about_settings_summary">Emektarlar, destek, güncellemeler</string>
     <string name="privacy">Gizlilik</string>
@@ -446,8 +441,6 @@
     <string name="geq_gain">Büyüklük</string>
     <string name="geq_frequency">Sıklık</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">Sunucuyla bağlantı başarısız. %1$s</string>
-    <string name="geq_api_network_error_details_code">Sunucu hata koduyla yanıt verdi: %1$d</string>
     <string name="autoeq_search">Otomatik Eq araması</string>
     <string name="autoeq_enter_model">Kulaklık modelinizi girin…</string>
     <string name="autoeq_partial_results_warning">İlk %1$d sonuç gösteriliyor. Daha alakalı sonuçlar elde etmek için lütfen aramanızda ince ayar yapın.</string>

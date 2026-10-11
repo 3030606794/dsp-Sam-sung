@@ -337,12 +337,7 @@
     <string name="misc_permission_header">Додаткові дозволи</string>
     <string name="assets">Ресурси</string>
     <string name="network_services">Мережеві сервіси</string>
-    <string name="network_autoeq_api_url">URL-адреса API-бекенду AutoEQ</string>
     <string name="network_invalid_url">Неправильний формат URL-адреси</string>
-    <string name="network_autoeq_conntest_running">Перевірка з\'єднання з сервером…</string>
-    <string name="network_autoeq_conntest_done">З\'єднання успішно встановлено</string>
-    <string name="network_autoeq_conntest_fail">Не вдалося перевірити з\'єднання</string>
-    <string name="network_autoeq_conntest_fail_summary">Сервер не повернув правильну відповідь. Переконайтеся, що програмне забезпечення https://github.com/ThePBone/AutoEqApi налаштовано на сервері правильно.\n\nПомилка мережі: %1$s\n\nВідновити типові значення?</string>
     <string name="about_settings">Про додаток</string>
     <string name="about_settings_summary">Автори, підтримка, оновлення</string>
     <string name="privacy">Конфіденційність</string>
@@ -463,8 +458,6 @@
     <string name="geq_gain">Підсилення</string>
     <string name="geq_frequency">Частота</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">Не вдалося під\'єднатися до сервера. %1$s</string>
-    <string name="geq_api_network_error_details_code">Помилка сервера: %1$d</string>
     <string name="autoeq_search">Пошук профілів AutoEQ</string>
     <string name="autoeq_enter_model">Введіть модель навушників...</string>
     <string name="autoeq_partial_results_warning">Показано перші %1$d результатів. Будь ласка, налаштуйте ваш пошук, щоб отримати більш релевантні результати.</string>

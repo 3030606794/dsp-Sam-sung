@@ -337,12 +337,7 @@
     <string name="misc_permission_header">Izin opsional</string>
     <string name="assets">Aset</string>
     <string name="network_services">Layanan jaringan</string>
-    <string name="network_autoeq_api_url">AutoEQ API backend URL</string>
     <string name="network_invalid_url">Format URL tidak valid</string>
-    <string name="network_autoeq_conntest_running">Memeriksa koneksi server…</string>
-    <string name="network_autoeq_conntest_done">Tes koneksi berhasil</string>
-    <string name="network_autoeq_conntest_fail">Tes koneksi gagal</string>
-    <string name="network_autoeq_conntest_fail_summary">Server tidak merespon dengan benar. Pastikan perangkat lunak https://github.com/ThePBone/AutoEqApi diatur dengan benar pada server. \n\nKesalahan Jaringan: %1$s\n\nAnda ingin mengembalikan pengaturan ke nilai awal?</string>
     <string name="about_settings">Tentang</string>
     <string name="about_settings_summary">Kredit, dukungan, pembaruan</string>
     <string name="privacy">Privasi</string>
@@ -463,8 +458,6 @@
     <string name="geq_gain">Gain</string>
     <string name="geq_frequency">Frekuensi</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">Gagal terhubung ke server. %1$s</string>
-    <string name="geq_api_network_error_details_code">Server merespon dengan kode error: %1$d</string>
     <string name="autoeq_search">Cari AutoEQ</string>
     <string name="autoeq_enter_model">Pilih model headphone…</string>
     <string name="autoeq_partial_results_warning">Menampilkan hasil pertama dari %1$d hasil. Sesuaikan pencarian anda untuk mencari hasil yang lebih sesuai.</string>

@@ -338,12 +338,7 @@ Graphic eq</string>
     <string name="misc_permission_header">Uprawnienia opcjonalne</string>
     <string name="assets">Zasoby</string>
     <string name="network_services">Usługi sieciowe</string>
-    <string name="network_autoeq_api_url">AutoEQ API backend URL</string>
     <string name="network_invalid_url">Nieprawidłowy format URL</string>
-    <string name="network_autoeq_conntest_running">Testowanie połączenia z serwerem…</string>
-    <string name="network_autoeq_conntest_done">Test połączenia udany</string>
-    <string name="network_autoeq_conntest_fail">Test połączenia nie powiódł się</string>
-    <string name="network_autoeq_conntest_fail_summary">Serwer nie odpowiedział poprawnie. Upewnij się, że oprogramowanie na https://github.com/ThePBone/AutoEqApi jest poprawnie skonfigurowane na serwerze.\n\nBłąd sieci: %1$s\n\nCzy chcesz przywrócić to ustawienie do wartości domyślnej?</string>
     <string name="about_settings">O Aplikacji</string>
     <string name="about_settings_summary">O programie, wsparcie, aktualizacje</string>
     <string name="privacy">Prywatność</string>
@@ -464,8 +459,6 @@ Graphic eq</string>
     <string name="geq_gain">Wzmocnienie</string>
     <string name="geq_frequency">Częstotliwość</string>
     <!-- AutoEQ GraphicEQ selector -->
-    <string name="geq_api_network_error">Połączenie z serwerem nie powiodło się. %1$s</string>
-    <string name="geq_api_network_error_details_code">Serwer odpowiedział błędem o kodzie: %1$d</string>
     <string name="autoeq_search">Wyszukiwanie AutoEQ</string>
     <string name="autoeq_enter_model">Wprowadź swój model słuchawek…</string>
     <string name="autoeq_partial_results_warning">Wyświetlanie pierwszych %1$d wyników. Doprecyzuj swoje wyszukiwanie, aby otrzymać lepsze wyniki.</string>

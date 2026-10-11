@@ -6,6 +6,9 @@ import android.os.Bundle
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -14,6 +17,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import me.timschneeberger.rootlessjamesdsp.R
@@ -53,9 +57,13 @@ class PeqEditorUiTest {
     private fun layout() {
         idle()
         val content = controller!!.get().findViewById<View>(android.R.id.content)
-        content.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(2200, View.MeasureSpec.EXACTLY))
-        content.layout(0, 0, 1080, 2200)
+        val metrics = application.resources.displayMetrics
+        val config = application.resources.configuration
+        val width = (config.screenWidthDp * metrics.density).toInt()
+        val height = (config.screenHeightDp * metrics.density).toInt()
+        content.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+        content.layout(0, 0, width, height)
         idle()
     }
     private fun launch(): PeqFragment {
@@ -84,15 +92,19 @@ class PeqEditorUiTest {
         return dialog()
     }
 
-    @Test fun enteringEditorDoesNotSaveDefaultBandsOrEnableEffectAndLegacyImportRemainsAvailable() {
+    @Test fun enteringEditorDoesNotSaveDefaultBandsOrEnableEffectAndHasNoLegacyEntry() {
         launch()
         assertFalse(repository.hasSavedState())
         assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
         assertEquals(10, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
-        assertEquals(View.VISIBLE, view<View>(R.id.peq_legacy).visibility)
-        view<MaterialButton>(R.id.peq_legacy).performClick()
-        assertTrue(shadowOf(controller!!.get()).nextStartedActivity.getBooleanExtra("legacy_curve", false))
-        assertFalse(repository.hasSavedState())
+        fun texts(view: View): List<String> = when (view) {
+            is TextView -> listOf(view.text.toString())
+            is ViewGroup -> (0 until view.childCount).flatMap { texts(view.getChildAt(it)) }
+            else -> emptyList()
+        }
+        assertTrue(texts(fragment().requireView()).none {
+            it.contains("AutoEQ") || it.contains("旧曲线") || it.contains("48 kHz")
+        })
     }
 
     @Test fun curveStaysPinnedAnd170BandsAreRecycledWithValuesSurvivingRotation() {
@@ -159,7 +171,7 @@ class PeqEditorUiTest {
         settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         layout()
-        assertEquals(listOf(original.bands.first()), repository.load().bands)
+        assertEquals(PeqModel.resize(original, 1).bands, repository.load().bands)
         assertEquals(1, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
     }
 
@@ -193,7 +205,7 @@ class PeqEditorUiTest {
         launch()
         val dialog = edit()
         dialog.findViewById<EditText>(R.id.peq_frequency_input)!!.setText("20001")
-        dialog.findViewById<EditText>(R.id.peq_quality_input)!!.setText("31")
+        dialog.findViewById<EditText>(R.id.peq_quality_input)!!.setText("101")
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         assertTrue(dialog.isShowing)
         assertNotNull(dialog.findViewById<TextInputLayout>(R.id.peq_frequency_box)!!.error)
@@ -210,13 +222,12 @@ class PeqEditorUiTest {
         assertEquals(2.0, repository.load().bands.single().q, 0.00001)
     }
 
-    @Test fun dragUpdatesPreviewThenSavesWithin50msWithoutTakingOverLegacyOrEnablingEffect() {
+    @Test fun dragUpdatesPreviewThenSavesWithin50msWithoutRewritingArchivedCurveOrEnablingEffect() {
         val curve = "GraphicEQ: 50 3; 1000 -2;"
         prefs.edit().putString(application.getString(R.string.key_geq_nodes), curve)
             .putBoolean(application.getString(R.string.key_geq_enable), false).commit()
         repository.save(PeqModel.defaultState(1))
         launch()
-        assertFalse(PeqController.isParametric(application))
         val slider = row(0).findViewById<Slider>(R.id.peq_band_slider)
         assertTrue(slider.requestFocus())
         assertTrue(slider.onKeyDown(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT)))
@@ -224,11 +235,7 @@ class PeqEditorUiTest {
         assertEquals(fragment().editorState, view<PeqResponseView>(R.id.peq_curve).requestedState)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(60))
         assertEquals(fragment().editorState, repository.load())
-        assertFalse(PeqController.isParametric(application))
         assertEquals(curve, prefs.getString(application.getString(R.string.key_geq_nodes), null))
-        view<MaterialButton>(R.id.peq_activate).performClick()
-        idle()
-        assertTrue(PeqController.isParametric(application))
         assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
     }
 
@@ -246,6 +253,139 @@ class PeqEditorUiTest {
         assertEquals(expected, repository.load().bands.single().gain, 0.0)
         assertEquals(expected.toFloat(), row(0).findViewById<Slider>(R.id.peq_band_slider).value, 0f)
     }
+
+    @Test fun maximumQSurvivesRepeatedBandwidthSwitchesAndRememberedModeCanBeEditedBothWays() {
+        repository.save(PeqState(listOf(PeqBand(frequency = 1000.0, q = 100.0))))
+        launch()
+        val first = edit()
+        repeat(3) {
+            first.findViewById<MaterialButton>(R.id.peq_quality_bw)!!.performClick()
+            assertNull(first.findViewById<TextInputLayout>(R.id.peq_quality_box)!!.error)
+            first.findViewById<MaterialButton>(R.id.peq_quality_q)!!.performClick()
+            assertEquals(100.0, first.findViewById<EditText>(R.id.peq_quality_input)!!.text.toString().toDouble(), 0.0)
+        }
+        first.findViewById<MaterialButton>(R.id.peq_quality_bw)!!.performClick()
+        first.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        assertFalse(first.isShowing)
+        assertEquals(100.0, repository.load().bands.single().q, 0.0)
+        assertEquals(PeqQualityDisplay.BW, repository.load().bands.single().qualityDisplay)
+        val second = edit()
+        assertTrue(second.findViewById<MaterialButton>(R.id.peq_quality_bw)!!.isChecked)
+        second.findViewById<EditText>(R.id.peq_quality_input)!!.setText(
+            PeqResponse.bandwidthOctaves(12.5, 1000.0).toString())
+        second.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        assertEquals(12.5, repository.load().bands.single().q, 1e-10)
+        val third = edit()
+        third.findViewById<MaterialButton>(R.id.peq_quality_q)!!.performClick()
+        third.findViewById<EditText>(R.id.peq_quality_input)!!.setText("30")
+        third.findViewById<MaterialButton>(R.id.peq_quality_bw)!!.performClick()
+        third.findViewById<MaterialButton>(R.id.peq_quality_q)!!.performClick()
+        third.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        assertEquals(30.0, repository.load().bands.single().q, 0.0)
+        assertEquals(PeqQualityDisplay.Q, repository.load().bands.single().qualityDisplay)
+    }
+
+    @Test fun optionalLogarithmicSlidersUseRealUserEventsAndPersistWithoutRedistributingSameCount() {
+        val original = PeqState(listOf(PeqBand(frequency = 777.0, q = 2.0, gain = 0.1)))
+        repository.save(original)
+        launch()
+        val settings = settings()
+        settings.findViewById<MaterialSwitch>(R.id.peq_show_q_slider)!!.performClick()
+        settings.findViewById<MaterialSwitch>(R.id.peq_show_frequency_slider)!!.performClick()
+        settings.findViewById<MaterialAutoCompleteTextView>(R.id.peq_gain_range)!!.setText("±100 dB", false)
+        settings.findViewById<MaterialAutoCompleteTextView>(R.id.peq_gain_step)!!.setText("1.5 dB", false)
+        settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        assertEquals(original.bands, repository.load().bands)
+        assertTrue(repository.load().showQSlider)
+        assertTrue(repository.load().showFrequencySlider)
+        assertEquals(100.0, repository.load().gainRange, 0.0)
+        assertEquals(1.5, repository.load().gainStep, 0.0)
+        val currentRow = row(0)
+        listOf(R.id.peq_q_slider, R.id.peq_frequency_slider).forEach { id ->
+            val slider = currentRow.findViewById<Slider>(id)
+            assertTrue(slider.isShown)
+            assertTrue(slider.requestFocus())
+            assertTrue(slider.onKeyDown(KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT)))
+        }
+        val changed = fragment().editorState
+        assertTrue(changed.bands.single().q > 2.0)
+        assertTrue(changed.bands.single().frequency > 777.0)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(60))
+        assertEquals(changed, repository.load())
+        assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
+        controller!!.recreate()
+        layout()
+        assertEquals(changed, fragment().editorState)
+        assertEquals(PeqBandAdapter.logarithmicPosition(changed.bands.single().q, 0.1, 100.0),
+            row(0).findViewById<Slider>(R.id.peq_q_slider).value, 0f)
+        assertEquals(PeqBandAdapter.logarithmicPosition(changed.bands.single().frequency, 20.0, 20000.0),
+            row(0).findViewById<Slider>(R.id.peq_frequency_slider).value, 0f)
+    }
+
+    @Test fun explicitRedistributionAndCountChangePreserveOtherParameters() {
+        val original = PeqState(listOf(PeqBand(frequency = 80.0, q = 7.0, gain = -3.5),
+            PeqBand(frequency = 12000.0, q = 30.0, gain = 4.0, type = PeqFilterType.HIGH_SHELF, enabled = false)))
+        repository.save(original)
+        launch()
+        settings().findViewById<MaterialButton>(R.id.peq_redistribute)!!.performClick()
+        assertEquals(original, repository.load())
+        dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        val distributed = repository.load()
+        assertEquals(listOf(20.0, 20000.0), distributed.bands.map { it.frequency })
+        assertEquals(original.bands, distributed.bands.mapIndexed { index, band -> band.copy(frequency = original.bands[index].frequency) })
+        val settings = settings()
+        settings.findViewById<EditText>(R.id.peq_band_count)!!.setText("3")
+        settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        assertEquals(distributed, repository.load())
+        dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        val resized = repository.load()
+        assertEquals(3, resized.bands.size)
+        assertEquals(20.0, resized.bands.first().frequency, 0.0)
+        assertEquals(20000.0, resized.bands.last().frequency, 0.0)
+        assertEquals(distributed.bands, resized.bands.take(2).mapIndexed { index, band ->
+            band.copy(frequency = distributed.bands[index].frequency)
+        })
+    }
+
+    private fun assertResponsivePlotGeometry() {
+        launch()
+        val root = fragment().requireView()
+        val card = view<View>(R.id.peq_response_card)
+        val curve = view<PeqResponseView>(R.id.peq_curve)
+        val margin = (2 * application.resources.displayMetrics.density + 0.5f).toInt()
+        assertEquals(margin, card.left)
+        assertEquals(margin, root.width - card.right)
+        assertEquals(card.width, curve.width)
+        assertTrue(view<RecyclerView>(R.id.peq_band_list).height > 0)
+        val bitmap = Bitmap.createBitmap(curve.width, curve.height, Bitmap.Config.ARGB_8888)
+        curve.draw(Canvas(bitmap))
+        bitmap.recycle()
+        assertTrue(curve.renderedFrequencyLabels.size >= 5)
+        assertTrue(curve.renderedGainLabels.size >= 3)
+        assertEquals("20", curve.renderedFrequencyLabels.first().text)
+        assertEquals("20k", curve.renderedFrequencyLabels.last().text)
+        curve.renderedFrequencyLabels.zipWithNext().forEach { (left, right) ->
+            assertTrue(left.bounds.right < right.bounds.left)
+        }
+        curve.renderedGainLabels.zipWithNext().forEach { (upper, lower) ->
+            assertTrue(upper.bounds.bottom < lower.bounds.top)
+        }
+    }
+
+    @Test fun phonePlotUsesTwoDpEdgesAndNonoverlappingDetailedTicks() = assertResponsivePlotGeometry()
+
+    @Test @Config(qualifiers = "w820dp-h411dp-land")
+    fun landscapePlotUsesTwoDpEdgesAndLeavesScrollableBandSpace() = assertResponsivePlotGeometry()
+
+    @Test @Config(qualifiers = "sw600dp-w800dp-h1280dp-port")
+    fun tabletPlotUsesTwoDpEdgesAndNonoverlappingDetailedTicks() = assertResponsivePlotGeometry()
 
     class HostActivity : FragmentActivity() {
         override fun onCreate(savedInstanceState: Bundle?) {

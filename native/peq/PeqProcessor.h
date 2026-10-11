@@ -6,7 +6,9 @@
 #include <mutex>
 
 namespace dspfusion {
-// Stereo, independently implemented RBJ biquads. setParameters() may run on
+// Stereo RBJ transfer functions, realized as trapezoidal state-variable sections
+// to avoid direct-form coefficient cancellation at extreme gain/Q/frequency.
+// setParameters() may run on
 // the control thread concurrently with process(); configure/reset require the
 // caller to exclude process(), as Android SET_CONFIG/RESET already do.
 class PeqProcessor {
@@ -22,7 +24,8 @@ private:
     struct Band { int32_t type=0,enabled=0,frequency=1000000,gain=0,q=707; };
     struct Settings { bool enabled=false; size_t count=0; std::array<Band,kMaxBands> bands{}; };
     struct Coeff {
-        double b0=1,b1=0,b2=0,a1=0,a2=0;
+        double highInput=1,highState=0,step1=0,feedback1=0,step2=0;
+        double mixHigh=1,mixBand=0,mixLow=1;
         bool operator==(const Coeff&) const = default;
     };
     struct Prepared { size_t count=0; std::array<Coeff,kMaxBands> coefficients{}; };
@@ -34,6 +37,7 @@ private:
         void flushDenormals();
     };
     static bool design(const Band&,uint32_t rate,Coeff& result);
+    friend struct PeqTestAccess;
     Prepared prepare(const Settings&) const;
     void adoptPending();
     // Audio never waits for this lock: it keeps the previous bank if a new

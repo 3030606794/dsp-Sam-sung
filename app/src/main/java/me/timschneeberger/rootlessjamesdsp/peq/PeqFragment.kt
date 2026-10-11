@@ -18,7 +18,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import me.timschneeberger.rootlessjamesdsp.R
-import me.timschneeberger.rootlessjamesdsp.activity.GraphicEqualizerActivity
 import me.timschneeberger.rootlessjamesdsp.databinding.PeqBandDialogBinding
 import me.timschneeberger.rootlessjamesdsp.databinding.PeqFragmentBinding
 import me.timschneeberger.rootlessjamesdsp.databinding.PeqSettingsDialogBinding
@@ -28,7 +27,7 @@ import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.se
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.unregisterLocalReceiver
 import java.util.UUID
 
-/** An editor only: saving bands does not enable the effect or replace the selected legacy mode. */
+/** An editor only: saving bands never enables the effect or its global power switch. */
 class PeqFragment : Fragment() {
     private var binding: PeqFragmentBinding? = null
     private lateinit var repository: PeqRepository
@@ -57,10 +56,10 @@ class PeqFragment : Fragment() {
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View {
         val ui = PeqFragmentBinding.inflate(inflater, container, false)
         binding = ui
-        bandAdapter = PeqBandAdapter(onGainChanged = { id, gain ->
-            val next = editorState.copy(bands = editorState.bands.map { if (it.id == id) it.copy(gain = gain) else it })
+        bandAdapter = PeqBandAdapter(onBandChanged = { edited ->
+            val next = editorState.copy(bands = editorState.bands.map { if (it.id == edited.id) edited else it })
             editorState = next
-            render(interactingBand = id)
+            render(interactingBand = edited.id)
             if (!saveQueued) {
                 saveQueued = true
                 handler.postDelayed(pendingSave, 50)
@@ -77,21 +76,13 @@ class PeqFragment : Fragment() {
                 ui.peqBandList.smoothScrollToPosition(editorState.bands.lastIndex)
             }
         }
-        ui.peqLegacy.setOnClickListener {
-            startActivity(Intent(requireContext(), GraphicEqualizerActivity::class.java)
-                .putExtra("legacy_curve", true))
-        }
-        ui.peqActivate.setOnClickListener {
-            PeqController.useParametric(requireContext())
-            refreshMode()
-        }
         reload()
         return ui.root
     }
 
     override fun onResume() {
         super.onResume()
-        // Returning from the legacy/AutoEQ editor can change the selected mode or its curve.
+        // Another screen or a device preset can replace the saved band bank.
         if (binding != null) reload()
     }
 
@@ -102,17 +93,8 @@ class PeqFragment : Fragment() {
         editorState = loaded.state
         lastSavedState = editorState
         render(false)
-        refreshMode()
         if (loaded.corrupt) binding?.root?.post {
             binding?.root?.let { Snackbar.make(it, R.string.peq_corrupt_profile, Snackbar.LENGTH_LONG).show() }
-        }
-    }
-
-    private fun refreshMode() {
-        binding?.apply {
-            peqLegacy.setText(if (PeqController.hasLegacyCurve(requireContext()))
-                R.string.peq_legacy_curve else R.string.peq_curve_autoeq)
-            peqModeNotice.isVisible = !PeqController.isParametric(requireContext())
         }
     }
 
@@ -172,6 +154,8 @@ class PeqFragment : Fragment() {
         ui.peqGainRange.setAdapter(ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, ranges))
         ui.peqGainStep.setText(steps[PeqModel.GAIN_STEPS.indexOf(editorState.gainStep)], false)
         ui.peqGainRange.setText(ranges[PeqModel.GAIN_RANGES.indexOf(editorState.gainRange)], false)
+        ui.peqShowQSlider.isChecked = editorState.showQSlider
+        ui.peqShowFrequencySlider.isChecked = editorState.showFrequencySlider
         val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.peq_settings_title).setView(ui.root)
             .setPositiveButton(android.R.string.ok, null)
@@ -186,16 +170,28 @@ class PeqFragment : Fragment() {
                 val step = PeqModel.GAIN_STEPS.getOrNull(steps.indexOf(ui.peqGainStep.text.toString())) ?: return@setOnClickListener
                 val range = PeqModel.GAIN_RANGES.getOrNull(ranges.indexOf(ui.peqGainRange.text.toString())) ?: return@setOnClickListener
                 fun applySettings() {
-                    if (save(PeqModel.resize(editorState, count).copy(gainStep = step, gainRange = range))) dialog.dismiss()
+                    if (save(PeqModel.resize(editorState, count).copy(gainStep = step, gainRange = range,
+                        showQSlider = ui.peqShowQSlider.isChecked,
+                        showFrequencySlider = ui.peqShowFrequencySlider.isChecked))) dialog.dismiss()
                 }
-                if (count < editorState.bands.size) {
+                if (count != editorState.bands.size) {
                     track(MaterialAlertDialogBuilder(requireContext())
                         .setTitle(R.string.peq_reduce_title)
-                        .setMessage(getString(R.string.peq_reduce_confirm, editorState.bands.size, count, editorState.bands.size - count))
+                        .setMessage(if (count < editorState.bands.size)
+                            getString(R.string.peq_reduce_confirm, editorState.bands.size, count, editorState.bands.size - count)
+                        else getString(R.string.peq_increase_confirm, editorState.bands.size, count))
                         .setPositiveButton(android.R.string.ok) { _, _ -> applySettings() }
                         .setNegativeButton(android.R.string.cancel, null).create()).show()
                 } else applySettings()
             }
+        }
+        ui.peqRedistribute.setOnClickListener {
+            track(MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.peq_redistribute_title)
+                .setMessage(getString(R.string.peq_redistribute_confirm, editorState.bands.size))
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    if (save(PeqModel.redistribute(editorState))) dialog.dismiss()
+                }.setNegativeButton(android.R.string.cancel, null).create()).show()
         }
         track(dialog).show()
     }
@@ -207,60 +203,62 @@ class PeqFragment : Fragment() {
         val types = PeqFilterType.entries.toList()
         val labels = types.map { PeqBandAdapter.typeLabel(requireContext(), it) }
         var selectedType = band.type
-        var bandwidthMode = false
         var changingMode = false
+        fun supportsBandwidth(type: PeqFilterType) = type in listOf(PeqFilterType.PEAK, PeqFilterType.NOTCH, PeqFilterType.BAND_PASS)
+        val frequencyText = PeqBandAdapter.number(band.frequency, 4)
+        val qualityEditor = PeqQualityEditor(band.q, frequencyText.toDouble(),
+            if (supportsBandwidth(band.type)) band.qualityDisplay else PeqQualityDisplay.Q)
         ui.peqBandType.setAdapter(ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, labels))
         ui.peqBandType.setText(PeqBandAdapter.typeLabel(requireContext(), band.type), false)
-        ui.peqFrequencyInput.setText(PeqBandAdapter.number(band.frequency, 4))
+        ui.peqFrequencyInput.setText(frequencyText)
         ui.peqGainInput.setText(PeqBandAdapter.number(band.gain, 4))
-        ui.peqQualityInput.setText(PeqBandAdapter.number(band.q, 6))
         fun frequency() = ui.peqFrequencyInput.text?.toString()?.toDoubleOrNull()
         fun inputQ(): Double? {
-            val raw = ui.peqQualityInput.text?.toString()?.toDoubleOrNull() ?: return null
-            return if (!bandwidthMode) raw else runCatching {
-                PeqResponse.qFromBandwidth(raw, frequency() ?: return null)
-            }.getOrNull()
+            val freq = frequency() ?: return null
+            return qualityEditor.readQ(ui.peqQualityInput.text?.toString().orEmpty(), freq)
         }
-        fun supportsBandwidth(type: PeqFilterType) = type in listOf(PeqFilterType.PEAK, PeqFilterType.NOTCH, PeqFilterType.BAND_PASS)
+        fun renderQualityMode() {
+            changingMode = true
+            val bandwidthMode = qualityEditor.mode == PeqQualityDisplay.BW
+            ui.peqQualityMode.check(if (bandwidthMode) R.id.peq_quality_bw else R.id.peq_quality_q)
+            ui.peqQualityInput.setText(qualityEditor.renderedText)
+            ui.peqQualityBox.hint = getString(if (bandwidthMode) R.string.peq_bandwidth else R.string.peq_quality)
+            ui.peqQualityBox.helperText = getString(if (bandwidthMode) R.string.peq_bandwidth_hint else R.string.peq_quality_hint)
+            ui.peqQualityBox.error = null
+            changingMode = false
+        }
         fun updateTypeFields() {
             ui.peqGainBox.isVisible = selectedType.usesGain
             ui.peqQualityBw.isVisible = supportsBandwidth(selectedType)
         }
         ui.peqBandType.setOnItemClickListener { _, _, position, _ ->
-            val previousQ = inputQ()
-            selectedType = types[position]
-            if (!supportsBandwidth(selectedType) && bandwidthMode) {
-                changingMode = true
-                bandwidthMode = false
-                ui.peqQualityMode.check(R.id.peq_quality_q)
-                ui.peqQualityInput.setText(PeqBandAdapter.number(previousQ ?: band.q, 6))
-                ui.peqQualityBox.hint = getString(R.string.peq_quality)
-                ui.peqQualityBox.helperText = getString(R.string.peq_quality_hint)
-                changingMode = false
+            val nextType = types[position]
+            if (!supportsBandwidth(nextType) && qualityEditor.mode == PeqQualityDisplay.BW) {
+                val converted = qualityEditor.switchMode(PeqQualityDisplay.Q,
+                    ui.peqQualityInput.text?.toString().orEmpty(), frequency() ?: Double.NaN)
+                if (converted == null) {
+                    ui.peqBandType.setText(PeqBandAdapter.typeLabel(requireContext(), selectedType), false)
+                    ui.peqQualityBox.error = getString(R.string.peq_invalid_quality)
+                    return@setOnItemClickListener
+                }
+                renderQualityMode()
             }
+            selectedType = nextType
             updateTypeFields()
         }
         ui.peqQualityMode.addOnButtonCheckedListener { _, checkedId, checked ->
             if (!checked || changingMode) return@addOnButtonCheckedListener
-            val q = inputQ()
-            val useBandwidth = checkedId == R.id.peq_quality_bw
-            val converted = runCatching {
-                if (q == null || q !in PeqModel.MIN_Q..PeqModel.MAX_Q) error("Invalid Q")
-                if (useBandwidth) PeqResponse.bandwidthOctaves(q, frequency() ?: error("Invalid frequency")) else q
-            }.getOrNull()
+            val nextMode = if (checkedId == R.id.peq_quality_bw) PeqQualityDisplay.BW else PeqQualityDisplay.Q
+            val converted = qualityEditor.switchMode(nextMode, ui.peqQualityInput.text?.toString().orEmpty(),
+                frequency() ?: Double.NaN)
             if (converted == null) {
                 changingMode = true
-                ui.peqQualityMode.check(if (bandwidthMode) R.id.peq_quality_bw else R.id.peq_quality_q)
+                ui.peqQualityMode.check(if (qualityEditor.mode == PeqQualityDisplay.BW) R.id.peq_quality_bw else R.id.peq_quality_q)
                 changingMode = false
                 ui.peqQualityBox.error = getString(R.string.peq_invalid_quality)
-            } else {
-                bandwidthMode = useBandwidth
-                ui.peqQualityInput.setText(PeqBandAdapter.number(converted, 6))
-                ui.peqQualityBox.hint = getString(if (useBandwidth) R.string.peq_bandwidth else R.string.peq_quality)
-                ui.peqQualityBox.helperText = getString(if (useBandwidth) R.string.peq_bandwidth_hint else R.string.peq_quality_hint)
-                ui.peqQualityBox.error = null
-            }
+            } else renderQualityMode()
         }
+        renderQualityMode()
         updateTypeFields()
         fun editedBand(): PeqBand? {
             val freq = frequency()
@@ -273,7 +271,8 @@ class PeqFragment : Fragment() {
             ui.peqQualityBox.error = if (q == null || !q.isFinite() || q !in PeqModel.MIN_Q..PeqModel.MAX_Q)
                 getString(R.string.peq_invalid_quality) else null
             if (ui.peqFrequencyBox.error != null || ui.peqGainBox.error != null || ui.peqQualityBox.error != null) return null
-            return band.copy(type = selectedType, frequency = requireNotNull(freq), gain = requireNotNull(gain), q = requireNotNull(q))
+            return band.copy(type = selectedType, frequency = requireNotNull(freq), gain = requireNotNull(gain),
+                q = requireNotNull(q), qualityDisplay = qualityEditor.mode)
         }
         val dialog = MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.peq_edit_band)
             .setView(ui.root).setPositiveButton(android.R.string.ok, null)

@@ -51,16 +51,6 @@
             app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
-    <PreferenceCategory app:title="@string/network_services"
-        app:iconSpaceReserved="false">
-        <EditTextPreference
-            android:key="@string/key_network_autoeq_api_url"
-            android:title="@string/network_autoeq_api_url"
-            app:useSimpleSummaryProvider="true"
-            app:defaultValue="@string/default_network_autoeq_api_url"
-            android:inputType="textUri"
-            app:iconSpaceReserved="false" />
-    </PreferenceCategory>
 
     <PreferenceCategory
         app:title="@string/privacy"

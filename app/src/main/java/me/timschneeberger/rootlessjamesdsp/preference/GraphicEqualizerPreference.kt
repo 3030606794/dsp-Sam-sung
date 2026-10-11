@@ -4,26 +4,19 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.res.TypedArray
 import android.util.AttributeSet
 import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
-import androidx.core.view.isVisible
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.PreferenceGraphicEqualizerBinding
-import me.timschneeberger.rootlessjamesdsp.model.GraphicEqNodeList
-import me.timschneeberger.rootlessjamesdsp.peq.PeqController
 import me.timschneeberger.rootlessjamesdsp.peq.PeqRepository
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.registerLocalReceiver
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.unregisterLocalReceiver
-import timber.log.Timber
-import java.util.MissingFormatArgumentException
 
 class GraphicEqualizerPreference : Preference {
 
     private var binding: PreferenceGraphicEqualizerBinding? = null
-    private var initialValue: String = ""
 
     private val broadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -61,47 +54,16 @@ class GraphicEqualizerPreference : Preference {
         super.onDetached()
     }
 
-    override fun onSetInitialValue(defaultValue: Any?) {
-        initialValue = getPersistedString(defaultValue as? String ?: "")
-    }
-
-    override fun onGetDefaultValue(a: TypedArray, index: Int): Any {
-        return a.getString(index).toString()
-    }
-
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
         super.onBindViewHolder(holder)
 
         binding = PreferenceGraphicEqualizerBinding.bind(holder.itemView)
-        setEqualizerViewValues(initialValue)
+        updateFromPreferences()
     }
 
     fun updateFromPreferences() {
-        initialValue = getPersistedString(initialValue)
-        setEqualizerViewValues(initialValue)
-    }
-
-    private fun setEqualizerViewValues(value: String) {
-        val parametric = PeqController.isParametric(context)
-        binding?.layoutEqualizer?.isVisible = !parametric
-        binding?.layoutPeq?.isVisible = parametric
-        if (parametric) {
-            val state = PeqRepository(context).load()
-            binding?.layoutPeq?.setState(state)
-            binding?.nodeCount?.text = context.getString(R.string.fusion_peq_band_count, state.bands.size)
-            return
-        }
-        val nodes = GraphicEqNodeList()
-        nodes.deserialize(value)
-
-        binding?.layoutEqualizer?.setNodes(nodes)
-        try {
-            binding?.nodeCount?.text =
-                context.getString(R.string.fusion_peq_legacy_count, nodes.size)
-        }
-        catch (ex: MissingFormatArgumentException) {
-            Timber.e(ex)
-            binding?.nodeCount?.text = context.getString(R.string.geq_node_editor)
-        }
+        val state = PeqRepository(context).load()
+        binding?.layoutPeq?.setState(state)
+        binding?.nodeCount?.text = context.getString(R.string.fusion_peq_band_count, state.bands.size)
     }
 }
