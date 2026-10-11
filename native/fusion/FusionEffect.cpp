@@ -25,10 +25,14 @@ constexpr size_t kBlockFrames=512;
 constexpr size_t kMaxTransfer=32*1024*1024;
 constexpr uint32_t kJamesEnable=131072, kViperEnable=131073;
 constexpr uint32_t kProtocol=131080, kCapabilities=131081, kTone=196608;
+// Retain the upstream engines' nominal policy charges (1 KB each). This legacy
+// descriptor field is admission accounting, not measured process RSS: a 1024 KB
+// estimate exceeds Android's global effects budget and prevents any instance.
+constexpr uint16_t kPolicyMemoryKb=2;
 const effect_descriptor_t kDescriptor{
     kType,kUuid,EFFECT_CONTROL_API_VERSION,
     EFFECT_FLAG_TYPE_INSERT | EFFECT_FLAG_INSERT_LAST | EFFECT_FLAG_INPUT_DIRECT | EFFECT_FLAG_OUTPUT_DIRECT,
-    30,1024,"DSP Fusion 0.1","James Fung / ViPER authors / DSP Fusion"
+    30,kPolicyMemoryKb,"DSP Fusion 0.1","James Fung / ViPER authors / DSP Fusion"
 };
 
 int32_t childCommand(effect_handle_t child,uint32_t cmd,uint32_t size=0,void* data=nullptr) {

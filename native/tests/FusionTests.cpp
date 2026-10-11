@@ -43,10 +43,18 @@ int process(effect_handle_t h,void* in,void* out,size_t frames) {
     return (*h)->process(h,&a,&b);
 }
 int main() {
+    effect_descriptor_t descriptor{};
+    assert(AELI.get_descriptor(&uuid,&descriptor)==0);
+    // Android AudioPolicyManager rejects even a correctly created/configured
+    // engine when its declared memory exceeds the legacy 512 KB global budget.
+    assert(descriptor.memoryUsage>0 && descriptor.memoryUsage<512);
     effect_handle_t h=nullptr;
     effect_uuid_t bad=uuid;bad.timeLow=0;
     assert(AELI.create_effect(&bad,0,0,&h)==-ENOENT);
     assert(AELI.create_effect(&uuid,0,0,&h)==0 && h);
+    effect_descriptor_t instanceDescriptor{};
+    assert((*h)->get_descriptor(h,&instanceDescriptor)==0);
+    assert(instanceDescriptor.memoryUsage==descriptor.memoryUsage);
     assert(get(h,131080)==1 && get(h,131081)==7);
     assert(get(h,20002)>0 && get(h,20001)==48000);
     assert(set(h,131072,0)==0 && set(h,131073,0)==0);
