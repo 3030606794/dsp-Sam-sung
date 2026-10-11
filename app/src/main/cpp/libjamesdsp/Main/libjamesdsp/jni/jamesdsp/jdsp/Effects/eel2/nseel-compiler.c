@@ -1646,7 +1646,7 @@ static float NSEEL_CGEN_CALL  eel_mean(float *blocks, float *start, float *lengt
  ---------------------------------------------------------------------------*/
 float kth_smallest(float a[], int n, int k)
 {
-	register i, j, l, m;
+	register int i, j, l, m;
 	register float x;
 
 	l = 0; m = n - 1;
@@ -3856,7 +3856,9 @@ static float NSEEL_CGEN_CALL _eel_flacDecodeFile(void *opaque, INT_PTR num_param
 	const char *filename = (const char*)GetStringForIndex(c->region_context, *parms[0], 0);
 	uint32_t channels, fs;
 	uint64_t frameCount;
-	float *signal = drflac_open_file_and_read_pcm_frames_f32(filename, &channels, &fs, &frameCount, 0);
+	drflac_uint64 decodedFrames;
+	float *signal = drflac_open_file_and_read_pcm_frames_f32(filename, &channels, &fs, &decodedFrames, 0);
+	frameCount = decodedFrames;
 	float targetFs = *parms[2];
 	if (targetFs > FLT_EPSILON)
 	{
@@ -3918,7 +3920,9 @@ static float NSEEL_CGEN_CALL _eel_flacDecodeMemory(void *opaque, INT_PTR num_par
 	unsigned char *memoryBlk = base64_decode((const unsigned char*)base64String, strlen(base64String), &actualSize);
 	uint32_t channels, fs;
 	uint64_t frameCount;
-	float *signal = drflac_open_memory_and_read_pcm_frames_f32(memoryBlk, actualSize, &channels, &fs, &frameCount, 0);
+	drflac_uint64 decodedFrames;
+	float *signal = drflac_open_memory_and_read_pcm_frames_f32(memoryBlk, actualSize, &channels, &fs, &decodedFrames, 0);
+	frameCount = decodedFrames;
 	float targetFs = *parms[2];
 	if (targetFs > FLT_EPSILON)
 	{

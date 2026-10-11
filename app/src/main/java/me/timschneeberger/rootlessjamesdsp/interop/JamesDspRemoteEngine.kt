@@ -111,7 +111,7 @@ class JamesDspRemoteEngine(
             effect = createEffect()
             effect?.enabled = wasEnabled
             syncFusionPreferences()
-            super.syncWithPreferences()
+            super.syncWithPreferences(null)
         }
         catch (ex: IllegalStateException) {
             Timber.e("Failed to re-instantiate JamesDSP effect")

@@ -1,3 +1,4 @@
+#include <math.h>
 void NSEEL_HOSTSTUB_EnterMutex() { }
 void NSEEL_HOSTSTUB_LeaveMutex() { }
 #include "../jdsp_header.h"
