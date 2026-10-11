@@ -159,6 +159,8 @@ class PinnedOutputControlTest {
         val activity = launch()
         activity.findViewById<View>(R.id.output_threshold)
             .findViewById<View>(R.id.output_value_row).performClick()
+        // OnShow installs the validation click handler through the main looper.
+        idle()
         val dialog = ShadowDialog.getLatestDialog() as AlertDialog
         val input = dialog.findViewById<EditText>(android.R.id.edit)!!
         input.setText("-1000")

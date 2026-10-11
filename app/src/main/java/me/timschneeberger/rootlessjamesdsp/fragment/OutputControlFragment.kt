@@ -78,6 +78,12 @@ class OutputControlFragment : Fragment(R.layout.fragment_output_control) {
         requireContext().registerLocalReceiver(presetReceiver, IntentFilter(Constants.ACTION_PRESET_LOADED))
     }
 
+    override fun onViewStateRestored(savedInstanceState: Bundle?) {
+        super.onViewStateRestored(savedInstanceState)
+        // Per-device preferences remain authoritative after a rotation or process restore.
+        reloadValues()
+    }
+
     @Suppress("DEPRECATION")
     private fun openPreferences(): SharedPreferences =
         requireContext().getSharedPreferences(Constants.PREF_OUTPUT, Context.MODE_MULTI_PROCESS)
@@ -88,6 +94,9 @@ class OutputControlFragment : Fragment(R.layout.fragment_output_control) {
         unit: String, integral: Boolean = false,
     ) {
         val tile = parent.findViewById<View>(tileId)
+        // Included tiles reuse their child IDs. Their state comes from preferences;
+        // a flat hierarchy-state array would mix values between those children.
+        tile.isSaveFromParentEnabled = false
         val control = Control(tile, key, getString(title), minimum, maximum, default, unit, integral)
         controls.add(control)
         tile.findViewById<TextView>(R.id.output_label).setText(shortTitle)
