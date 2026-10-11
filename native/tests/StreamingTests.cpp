@@ -11,6 +11,9 @@
 #endif
 
 extern "C" audio_effect_library_t AELI;
+#ifdef DSP_FUSION_TEST_ALLOCATIONS
+extern "C" void JamesDSPTestFailIRAllocationAfter(int successfulAllocations);
+#endif
 namespace {
 constexpr effect_uuid_t uuid{0x30306067,0x9400,0x4d53,0x9000,{0,0,0,0,0,1}};
 struct Engine {
@@ -50,7 +53,7 @@ struct Engine {
         }
         return output;
     }
-    void impulse(const std::vector<float>& samples,int channels) {
+    void prepareImpulse(const std::vector<float>& samples,int channels) {
         const int32_t parts=(samples.size()+4095)/4096;
         const std::array<int32_t,4> info{int32_t(samples.size()),channels,0,parts};
         assert(raw(9999,info.data(),sizeof(info))==0);
@@ -60,6 +63,9 @@ struct Engine {
             std::copy_n(samples.data()+part*4096,count,block.data());
             assert(raw(12000,block.data(),sizeof(block))==0);
         }
+    }
+    void impulse(const std::vector<float>& samples,int channels) {
+        prepareImpulse(samples,channels);
         assert(set(10004,int16_t(1))==0);
         assert(set(1205,int16_t(1))==0);
     }
@@ -125,6 +131,27 @@ void testCrossfeedStreaming() {
         assert(error(regular,phone)<3e-5);
     }
 }
+#ifdef DSP_FUSION_TEST_ALLOCATIONS
+void testImpulseAllocationFailures() {
+    const auto input=signal(2048);
+    Engine engine(true,false);
+    // Fail storage, channel-pointer array, each channel, and the FFT object.
+    // The production Android library has no fault-injection hook.
+    for(int channels:{1,2,4}) for(int failAfter=0;failAfter<channels+3;++failAfter) {
+        engine.impulse({.5f},1);
+        engine.prepareImpulse(std::vector<float>(channels,.25f),channels);
+        JamesDSPTestFailIRAllocationAfter(failAfter);
+        assert(engine.set(10004,int16_t(1))==-ENOMEM);
+        JamesDSPTestFailIRAllocationAfter(-1);
+        assert(engine.set(1205,int16_t(1))==0);
+        assert(error(engine.render(input,960),input)<1e-7);
+        engine.impulse({.5f},1);
+        const auto recovered=engine.render(input,960);
+        for(size_t i=0;i<input.size();++i) assert(std::abs(recovered[i]-.5f*input[i])<1e-7);
+    }
+    std::puts("IR loader allocation-failure injection passed (mono/stereo/four-channel, dry fallback and retry).");
+}
+#endif
 void testRemovedEffectsAndBalance() {
     const auto input=signal(8192);
     Engine engine(false,true);
@@ -170,6 +197,9 @@ void testAnalogAndTube() {
 }
 void runStreamingTests() {
     std::setvbuf(stdout,nullptr,_IONBF,0);
+#ifdef DSP_FUSION_TEST_ALLOCATIONS
+    testImpulseAllocationFailures();
+#endif
     testConvolutionStreaming();testCrossfeedStreaming();testRemovedEffectsAndBalance();testAnalogAndTube();
     std::puts("Streaming, removed algorithms, balance, analog, and retained James limiter passed.");
 }
