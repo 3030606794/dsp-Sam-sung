@@ -2,7 +2,7 @@
 
 The installed driver is **one `libdspfusion.so` and one registered Android AudioEffect**. It owns private JamesDSP and ViPER effect instances and processes:
 
-`input → JamesDSP → independent listening controls → ViPER → unified balance → finite-output clamp → output`
+`input → 170-band PEQ → JamesDSP → independent listening controls → ViPER → unified balance → finite-output clamp → output`
 
 The old drivers' `AELI` symbols are renamed internally; the linker exports only the Fusion `AELI`. Do not register the original JamesDSP or ViPER UUIDs for this library.
 
@@ -10,8 +10,8 @@ The old drivers' `AELI` symbols are renamed internally; the linker exports only 
 |---|---|
 | Implementation UUID | `30306067-9400-4d53-9000-000000000001` |
 | Type UUID | `30306067-9400-4d53-9000-000000000000` |
-| Control protocol | 2 |
-| Capabilities | 7: James = 1, ViPER = 2, listening controls = 4 |
+| Control protocol | 3 |
+| Capabilities | 15: James = 1, ViPER = 2, listening controls = 4, PEQ = 8 |
 | Channels | Stereo only |
 | External PCM formats | float, signed 16-bit, signed 32-bit, packed signed 24-bit, signed 8.24 |
 | Internal format | Interleaved stereo float; child output uses WRITE |
@@ -28,8 +28,9 @@ Use Android `EFFECT_CMD_SET_PARAM` / `EFFECT_CMD_GET_PARAM`, `effect_param_t.psi
 | 131072 | SET/GET | James stage enable, int32 0 or 1 |
 | 131073 | SET/GET | ViPER stage enable, int32 0 or 1 |
 | 131074 | SET/GET | Unified balance, int32 −100 (left) to +100 (right), 0 centered |
-| 131080 | GET | Protocol version, int32 = 2 |
-| 131081 | GET | Capability bits, int32 = 7 |
+| 1250 | SET | PEQ snapshot, schema 1; see [`peq/README.md`](peq/README.md) |
+| 131080 | GET | Protocol version, int32 = 3 |
+| 131081 | GET | Capability bits, int32 = 15 |
 | 196608 | SET | 44 bytes: int32 enable followed by ten int32 controls |
 
 The ten listening controls retain the screenshot order: temperature, bass extension, bass punch, thickness, vocal presence, female vocal coloration, low sibilance, high sibilance, transients, air. Values are −100 to +100. This is an independent DSP model; it does not contain HiBy's proprietary engine or claim bit-identical MSEB output. See [`tone/README.md`](tone/README.md) and the application compatibility document for the model's scope.
@@ -40,7 +41,7 @@ Legacy James GET 20001 reports the James engine's internal processing rate, not 
 
 ViPER controls use their original 32-bit integer protocol. IDs 65570/65571 (dynamic-system frequency pairs) and 65572 (side gains) take two int32 values. Reverb IDs 65560–65564 use integer percentages 0–100; their meanings are room size, width, damping, wet, dry. Differential delay is hundredths of a millisecond. The application's `ViperParameters.kt` is the UI range and encoding specification.
 
-Protocol 2 removes ViPER's ten-band EQ, speaker optimization, and output volume/pan/limiter algorithms. Their old IDs 65551, 65552, 65586, 65587, 65588, and 65603 return `-ENOSYS`, including when disabling them. Output limiting uses the retained James controls; balance uses 131074 and remains independent of the ViPER stage. The application must use a matching protocol-2 driver.
+Since protocol 2, ViPER's ten-band EQ, speaker optimization, and output volume/pan/limiter algorithms are removed. Their old IDs 65551, 65552, 65586, 65587, 65588, and 65603 return `-ENOSYS`, including when disabling them. Output limiting uses the retained James controls; balance uses 131074 and remains independent of the ViPER stage. The current application requires the matching protocol-3 driver.
 
 Incomplete upstream paths return `-ENOSYS`: native ViPER IR upload/convolution, headphone VHE, AGC, FET compressor, and native ViPER DDC coefficient upload. VHE disable is accepted. User DDC and IR processing are provided by the existing JamesDSP controls. The main ViPER environment/field-surround control is implemented and is distinct from the incomplete VHE path.
 
@@ -49,7 +50,7 @@ Incomplete upstream paths return `-ENOSYS`: native ViPER IR upload/convolution, 
 - Global disable performs dry bypass; same-format WRITE preserves the original bytes. Stage switches are independent of the global effect state; the application enables both stages and exposes one master switch. Balance changes use a 10 ms smoothing time constant.
 - Packet sizes, ranges, finite numeric values and segmented-transfer state are checked before calling the older engines. Strings have a terminating NUL and repeated uploads free the previous buffer.
 - Processing uses bounded chunks with fixed wrapper work buffers. James convolution state is retained across different callback sizes, including a 960-frame mixer callback split into 512 + 448. Fusion uses James' built-in partition timing estimates instead of a background benchmark that could rebuild active filters during playback.
-- Control commands serialize access to both engines. The audio thread uses a nonblocking lock and temporarily emits dry audio if a control operation holds it. Large IR/filter changes may therefore produce an audible transition; this initial implementation does not promise seamless arbitrary filter replacement.
+- Legacy control commands serialize access to both engines. The audio thread uses a nonblocking lock and temporarily emits dry audio if one of those operations holds it. Large IR/filter changes may therefore produce an audible transition. PEQ updates use a separate snapshot mechanism that keeps processing the previous bank during coefficient preparation and crossfades the new bank over 20 ms.
 - The removed ViPER limiter no longer adds its approximately 255-sample delay. The final clamp prevents nonfinite/over-range processed output; ACCUMULATE still honors the host's mixing semantics.
 - ViPER reverb retains its original fixed sample delays. Its time behavior changes with sample rate. The unified processing order, floating-point toolchain and corrected upstream bugs can also cause differences from separately installed old binaries.
 

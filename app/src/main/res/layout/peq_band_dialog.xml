@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="wrap_content" android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:paddingHorizontal="24dp" android:paddingVertical="8dp">
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.FilledBox.ExposedDropdownMenu"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="@string/peq_filter_type">
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/peq_band_type" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:inputType="none" />
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_frequency_box"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:hint="@string/peq_frequency" app:suffixText="Hz">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_frequency_input"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:inputType="numberDecimal" android:selectAllOnFocus="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_gain_box"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:hint="@string/peq_gain" app:suffixText="dB">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_gain_input"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:inputType="numberSigned|numberDecimal" android:selectAllOnFocus="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.button.MaterialButtonToggleGroup android:id="@+id/peq_quality_mode"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center"
+            app:singleSelection="true" app:selectionRequired="true" app:checkedButton="@id/peq_quality_q">
+            <com.google.android.material.button.MaterialButton android:id="@+id/peq_quality_q"
+                style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Q" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/peq_quality_bw"
+                style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="@string/peq_bandwidth" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+        <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_quality_box"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="@string/peq_quality" app:helperText="@string/peq_quality_hint">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_quality_input"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:inputType="numberDecimal" android:selectAllOnFocus="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.button.MaterialButton android:id="@+id/peq_band_copy"
+            style="@style/Widget.Material3.Button.TextButton" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="@string/peq_copy_band" />
+    </LinearLayout>
+</ScrollView>

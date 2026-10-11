@@ -8,9 +8,12 @@ import android.content.res.TypedArray
 import android.util.AttributeSet
 import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
+import androidx.core.view.isVisible
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.PreferenceGraphicEqualizerBinding
 import me.timschneeberger.rootlessjamesdsp.model.GraphicEqNodeList
+import me.timschneeberger.rootlessjamesdsp.peq.PeqController
+import me.timschneeberger.rootlessjamesdsp.peq.PeqRepository
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.registerLocalReceiver
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.unregisterLocalReceiver
@@ -79,13 +82,22 @@ class GraphicEqualizerPreference : Preference {
     }
 
     private fun setEqualizerViewValues(value: String) {
+        val parametric = PeqController.isParametric(context)
+        binding?.layoutEqualizer?.isVisible = !parametric
+        binding?.layoutPeq?.isVisible = parametric
+        if (parametric) {
+            val state = PeqRepository(context).load()
+            binding?.layoutPeq?.setState(state)
+            binding?.nodeCount?.text = context.getString(R.string.fusion_peq_band_count, state.bands.size)
+            return
+        }
         val nodes = GraphicEqNodeList()
         nodes.deserialize(value)
 
         binding?.layoutEqualizer?.setNodes(nodes)
         try {
             binding?.nodeCount?.text =
-                context.resources.getQuantityString(R.plurals.nodes, nodes.size, nodes.size)
+                context.getString(R.string.fusion_peq_legacy_count, nodes.size)
         }
         catch (ex: MissingFormatArgumentException) {
             Timber.e(ex)

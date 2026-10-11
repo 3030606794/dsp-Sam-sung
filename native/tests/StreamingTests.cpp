@@ -170,6 +170,30 @@ void testRemovedEffectsAndBalance() {
     assert(engine.set(131074,int32_t(0))==0);engine.render(input,960);
     assert(engine.render(input,960)==input);
 }
+void testPeqProtocolAndChainOrder() {
+    Engine engine(false,false);
+    const std::array<int32_t,8> peq{1,1,1,0,1,1000000,12000,1000};
+    assert(engine.raw(1250,peq.data(),sizeof(peq))==0);
+    auto malformed=peq;malformed[2]=170;
+    assert(engine.raw(1250,malformed.data(),sizeof(malformed))==-EINVAL);
+    assert(engine.raw(1250,peq.data(),sizeof(peq)-1)==-EINVAL);
+    constexpr double pi=3.14159265358979323846;
+    std::vector<float> input(48000*2);
+    for(size_t i=0;i<input.size()/2;++i) input[i*2]=input[i*2+1]=float(.01*std::sin(2*pi*1000*i/48000));
+    const auto boosted=engine.render(input,960);
+    double dry=0,wet=0;
+    for(size_t i=24000*2;i<input.size();++i) {dry+=double(input[i])*input[i];wet+=double(boosted[i])*boosted[i];}
+    assert(std::abs(10*std::log10(wet/dry)-12)<.002);
+    assert(engine.set(131072,int32_t(1))==0);
+    const std::array<float,3> limiter{-6.f,60.f,0.f};
+    assert(engine.raw(1500,limiter.data(),sizeof(limiter))==0);
+    for(auto& s:input) s*=20;
+    const auto limited=engine.render(input,960);
+    // If PEQ ran after James, the +12 dB peak could escape the -6 dB limiter.
+    for(float s:limited) assert(std::isfinite(s)&&std::abs(s)<=.502f);
+    const std::array<int32_t,3> off{1,0,0};assert(engine.raw(1250,off.data(),sizeof(off))==0);
+    std::puts("PEQ wire validation, independent stage and placement before James limiter passed.");
+}
 void testAnalogAndTube() {
     const auto input=signal(16384);
     for(uint32_t rate:{44100u,48000u,96000u}) {
@@ -200,6 +224,6 @@ void runStreamingTests() {
 #ifdef DSP_FUSION_TEST_ALLOCATIONS
     testImpulseAllocationFailures();
 #endif
-    testConvolutionStreaming();testCrossfeedStreaming();testRemovedEffectsAndBalance();testAnalogAndTube();
+    testConvolutionStreaming();testCrossfeedStreaming();testRemovedEffectsAndBalance();testAnalogAndTube();testPeqProtocolAndChainOrder();
     std::puts("Streaming, removed algorithms, balance, analog, and retained James limiter passed.");
 }

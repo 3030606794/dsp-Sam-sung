@@ -8,6 +8,7 @@ import android.media.audiofx.AudioEffect
 import android.media.audiofx.AudioEffectHidden
 import me.timschneeberger.rootlessjamesdsp.fusion.ToneController
 import me.timschneeberger.rootlessjamesdsp.fusion.ViperController
+import me.timschneeberger.rootlessjamesdsp.peq.PeqController
 import me.timschneeberger.rootlessjamesdsp.interop.structure.EelVmVariable
 import me.timschneeberger.rootlessjamesdsp.model.ProcessorMessage
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
@@ -46,6 +47,9 @@ class JamesDspRemoteEngine(
     }
 
     private val fusionPackets = mutableMapOf<Int, IntArray>()
+    private var lastParametricMode: Boolean? = null
+    private var legacyCurveDisabled = false
+    @Volatile private var graphicEqNeedsRetry = false
     @Volatile private var convolverFailure: String? = null
     var effect: AudioEffectHidden? = createEffect()
 
@@ -76,11 +80,11 @@ class JamesDspRemoteEngine(
         return try {
             AudioEffectHidden(EFFECT_TYPE_CUSTOM, EFFECT_JAMESDSP, priority, sessionId).also {
                 if (it.getParameterInt(FUSION_PROTOCOL) != REQUIRED_PROTOCOL ||
-                    ((it.getParameterInt(FUSION_CAPABILITIES) ?: 0) and 7) != 7) {
+                    ((it.getParameterInt(FUSION_CAPABILITIES) ?: 0) and 15) != 15) {
                     it.release()
                     throw IllegalStateException("DSP音效 驱动协议不匹配，请安装与 APK 同一版本的融合模块。")
                 }
-                ViperController.publishStatus(context, "已连接 DSP音效：JamesDSP + ViPER + 听感调音")
+                ViperController.publishStatus(context, "已连接 DSP音效：参数均衡器 + JamesDSP + MSEB + ViPER")
             }
         } catch (e: Exception) {
             ViperController.publishStatus(context, "连接失败：请安装 DSP音效 融合模块并重启手机。旧 JamesDSP / ViPER 模块不能驱动本应用。")
@@ -109,6 +113,8 @@ class JamesDspRemoteEngine(
             val wasEnabled = effect?.enabled ?: false
             effect?.release()
             fusionPackets.clear()
+            legacyCurveDisabled = false
+            lastParametricMode = null
             clearCache()
             effect = createEffect()
             effect?.enabled = wasEnabled
@@ -130,29 +136,49 @@ class JamesDspRemoteEngine(
         }
 
         checkEngine()
-        syncFusionPreferences()
-        super.syncWithPreferences(forceUpdateNamespaces)
+        val parametricMode = PeqController.isParametric(context)
+        val targets = if (lastParametricMode != parametricMode || graphicEqNeedsRetry)
+            (forceUpdateNamespaces ?: emptyArray()) + Constants.PREF_GEQ
+        else forceUpdateNamespaces
+        if (syncFusionPreferences()) lastParametricMode = parametricMode
+        super.syncWithPreferences(targets)
+    }
+
+    private fun sendFusionParameter(parameter: Int, values: IntArray): Boolean {
+        if (fusionPackets[parameter]?.contentEquals(values) == true) return true
+        val success = effect.setParameterIntArray(parameter, values) == AudioEffect.SUCCESS
+        if (success) fusionPackets[parameter] = values.copyOf()
+        else fusionPackets.remove(parameter)
+        return success
+    }
+
+    private fun writeLegacyEnable(enable: Boolean): Boolean {
+        val success = effect.setParameter(1210, enable.toShort()) == AudioEffect.SUCCESS
+        legacyCurveDisabled = success && !enable
+        graphicEqNeedsRetry = !success
+        return success
+    }
+
+    private fun syncParametricEq(): Boolean = PeqController.sync(context) { parameter, values ->
+        // The legacy engine synchronizes asynchronously. Confirm it is bypassed
+        // before activating PEQ; a failed write must be retried, never cached.
+        if (values[1] == 1 && !legacyCurveDisabled && !writeLegacyEnable(false)) false
+        else sendFusionParameter(parameter, values)
     }
 
     @Synchronized
-    private fun syncFusionPreferences() {
+    private fun syncFusionPreferences(): Boolean {
         // Avoid resetting unchanged processors when another control is adjusted.
-        fun send(parameter: Int, values: IntArray): Boolean {
-            val cacheKey = parameter
-            if (fusionPackets[cacheKey]?.contentEquals(values) == true) return true
-            val success = effect.setParameterIntArray(parameter, values) == AudioEffect.SUCCESS
-            if (success) fusionPackets[cacheKey] = values.copyOf()
-            else fusionPackets.remove(cacheKey)
-            return success
-        }
-        val viperOk = ViperController.sync(context, ::send)
-        val toneOk = ToneController.sync(context, ::send)
+        val viperOk = ViperController.sync(context, ::sendFusionParameter)
+        val toneOk = ToneController.sync(context, ::sendFusionParameter)
+        val peqOk = syncParametricEq()
         val output = PreferenceCache.getPreferences(context, Constants.PREF_OUTPUT)
         val balance = (output.all["balance"] as? Number)?.toInt()?.coerceIn(-100, 100) ?: 0
-        val balanceOk = send(FUSION_BALANCE, intArrayOf(balance))
-        ViperController.publishStatus(context, convolverFailure ?: if (viperOk && toneOk && balanceOk)
-            "参数已同步：JamesDSP → 听感调音 → ViPER"
+        val balanceOk = sendFusionParameter(FUSION_BALANCE, intArrayOf(balance))
+        ViperController.publishStatus(context, convolverFailure ?: if (viperOk && toneOk && peqOk && balanceOk)
+            "参数已同步：参数均衡器 → JamesDSP → MSEB → ViPER"
         else "部分参数写入失败，请检查驱动版本或重新启动音效服务。")
+        return peqOk
     }
 
     override fun close() {
@@ -294,17 +320,25 @@ class JamesDspRemoteEngine(
         return false
     }
 
+    @Synchronized
     override fun setGraphicEqInternal(enable: Boolean, bands: String): Boolean {
+        val legacyEnabled = enable && !PeqController.isParametric(context)
+        // Bypass PEQ explicitly for the reverse handoff; do not depend on an
+        // earlier asynchronous preference update having reached the driver.
+        if (legacyEnabled && !sendFusionParameter(PeqController.PARAMETER, intArrayOf(1, 0, 0))) {
+            graphicEqNeedsRetry = true
+            return false
+        }
         val prevCrc = this.graphicEqHash
         val currentCrc = bands.crc()
 
         Timber.i("GraphicEQ hash before: $prevCrc, current: $currentCrc")
-        if (prevCrc != currentCrc && enable) {
+        if (prevCrc != currentCrc && legacyEnabled) {
             effect.setParameterCharBuffer(12001, 10006, bands)
             effect.setParameter(25000, currentCrc) // Commit hash
         }
 
-        return effect.setParameter(1210, enable.toShort()) == AudioEffect.SUCCESS
+        return writeLegacyEnable(legacyEnabled)
     }
 
     override fun setLiveprogInternal(enable: Boolean, name: String, script: String): Boolean {
@@ -365,7 +399,7 @@ class JamesDspRemoteEngine(
         private const val FUSION_PROTOCOL = 131080
         private const val FUSION_CAPABILITIES = 131081
         private const val FUSION_BALANCE = 131074
-        private const val REQUIRED_PROTOCOL = 2
+        private const val REQUIRED_PROTOCOL = 3
 
         fun isPluginInstalled(): PluginState {
             // AIDL can omit custom effects from queryEffects. Probe the unique UUID and handshake.
@@ -373,7 +407,7 @@ class JamesDspRemoteEngine(
                 val probe = AudioEffectHidden(EFFECT_TYPE_CUSTOM, EFFECT_JAMESDSP, 0, 0)
                 try {
                     if (probe.getParameterInt(FUSION_PROTOCOL) == REQUIRED_PROTOCOL &&
-                        ((probe.getParameterInt(FUSION_CAPABILITIES) ?: 0) and 7) == 7)
+                        ((probe.getParameterInt(FUSION_CAPABILITIES) ?: 0) and 15) == 15)
                         PluginState.Available
                     else PluginState.Unsupported
                 } finally { probe.release() }

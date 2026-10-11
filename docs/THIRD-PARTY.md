@@ -8,6 +8,7 @@ DSP Fusion retains upstream author notices and licenses. It is an independent in
 | JamesDSP engine | james34602/JamesDSPManager / ThePBone fork `1b9f89dbd4b332a07724beb41d58bc2ffcb05395` | `app/src/main/cpp/libjamesdsp/Main/libjamesdsp`; original `Main/LICENSE` retained. Individual dependency notices also retained. |
 | ViPER RE engine | WSTxda/ViPERFX_RE `43a66a810c00b1a833463d73a9f6f67ea9937973` (v0.6.3) | `native/viper/src`; accompanying upstream module GPLv2 text retained as `native/viper/LICENSE.module`. Original credits: ViPER520, Zhuhang, Martmists, Iscle and subsequent fork contributors. |
 | Listening controls | DSP Fusion contributors | Independently implemented; inspired by the ten publicly visible MSEB controls. No HiBy APK, proprietary library or decompiled application source is distributed. |
+| Parametric EQ | DSP Fusion contributors | Independent implementation of the published [RBJ biquad equations](https://www.w3.org/TR/audio-eq-cookbook/). The Neutron Player 2.29.0 UI was inspected as an interaction reference; no Neutron code, binary, image or skin is included. |
 
 The ViPER source tree does not contain separate license headers for every native file; `LICENSE.module` records the supplied distribution notice rather than asserting additional licensing terms. All upstream source is included for inspection and modification, with the integration changes visible in repository history.
 

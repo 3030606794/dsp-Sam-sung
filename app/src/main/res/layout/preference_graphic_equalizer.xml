@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="335dp"
+    android:layout_height="wrap_content"
     android:orientation="vertical">
 
         <LinearLayout
@@ -21,7 +21,7 @@
                 android:layout_height="wrap_content"
                 android:singleLine="true"
                 android:textAppearance="?android:attr/textAppearanceListItem"
-                android:text="@string/geq_nodes"
+                android:text="@string/fusion_peq_title"
                 android:ellipsize="marquee"/>
             <TextView
                 android:id="@+id/node_count"
@@ -39,5 +39,11 @@
         android:id="@+id/layout_equalizer"
         android:layout_width="match_parent"
         android:layout_height="256dp" />
+
+    <me.timschneeberger.rootlessjamesdsp.peq.PeqResponseView
+        android:id="@+id/layout_peq"
+        android:layout_width="match_parent"
+        android:layout_height="180dp"
+        android:visibility="gone" />
 
 </LinearLayout>

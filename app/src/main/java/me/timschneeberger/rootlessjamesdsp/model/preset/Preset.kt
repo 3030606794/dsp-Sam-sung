@@ -6,7 +6,10 @@ import android.system.ErrnoException
 import me.timschneeberger.rootlessjamesdsp.BuildConfig
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.backup.BackupManager
+import me.timschneeberger.rootlessjamesdsp.interop.PreferenceCache
 import me.timschneeberger.rootlessjamesdsp.liveprog.EelParser
+import me.timschneeberger.rootlessjamesdsp.peq.PeqController
+import me.timschneeberger.rootlessjamesdsp.peq.PeqRepository
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.broadcastPresetLoadEvent
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
@@ -59,6 +62,11 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
 
         Timber.d("Saving preset $name to ${targetFile.path}")
 
+        // Even an untouched neutral PEQ bank can replace a preserved legacy curve.
+        // Older apps ignore the mode and would enable that curve again on import.
+        val requiresParametricSupport = PeqRepository(ctx).hasSavedState() ||
+            PreferenceCache.getPreferences(ctx, Constants.PREF_GEQ).all[PeqController.MODE_KEY] ==
+            PeqController.PARAMETRIC
 
         // Create a TarOutputStream
         try {
@@ -68,7 +76,7 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                     META_APP_VERSION to BuildConfig.VERSION_NAME,
                     META_APP_FLAVOR to BuildConfig.FLAVOR,
                     META_LIVEPROG_INCLUDED to false.toString(),
-                    META_MIN_VERSION_CODE to MIN_VERSION_CODE
+                    META_MIN_VERSION_CODE to if (requiresParametricSupport) "1006" else MIN_VERSION_CODE
                 )
 
                 currentPath(ctx)
@@ -155,9 +163,9 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                 throw Exception(ctx.getString(R.string.filelibrary_corrupted))
             }
 
-            // Old JamesDSP presets lack Fusion processors: reset them instead of retaining
-            // the preceding device profile's tone/ViPER processing underneath an old preset.
-            arrayOf("dsp_fusion_viper", "dsp_fusion_tone").forEach { namespace ->
+            // Missing processor namespaces must not retain PEQ/tone/ViPER settings
+            // from the preceding device profile underneath an older preset.
+            arrayOf("dsp_fusion_viper", "dsp_fusion_tone", Constants.PREF_GEQ).forEach { namespace ->
                 if (files.none { it.name == "$namespace.xml" }) {
                     ctx.getSharedPreferences(namespace, Context.MODE_PRIVATE).edit().clear().commit()
                 }

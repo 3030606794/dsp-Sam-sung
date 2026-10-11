@@ -12,6 +12,7 @@
 #include <vector>
 #include "essential.h"
 #include "../tone/ToneProcessor.h"
+#include "../peq/PeqProcessor.h"
 
 extern "C" audio_effect_library_t JDSP_AELI;
 extern "C" audio_effect_library_t VIPER_AELI;
@@ -26,6 +27,7 @@ constexpr size_t kMaxTransfer=32*1024*1024;
 constexpr uint32_t kJamesEnable=131072, kViperEnable=131073;
 constexpr uint32_t kBalance=131074;
 constexpr uint32_t kProtocol=131080, kCapabilities=131081, kTone=196608;
+constexpr uint32_t kPeq=1250;
 // Retain the upstream engines' nominal policy charges (1 KB each). This legacy
 // descriptor field is admission accounting, not measured process RSS: a 1024 KB
 // estimate exceeds Android's global effects budget and prevents any instance.
@@ -94,6 +96,7 @@ struct Fusion {
     float balanceCurrent=0.f, balanceSmoothing=.002f;
     uint32_t stringChunks=0,stringWritten=0,impulseChunks=0,impulseWritten=0;
     dspfusion::ToneProcessor tone;
+    dspfusion::PeqProcessor peq;
     std::array<float,kBlockFrames*2> first{},second{};
     ~Fusion() {
         if(james) JDSP_AELI.release_effect(james);
@@ -131,6 +134,7 @@ int32_t setConfig(Fusion& f,const effect_config_t& cfg) {
     ret=childCommand(f.viper,EFFECT_CMD_SET_CONFIG,sizeof(internal),&internal);
     if(ret) return ret;
     f.tone.configure(in.samplingRate);
+    f.peq.configure(in.samplingRate);
     f.balanceSmoothing=1.f-std::exp(-1.f/(.01f*in.samplingRate));
     f.config=next;
     f.ioFormat.store(in.format | (uint32_t(out.format)<<8) | (uint32_t(out.accessMode==EFFECT_BUFFER_ACCESS_ACCUMULATE)<<16));
@@ -268,6 +272,13 @@ int32_t parameter(Fusion& f,bool set,uint32_t size,void* data,uint32_t* replySiz
         } else if(id==kBalance) {
             if(packet->vsize!=4 || valueAt<int32_t>(values)<-100 || valueAt<int32_t>(values)>100) status=-EINVAL;
             else f.balance=valueAt<int32_t>(values);
+        } else if(id==kPeq) {
+            std::array<int32_t,dspfusion::PeqProcessor::kMaxWords> parameters{};
+            if(packet->vsize<12 || packet->vsize>sizeof(parameters) || packet->vsize%4) status=-EINVAL;
+            else {
+                std::memcpy(parameters.data(),values,packet->vsize);
+                if(!f.peq.setParameters(parameters.data(),packet->vsize/4)) status=-EINVAL;
+            }
         } else if(id==kTone) {
             std::array<int32_t,11> parameters{};
             if(packet->vsize!=sizeof(parameters)) status=-EINVAL;
@@ -291,7 +302,7 @@ int32_t parameter(Fusion& f,bool set,uint32_t size,void* data,uint32_t* replySiz
     if(id==kProtocol || id==kCapabilities || id==kJamesEnable || id==kViperEnable || id==kBalance) {
         auto* result=static_cast<effect_param_t*>(reply);
         result->status=0; result->psize=result->vsize=4;
-        int32_t value=id==kProtocol?2:(id==kCapabilities?7:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)));
+        int32_t value=id==kProtocol?3:(id==kCapabilities?15:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)));
         std::memcpy(result->data,&id,4); std::memcpy(result->data+4,&value,4);
         *replySize=sizeof(effect_param_t)+8; return 0;
     }
@@ -325,6 +336,7 @@ int32_t process(effect_handle_t self,audio_buffer_t* in,audio_buffer_t* out) {
     for(size_t offset=0;offset<in->frameCount;offset+=kBlockFrames) {
         const size_t count=std::min(kBlockFrames,in->frameCount-offset);
         for(size_t i=0;i<count*2;++i) f.first[i]=readSample(in->raw,offset*2+i,inputFormat);
+        f.peq.process(f.first.data(),static_cast<uint32_t>(count));
         audio_buffer_t a{},b{}; a.frameCount=b.frameCount=count;
         a.f32=f.first.data(); b.f32=f.second.data();
         float* current=f.first.data();
@@ -350,6 +362,13 @@ int32_t process(effect_handle_t self,audio_buffer_t* in,audio_buffer_t* out) {
 int32_t commandInternal(effect_handle_t self,uint32_t code,uint32_t size,void* data,uint32_t* replySize,void* reply) {
     if(!self) return -EINVAL;
     auto& f=*reinterpret_cast<Fusion*>(self);
+    // PEQ owns its own pending-snapshot lock. Designing 170 filters must not
+    // make the existing audio-thread try_lock emit dry audio while dragging.
+    if(code==EFFECT_CMD_SET_PARAM && data && size>=sizeof(effect_param_t)+4) {
+        const auto* packet=static_cast<const effect_param_t*>(data);
+        if(packet->psize==4 && valueAt<uint32_t>(packet->data)==kPeq)
+            return parameter(f,true,size,data,replySize,reply);
+    }
     std::lock_guard<std::mutex> lock(f.mutex);
     switch(code) {
         case EFFECT_CMD_INIT: return statusReply(replySize,reply,0);
@@ -363,7 +382,7 @@ int32_t commandInternal(effect_handle_t self,uint32_t code,uint32_t size,void* d
             if(!replySize || !reply || *replySize<4) return -EINVAL;
             f.enabled.store(code==EFFECT_CMD_ENABLE); return statusReply(replySize,reply,0);
         case EFFECT_CMD_RESET:
-            childCommand(f.james,EFFECT_CMD_RESET); childCommand(f.viper,EFFECT_CMD_RESET); f.tone.reset();
+            childCommand(f.james,EFFECT_CMD_RESET); childCommand(f.viper,EFFECT_CMD_RESET); f.tone.reset();f.peq.reset();
             return replySize && reply ? statusReply(replySize,reply,0) : 0;
         case EFFECT_CMD_SET_PARAM: case EFFECT_CMD_GET_PARAM:
             return parameter(f,code==EFFECT_CMD_SET_PARAM,size,data,replySize,reply);

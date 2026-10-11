@@ -66,6 +66,7 @@ class GraphicEqualizerFragment : Fragment() {
                     activity?.finish()
                     startActivity(Intent(requireContext(), GraphicEqualizerActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        putExtra("legacy_curve", true)
                     })
                 }
             }
@@ -334,6 +335,7 @@ class GraphicEqualizerFragment : Fragment() {
             .putString(getString(R.string.key_geq_nodes), adapter.nodes.serialize())
             .commit()
         requireContext().sendLocalBroadcast(Intent(Constants.ACTION_GRAPHIC_EQ_CHANGED))
+        requireContext().sendLocalBroadcast(Intent(Constants.ACTION_PREFERENCES_UPDATED))
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
