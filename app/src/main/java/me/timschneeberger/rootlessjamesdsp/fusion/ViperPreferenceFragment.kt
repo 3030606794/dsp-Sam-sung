@@ -39,6 +39,9 @@ class ViperPreferenceFragment : PreferenceFragmentCompat() {
         preferenceManager.sharedPreferencesName = ViperParameters.PREFS
         @Suppress("DEPRECATION")
         preferenceManager.sharedPreferencesMode = Context.MODE_MULTI_PROCESS
+        // Child preferences have no manager until attached to the screen.
+        // Capture the fragment's store before entering any Preference.apply block.
+        val storedPreferences = requireNotNull(preferenceManager.sharedPreferences)
         preferenceScreen = preferenceManager.createPreferenceScreen(ctx)
         preferenceScreen.addPreference(Preference(ctx).apply {
             title = "DSP Fusion · 单驱动控制中心"
@@ -107,7 +110,7 @@ class ViperPreferenceFragment : PreferenceFragmentCompat() {
                     key = control.key
                     title = control.title
                     setDefaultValue(control.default)
-                    val value = (preferenceManager.sharedPreferences?.all?.get(control.key) as? Number)?.toInt()
+                    val value = (storedPreferences.all[control.key] as? Number)?.toInt()
                         ?: control.default
                     summary = control.label(value)
                     setOnPreferenceChangeListener { p, new ->
@@ -144,7 +147,7 @@ class ViperPreferenceFragment : PreferenceFragmentCompat() {
             title = "重置 ViPER 调节"
             summary = "关闭 ViPER 各项效果并恢复默认数值。"
             setOnPreferenceClickListener {
-                preferenceManager.sharedPreferences?.edit()?.clear()?.apply()
+                storedPreferences.edit().clear().apply()
                 (parentFragment as? DspFragment)?.restartFragment(id, ViperPreferenceFragment())
                 ctx.sendLocalBroadcast(Intent(Constants.ACTION_PREFERENCES_UPDATED))
                 true

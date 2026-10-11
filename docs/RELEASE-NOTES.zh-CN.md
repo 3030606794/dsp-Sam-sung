@@ -1,7 +1,11 @@
-DSP Fusion 0.1.0-alpha1 将 JamesDSP 与 ViPER RE 接入一个驱动和一个应用，并提供十项独立实现的听感调节。
+DSP Fusion 0.1.0-alpha2 修复用户手机上打开应用即闪退的问题。
 
-下载 APK 和 Driver ZIP。安装前请先阅读随附 `COMPATIBILITY.zh-CN.md`：禁用旧 JamesDSP、Viper（包括 AIDL）和 AML 模块并重启，再安装新模块并重启，最后安装 APK。新应用使用独立包名和持久签名。
+崩溃原因：ViPER 参数页创建滑块时，在滑块尚未加入界面前读取了它自己的设置管理器，触发空指针。现改为使用页面已经初始化的设置存储，并补充真实 Android 界面创建、恢复与调节的回归测试。
+
+已安装 0.1.0-alpha1 驱动的用户只需下载 `DSP-Fusion-0.1.0-alpha2.apk` 覆盖安装。同包名、同签名，保留设置；无需卸载或重新刷入驱动。驱动仍为 0.1.0-alpha1。
+
+首次安装才需要 APK 和 Driver ZIP，请阅读随附 `COMPATIBILITY.zh-CN.md`。
 
 海贝式十项调节是近似听感实现；没有分发海贝算法或宣称逐样本复刻。DDC/卷积共享 JamesDSP 入口；上游 RE 中未完成的 AGC/FET/VHE 不提供无效控制。
 
-本发布由 GitHub Actions 构建并执行离线检查，尚未在用户手机安装测试。请保留旧版安装包和预设以便回退。
+本发布由 GitHub Actions 构建并执行回归检查。实机启动验证结果将在发布说明中补充；音效与听感仍需实际试听。

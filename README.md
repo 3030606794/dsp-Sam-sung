@@ -2,7 +2,9 @@
 
 一个应用、一个 Magisk 模块，统一 JamesDSP、ViPER RE 与十项听感调节。
 
-初版：0.1.0-alpha1。Android 8+，ARM64/ARMv7。此版本需要 root 和配套模块。
+应用：0.1.0-alpha2；配套驱动：0.1.0-alpha1。Android 8+，ARM64/ARMv7。此版本需要 root 和配套模块。
+
+alpha2 修复打开应用时 ViPER 参数页的空指针崩溃。已安装 alpha1 驱动的用户只需覆盖升级 APK，无需重新刷驱动或清除设置。
 
 ## 下载和安装
 
