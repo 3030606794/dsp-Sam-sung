@@ -1,11 +1,7 @@
-import com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-kapt")
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
     id("com.google.devtools.ksp") version AndroidConfig.kspVersion
     id("dev.rikka.tools.refine") version AndroidConfig.rikkaRefineVersion
     id("org.jetbrains.kotlin.plugin.serialization") version "2.1.0"
@@ -65,10 +61,6 @@ android {
         }
         getByName("release") {
             manifestPlaceholders += mapOf("crashlyticsCollectionEnabled" to "true")
-            configure<CrashlyticsExtension> {
-                nativeSymbolUploadEnabled = true
-                mappingFileUploadEnabled = false
-            }
 
             //proguardFiles("proguard-android-optimize.txt", "proguard-rules.pro")
             isMinifyEnabled = false
@@ -175,17 +167,6 @@ android {
         }
     }
     namespace = "me.timschneeberger.rootlessjamesdsp"
-}
-
-// Hooks to upload native symbols to crashlytics automatically
-afterEvaluate {
-    getTasksByName("bundleRootlessFullRelease", false).firstOrNull()?.finalizedBy("uploadCrashlyticsSymbolFileRootlessFullRelease")
-    getTasksByName("bundleRootFullRelease", false).firstOrNull()?.finalizedBy("uploadCrashlyticsSymbolFileRootFullRelease")
-    getTasksByName("assembleRootlessFullRelease", false).firstOrNull()?.finalizedBy("uploadCrashlyticsSymbolFileRootlessFullRelease")
-    getTasksByName("assembleRootFullRelease", false).firstOrNull()?.finalizedBy("uploadCrashlyticsSymbolFileRootFullRelease")
-
-    getTasksByName("assembleRootlessFullPreview", false).firstOrNull()?.finalizedBy("uploadCrashlyticsSymbolFileRootlessFullRelease")
-    getTasksByName("assembleRootFullPreview", false).firstOrNull()?.finalizedBy("uploadCrashlyticsSymbolFileRootFullRelease")
 }
 
 dependencies {

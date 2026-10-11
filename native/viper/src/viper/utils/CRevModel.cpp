@@ -1,6 +1,7 @@
 #include "CRevModel.h"
 
-CRevModel::CRevModel() {
+CRevModel::CRevModel() : gain(0), roomSize(0), internalRoomSize(0), damp(0),
+        internalDamp(0), wet(0), unknown1(0), unknown2(0), dry(0), width(0), mode(0) {
     buffers[0] = new float[1116];
     buffers[1] = new float[1139];
     buffers[2] = new float[1188];

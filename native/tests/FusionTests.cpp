@@ -106,6 +106,19 @@ int main() {
         impulse.fill(0);
     }
     assert(lateEnergy>1e-9);
+    assert(set(h,65559,0)==0);
+    assert(set(h,65576,70)==0 && set(h,65577,200)==0 && set(h,65575,1)==0);
+    assert(set(h,65550,56)==0 && set(h,65558,500)==0 && set(h,65580,100)==0);
+    const std::array<uint32_t,12> effects{65548,65551,65553,65557,65569,65574,65578,65581,65583,65584,65603,65559};
+    for(auto effect:effects) {
+        assert(set(h,effect,1)==0);
+        for(int block=0;block<6;++block) {
+            for(size_t i=0;i<impulse.size();++i) impulse[i]=std::sin((block*1024+i)*.021f)*.05f;
+            assert(process(h,impulse.data(),tail.data(),512)==0);
+            for(float sample:tail) assert(std::isfinite(sample) && std::abs(sample)<=1);
+        }
+        assert(set(h,effect,0)==0);
+    }
     assert(set(h,131073,0)==0 && set(h,131072,1)==0);
     assert(setRaw(h,1203,&one,2)==0); // Original James reverb enable protocol remains compatible.
     for(uint32_t rate:{44100u,48000u,96000u}) {

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <new>
 #include <vector>
@@ -301,8 +302,13 @@ int32_t process(effect_handle_t self,audio_buffer_t* in,audio_buffer_t* out) {
     if(!lock.owns_lock() || !active || !f.configured) {
         // Heavy filter/IR changes may own the control mutex. Dry bypass keeps
         // the audio thread running without racing upstream filter state.
-        for(size_t i=0;i<in->frameCount*2;++i)
-            writeSample(out->raw,i,outputFormat,readSample(in->raw,i,inputFormat),accumulate);
+        if(inputFormat==outputFormat && !accumulate) {
+            const size_t bytes=inputFormat==AUDIO_FORMAT_PCM_16_BIT?2:(inputFormat==AUDIO_FORMAT_PCM_24_BIT_PACKED?3:4);
+            std::memmove(out->raw,in->raw,in->frameCount*2*bytes);
+        } else {
+            for(size_t i=0;i<in->frameCount*2;++i)
+                writeSample(out->raw,i,outputFormat,readSample(in->raw,i,inputFormat),accumulate);
+        }
         return active?0:-ENODATA;
     }
     for(size_t offset=0;offset<in->frameCount;offset+=kBlockFrames) {
@@ -323,7 +329,7 @@ int32_t process(effect_handle_t self,audio_buffer_t* in,audio_buffer_t* out) {
     }
     return 0;
 }
-int32_t command(effect_handle_t self,uint32_t code,uint32_t size,void* data,uint32_t* replySize,void* reply) {
+int32_t commandInternal(effect_handle_t self,uint32_t code,uint32_t size,void* data,uint32_t* replySize,void* reply) {
     if(!self) return -EINVAL;
     auto& f=*reinterpret_cast<Fusion*>(self);
     std::lock_guard<std::mutex> lock(f.mutex);
@@ -351,6 +357,10 @@ int32_t command(effect_handle_t self,uint32_t code,uint32_t size,void* data,uint
         default: return -EINVAL;
     }
 }
+int32_t command(effect_handle_t self,uint32_t code,uint32_t size,void* data,uint32_t* replySize,void* reply) {
+    try { return commandInternal(self,code,size,data,replySize,reply); }
+    catch(const std::bad_alloc&) { return -ENOMEM; }
+}
 int32_t descriptor(effect_handle_t self,effect_descriptor_t* result) {
     if(!self || !result) return -EINVAL;
     *result=kDescriptor; return 0;
@@ -361,7 +371,8 @@ int32_t create(const effect_uuid_t* uuid,int32_t session,int32_t io,effect_handl
     *handle=nullptr;
     if(std::memcmp(uuid,&kUuid,sizeof(kUuid))) return -ENOENT;
     try {
-        auto* f=new Fusion;
+        auto owner=std::make_unique<Fusion>();
+        auto* f=owner.get();
         f->iface=&kInterface;
         int32_t status=JDSP_AELI.create_effect(&kJamesUuid,session,io,&f->james);
         if(!status) status=VIPER_AELI.create_effect(&kViperUuid,session,io,&f->viper);
@@ -369,7 +380,7 @@ int32_t create(const effect_uuid_t* uuid,int32_t session,int32_t io,effect_handl
         if(!status) status=childCommand(f->viper,EFFECT_CMD_INIT);
         if(!status) status=childCommand(f->james,EFFECT_CMD_ENABLE);
         if(!status) status=childCommand(f->viper,EFFECT_CMD_ENABLE);
-        if(status) { delete f; return status; }
+        if(status) return status;
         f->config.inputCfg.samplingRate=f->config.outputCfg.samplingRate=48000;
         f->config.inputCfg.channels=f->config.outputCfg.channels=AUDIO_CHANNEL_OUT_STEREO;
         f->config.inputCfg.format=f->config.outputCfg.format=AUDIO_FORMAT_PCM_FLOAT;
@@ -377,8 +388,8 @@ int32_t create(const effect_uuid_t* uuid,int32_t session,int32_t io,effect_handl
         f->config.outputCfg.accessMode=EFFECT_BUFFER_ACCESS_WRITE;
         f->config.inputCfg.mask=f->config.outputCfg.mask=EFFECT_CONFIG_ALL;
         status=setConfig(*f,f->config);
-        if(status) { delete f; return status; }
-        *handle=reinterpret_cast<effect_handle_t>(f); return 0;
+        if(status) return status;
+        *handle=reinterpret_cast<effect_handle_t>(owner.release()); return 0;
     } catch(const std::bad_alloc&) { return -ENOMEM; }
 }
 int32_t release(effect_handle_t handle) {
