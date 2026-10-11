@@ -39,7 +39,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private val graphBounds = RectF()
     private val line = Path()
     private val fill = Path()
-    private var values = DoubleArray(POINTS)
+    private var responseValues = DoubleArray(POINTS)
     private var gainRange = 18.0
     private var animator: ValueAnimator? = null
     private var worker: ExecutorService? = null
@@ -72,17 +72,17 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
 
     private fun updateCurve(next: DoubleArray, animate: Boolean) {
         animator?.cancel()
-        if (!animate || !isAttachedToWindow || values.size != next.size) {
-            values = next
+        if (!animate || !isAttachedToWindow || responseValues.size != next.size) {
+            responseValues = next
             invalidate()
             return
         }
-        val previous = values.copyOf()
+        val previous = responseValues.copyOf()
         animator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 160
             addUpdateListener {
                 val fraction = it.animatedValue as Float
-                values = DoubleArray(next.size) { index -> previous[index] + (next[index] - previous[index]) * fraction }
+                responseValues = DoubleArray(next.size) { index -> previous[index] + (next[index] - previous[index]) * fraction }
                 invalidate()
             }
             start()
@@ -121,8 +121,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
                 y + textPaint.textSize * 0.35f, textPaint)
         }
         line.rewind()
-        values.forEachIndexed { index, db ->
-            val x = graphBounds.left + index.toFloat() / (values.size - 1) * graphBounds.width()
+        responseValues.forEachIndexed { index, db ->
+            val x = graphBounds.left + index.toFloat() / (responseValues.size - 1) * graphBounds.width()
             if (index == 0) line.moveTo(x, y(db)) else line.lineTo(x, y(db))
         }
         fill.set(line)
