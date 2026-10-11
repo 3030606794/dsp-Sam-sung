@@ -6,7 +6,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: fusion-${{ github.ref }}
+  group: fusion-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 jobs:
   apk:
@@ -57,6 +57,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - name: Test Magisk installation against fixture configs
+        run: python3 scripts/test-module-installer.py
       - name: Test listening controls
         run: |
           cmake -S native/tone -B build/tone -DCMAKE_BUILD_TYPE=Debug

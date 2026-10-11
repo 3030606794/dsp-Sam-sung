@@ -8,7 +8,7 @@
 
 从本仓库 [Releases](https://github.com/3030606794/DSP-mobile-version/releases) 下载 APK 和 Driver ZIP。私有仓库需登录对应账号。
 
-安装前阅读 [新版与旧版兼容性、安装及回退](docs/COMPATIBILITY.zh-CN.md)。需禁用旧 JamesDSP、Viper 和 AML 模块，刷入新模块后重启。APK 包名是 `com.dspfusion.android`。
+安装前阅读 [新版与旧版兼容性、安装及回退](docs/COMPATIBILITY.zh-CN.md)。先禁用旧 JamesDSP、Viper 和 AML 模块并重启，再刷入新模块并重启。APK 包名是 `com.dspfusion.android`。
 
 ## 功能
 
@@ -17,7 +17,7 @@
 - DDC 和卷积共用 JamesDSP 的文件导入与处理入口。
 - 十项海贝式听感控制：温度、下潜、弹性、厚度、人声、女毒、两段齿音、瞬态和空气声。它们使用自主实现的滤波与动态处理，未宣称复制海贝专有算法。参见 [映射和测试](native/tone/README.md)。
 
-系统只注册一个融合效果，内部顺序为 JamesDSP → 听感调节 → ViPER。新功能默认关闭，支持独立开关、设备配置与预设。
+系统只注册一个融合效果，内部顺序为 JamesDSP → 听感调节 → ViPER。新增单项音效默认关闭，两套引擎可独立旁路，支持设备配置与预设。
 
 ## 构建
 
