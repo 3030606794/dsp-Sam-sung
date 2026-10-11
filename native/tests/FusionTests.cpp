@@ -123,7 +123,12 @@ int main() {
     assert(setRaw(h,1203,&one,2)==0); // Original James reverb enable protocol remains compatible.
     for(uint32_t rate:{44100u,48000u,96000u}) {
         c=config(rate); assert(cmd(h,EFFECT_CMD_SET_CONFIG,sizeof(c),&c)==0);
-        assert(get(h,20001)==static_cast<int>(rate));
+        // The legacy James query reports its internal processing rate. James
+        // intentionally resamples 96 kHz to 48 kHz, then returns to the host rate.
+        assert(get(h,20001)==static_cast<int>(rate==96000?48000:rate));
+        effect_config_t actual{}; uint32_t configSize=sizeof(actual);
+        assert((*h)->command(h,EFFECT_CMD_GET_CONFIG,0,nullptr,&configSize,&actual)==0);
+        assert(actual.inputCfg.samplingRate==rate && actual.outputCfg.samplingRate==rate);
         assert(process(h,impulse.data(),tail.data(),512)==0);
         for(float sample:tail) assert(std::isfinite(sample));
     }
