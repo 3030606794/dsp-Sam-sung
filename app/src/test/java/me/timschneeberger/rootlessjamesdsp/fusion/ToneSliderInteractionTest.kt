@@ -73,10 +73,16 @@ class ToneSliderInteractionTest {
     }
 
     private fun row(fragment: TonePreferenceFragment, key: String): View {
+        // Expansion posts PreferenceGroupAdapter's visible-list rebuild to the main looper.
+        // Resolve the position only after that real update, otherwise a newly shown row is -1.
+        layout()
         val index = (fragment.listView.adapter as PreferenceGroupAdapter).getPreferenceAdapterPosition(key)
+        assertTrue("Expanded preference must appear in the adapter: $key", index >= 0)
         fragment.listView.scrollToPosition(index)
         layout()
-        return requireNotNull(fragment.listView.findViewHolderForAdapterPosition(index)).itemView
+        return requireNotNull(fragment.listView.findViewHolderForAdapterPosition(index)) {
+            "Preference $key at position $index must have a visible, bound row"
+        }.itemView
     }
 
     @Test fun buttonsEditDisabledEffectByExactlyOneAndStopAtEveryRangeBoundary() {
