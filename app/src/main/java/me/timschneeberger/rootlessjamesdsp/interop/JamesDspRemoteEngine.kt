@@ -9,6 +9,7 @@ import android.media.audiofx.AudioEffectHidden
 import me.timschneeberger.rootlessjamesdsp.fusion.ToneController
 import me.timschneeberger.rootlessjamesdsp.fusion.ViperController
 import me.timschneeberger.rootlessjamesdsp.interop.structure.EelVmVariable
+import me.timschneeberger.rootlessjamesdsp.model.ProcessorMessage
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.AudioEffectExtensions.getParameterInt
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.AudioEffectExtensions.setParameter
@@ -45,6 +46,7 @@ class JamesDspRemoteEngine(
     }
 
     private val fusionPackets = mutableMapOf<Int, IntArray>()
+    @Volatile private var convolverFailure: String? = null
     var effect: AudioEffectHidden? = createEffect()
 
     override var enabled: Boolean
@@ -73,16 +75,16 @@ class JamesDspRemoteEngine(
     private fun createEffect(): AudioEffectHidden {
         return try {
             AudioEffectHidden(EFFECT_TYPE_CUSTOM, EFFECT_JAMESDSP, priority, sessionId).also {
-                if (it.getParameterInt(FUSION_PROTOCOL) != 1 ||
+                if (it.getParameterInt(FUSION_PROTOCOL) != REQUIRED_PROTOCOL ||
                     ((it.getParameterInt(FUSION_CAPABILITIES) ?: 0) and 7) != 7) {
                     it.release()
-                    throw IllegalStateException("DSP Fusion 驱动协议不匹配，请安装与 APK 同一版本的融合模块。")
+                    throw IllegalStateException("DSP音效 驱动协议不匹配，请安装与 APK 同一版本的融合模块。")
                 }
-                ViperController.publishStatus(context, "已连接 DSP Fusion：JamesDSP + ViPER + 听感调音")
+                ViperController.publishStatus(context, "已连接 DSP音效：JamesDSP + ViPER + 听感调音")
             }
         } catch (e: Exception) {
-            ViperController.publishStatus(context, "连接失败：请安装 DSP Fusion 融合模块并重启手机。旧 JamesDSP / ViPER 模块不能驱动本应用。")
-            Timber.e("Failed to create DSP Fusion effect")
+            ViperController.publishStatus(context, "连接失败：请安装 DSP音效 融合模块并重启手机。旧 JamesDSP / ViPER 模块不能驱动本应用。")
+            Timber.e("Failed to create DSP音效 effect")
             Timber.e(e)
             throw IllegalStateException(e)
         }
@@ -134,9 +136,9 @@ class JamesDspRemoteEngine(
 
     @Synchronized
     private fun syncFusionPreferences() {
-        // Cache by command and (for EQ bands) packet index to avoid resetting unchanged effects.
+        // Avoid resetting unchanged processors when another control is adjusted.
         fun send(parameter: Int, values: IntArray): Boolean {
-            val cacheKey = if (parameter == 65552) parameter + 1_000_000 + values[0] else parameter
+            val cacheKey = parameter
             if (fusionPackets[cacheKey]?.contentEquals(values) == true) return true
             val success = effect.setParameterIntArray(parameter, values) == AudioEffect.SUCCESS
             if (success) fusionPackets[cacheKey] = values.copyOf()
@@ -145,7 +147,10 @@ class JamesDspRemoteEngine(
         }
         val viperOk = ViperController.sync(context, ::send)
         val toneOk = ToneController.sync(context, ::send)
-        ViperController.publishStatus(context, if (viperOk && toneOk)
+        val output = PreferenceCache.getPreferences(context, Constants.PREF_OUTPUT)
+        val balance = (output.all["balance"] as? Number)?.toInt()?.coerceIn(-100, 100) ?: 0
+        val balanceOk = send(FUSION_BALANCE, intArrayOf(balance))
+        ViperController.publishStatus(context, convolverFailure ?: if (viperOk && toneOk && balanceOk)
             "参数已同步：JamesDSP → 听感调音 → ViPER"
         else "部分参数写入失败，请检查驱动版本或重新启动音效服务。")
     }
@@ -260,11 +265,33 @@ class JamesDspRemoteEngine(
 
         Timber.i("Convolver hash before: $prevCrc, current: $irCrc")
         if (prevCrc != irCrc && enable) {
-            effect.setParameterImpulseResponseBuffer(12000, 10004, impulseResponse, irChannels)
-            effect.setParameter(25003, irCrc) // Commit hash
+            val transferred = effect.setParameterImpulseResponseBuffer(12000, 10004, impulseResponse, irChannels)
+            if (transferred != AudioEffect.SUCCESS) {
+                return reportConvolverFailure("上传", transferred)
+            }
+            val committed = effect.setParameter(25003, irCrc)
+            if (committed != AudioEffect.SUCCESS) {
+                return reportConvolverFailure("提交", committed)
+            }
         }
 
-        return effect.setParameter(1205, enable.toShort()) == AudioEffect.SUCCESS
+        val activated = effect.setParameter(1205, enable.toShort())
+        if (activated != AudioEffect.SUCCESS) return reportConvolverFailure("切换", activated)
+        if (convolverFailure != null) {
+            convolverFailure = null
+            ViperController.publishStatus(context, if (enable) "卷积已启用" else "卷积已关闭")
+        }
+        return true
+    }
+
+    private fun reportConvolverFailure(stage: String, status: Int): Boolean {
+        effect.setParameter(1205, 0.toShort())
+        val message = "脉冲响应${stage}失败（$status）：卷积暂时旁路，请重新开关卷积或选择较短的脉冲响应重试。"
+        convolverFailure = message
+        ViperController.publishStatus(context, message)
+        Timber.e(message)
+        callbacks?.onConvolverParseError(ProcessorMessage.ConvolverErrorCode.TransferFailed)
+        return false
     }
 
     override fun setGraphicEqInternal(enable: Boolean, bands: String): Boolean {
@@ -337,13 +364,15 @@ class JamesDspRemoteEngine(
         private val EFFECT_JAMESDSP = UUID.fromString("30306067-9400-4d53-9000-000000000001")
         private const val FUSION_PROTOCOL = 131080
         private const val FUSION_CAPABILITIES = 131081
+        private const val FUSION_BALANCE = 131074
+        private const val REQUIRED_PROTOCOL = 2
 
         fun isPluginInstalled(): PluginState {
             // AIDL can omit custom effects from queryEffects. Probe the unique UUID and handshake.
             return try {
                 val probe = AudioEffectHidden(EFFECT_TYPE_CUSTOM, EFFECT_JAMESDSP, 0, 0)
                 try {
-                    if (probe.getParameterInt(FUSION_PROTOCOL) == 1 &&
+                    if (probe.getParameterInt(FUSION_PROTOCOL) == REQUIRED_PROTOCOL &&
                         ((probe.getParameterInt(FUSION_CAPABILITIES) ?: 0) and 7) == 7)
                         PluginState.Available
                     else PluginState.Unsupported

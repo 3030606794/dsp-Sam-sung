@@ -452,6 +452,7 @@ object ContextExtensions {
     }
 
     fun Context.broadcastPresetLoadEvent() {
+        me.timschneeberger.rootlessjamesdsp.fusion.FusionPreferenceMigration.migrate(this)
         sendLocalBroadcast(Intent(Constants.ACTION_PREFERENCES_UPDATED))
         sendLocalBroadcast(Intent(Constants.ACTION_PRESET_LOADED))
     }

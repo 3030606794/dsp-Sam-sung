@@ -22,7 +22,6 @@ private:
     std::array<MultiBiquad, 2> peak;
 
     float gain;
-    uint32_t freqRange;
     int processingModel;
     uint32_t samplingRate;
     bool enable;

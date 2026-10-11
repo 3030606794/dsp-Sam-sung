@@ -1,12 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/dsp_scrollview"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     tools:context=".fragment.DspFragment"
     tools:ignore="SpeakableTextPresentCheck">
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/pinned_output_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="8dp">
+
+        <androidx.fragment.app.FragmentContainerView
+            android:id="@+id/card_output_control"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/dsp_scrollview"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
     <LinearLayout
         android:id="@+id/card_container"
@@ -76,17 +96,6 @@
 
             <androidx.fragment.app.FragmentContainerView
                 android:id="@+id/card_fusion_tone"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_output_control"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
         </com.google.android.material.card.MaterialCardView>
@@ -204,8 +213,7 @@
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="1dp"
-            android:layout_marginBottom="?attr/actionBarSize">
+            android:layout_marginHorizontal="1dp">
 
             <androidx.fragment.app.FragmentContainerView
                 android:id="@+id/card_reverb"
@@ -213,4 +221,5 @@
                 android:layout_height="wrap_content" />
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
-</androidx.core.widget.NestedScrollView>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

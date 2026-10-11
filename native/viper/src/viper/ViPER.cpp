@@ -8,8 +8,7 @@ ViPER::ViPER() :
     processTimeMs(0),
     samplingRate(VIPER_DEFAULT_SAMPLING_RATE),
     adaptiveBuffer(AdaptiveBuffer(2, 4096)),
-    waveBuffer(WaveBuffer(2, 4096)),
-    iirFilter(IIRFilter(10)) {
+    waveBuffer(WaveBuffer(2, 4096)) {
     VIPER_LOGI("Welcome to ViPER FX");
     VIPER_LOGI("Current version is %s (%d)", VERSION_NAME, VERSION_CODE);
 
@@ -31,9 +30,6 @@ ViPER::ViPER() :
     this->spectrumExtend.SetExciter(0);
     this->spectrumExtend.Reset();
 
-    this->iirFilter.SetEnable(false);
-    this->iirFilter.SetSamplingRate(this->samplingRate);
-    this->iirFilter.Reset();
 
     this->colorfulMusic.SetEnable(false);
     this->colorfulMusic.SetSamplingRate(this->samplingRate);
@@ -76,17 +72,8 @@ ViPER::ViPER() :
     this->analogX.SetProcessingModel(0);
     this->analogX.Reset();
 
-    this->speakerCorrection.SetEnable(false);
-    this->speakerCorrection.SetSamplingRate(this->samplingRate);
-    this->speakerCorrection.Reset();
 
-    for (auto &softwareLimiter: this->softwareLimiters) {
-        softwareLimiter.Reset();
-    }
 
-    this->frameScale = 1.0;
-    this->leftPan = 1.0;
-    this->rightPan = 1.0;
     this->updateProcessTime = false;
     this->processTimeMs = 0;
 }
@@ -145,11 +132,9 @@ void ViPER::process(std::vector<float>& buffer, uint32_t size) {
     if (tmpBufSize != 0) {
         this->viperDdc.Process(tmpBuf, tmpBufSize);
         this->spectrumExtend.Process(tmpBuf, tmpBufSize);
-        this->iirFilter.Process(tmpBuf, tmpBufSize);
         this->colorfulMusic.Process(tmpBuf, tmpBufSize);
         this->diffSurround.Process(tmpBuf, tmpBufSize);
         this->reverberation.Process(tmpBuf, tmpBufSize);
-        this->speakerCorrection.Process(tmpBuf, tmpBufSize);
         this->playbackGain.Process(tmpBuf, tmpBufSize);
         this->fetCompressor.Process(tmpBuf, tmpBufSize); // TODO: enable check
         this->dynamicSystem.Process(tmpBuf, tmpBufSize);
@@ -158,19 +143,6 @@ void ViPER::process(std::vector<float>& buffer, uint32_t size) {
         this->cure.Process(tmpBuf, tmpBufSize);
         this->tubeSimulator.TubeProcess(tmpBuf, tmpBufSize);
         this->analogX.Process(tmpBuf, tmpBufSize);
-
-        if (this->frameScale != 1.0) {
-            this->adaptiveBuffer.ScaleFrames(this->frameScale);
-        }
-
-        if (this->leftPan < 1.0 || this->rightPan < 1.0) {
-            this->adaptiveBuffer.PanFrames(this->leftPan, this->rightPan);
-        }
-
-        for (uint32_t i = 0; i < tmpBufSize * 2; i += 2) {
-            tmpBuf[i] = this->softwareLimiters[0].Process(tmpBuf[i]);
-            tmpBuf[i + 1] = this->softwareLimiters[1].Process(tmpBuf[i + 1]);
-        }
 
         if (!this->adaptiveBuffer.PopFrames(buffer.data(), tmpBufSize)) {
             this->adaptiveBuffer.FlushBuffer();
@@ -243,14 +215,6 @@ void ViPER::DispatchCommand(int param, int val1, int val2, int val3, int val4, u
             this->spectrumExtend.SetExciter((float) val1 / 100.0f);
             break;
         } // 0x1000E
-        case PARAM_FIR_EQUALIZER_ENABLE: {
-            this->iirFilter.SetEnable(val1 != 0);
-            break;
-        } // 0x1000F
-        case PARAM_FIR_EQUALIZER_BAND_LEVEL: {
-            this->iirFilter.SetBandLevel((uint32_t) val1, (float) val2 / 100.0f);
-            break;
-        } // 0x10010
         case PARAM_FIELD_SURROUND_ENABLE: {
             this->colorfulMusic.SetEnable(val1 != 0);
             break;
@@ -411,30 +375,6 @@ void ViPER::DispatchCommand(int param, int val1, int val2, int val3, int val4, u
             this->analogX.SetProcessingModel(val1);
             break;
         } // 0x10031
-        case PARAM_GATE_OUTPUT_VOLUME: {
-            this->frameScale = (float) val1 / 100.0f;
-            break;
-        } // 0x10032
-        case PARAM_GATE_CHANNEL_PAN: {
-            float tmp = (float) val1 / 100.0f;
-            if (tmp < 0.0f) {
-                this->leftPan = 1.0f;
-                this->rightPan = 1.0f + tmp;
-            } else {
-                this->leftPan = 1.0f - tmp;
-                this->rightPan = 1.0f;
-            }
-            break;
-        } // 0x10033
-        case PARAM_GATE_LIMIT: {
-            this->softwareLimiters[0].SetGate((float) val1 / 100.0f);
-            this->softwareLimiters[1].SetGate((float) val1 / 100.0f);
-            break;
-        } // 0x10034
-        case PARAM_SPEAKER_OPTIMIZATION: {
-            this->speakerCorrection.SetEnable(val1 != 0);
-            break;
-        } // 0x10043
         case PARAM_FET_COMPRESSOR_ENABLE: {
             break;
         } // 0x10049
@@ -510,8 +450,6 @@ void ViPER::resetAllEffects() {
     this->spectrumExtend.SetSamplingRate(this->samplingRate);
     this->spectrumExtend.Reset();
 
-    this->iirFilter.SetSamplingRate(this->samplingRate);
-    this->iirFilter.Reset();
 
     this->colorfulMusic.SetSamplingRate(this->samplingRate);
     this->colorfulMusic.Reset();
@@ -544,10 +482,5 @@ void ViPER::resetAllEffects() {
     this->analogX.SetSamplingRate(this->samplingRate);
     this->analogX.Reset();
 
-    this->speakerCorrection.SetSamplingRate(this->samplingRate);
-    this->speakerCorrection.Reset();
 
-    for (auto &softwareLimiter: softwareLimiters) {
-        softwareLimiter.Reset();
-    }
 }

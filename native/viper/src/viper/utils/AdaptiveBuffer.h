@@ -12,11 +12,9 @@ public:
     uint32_t GetBufferOffset() const;
     float *GetBuffer();
     uint32_t GetChannels() const;
-    void PanFrames(float left, float right);
     int PopFrames(float *frames, uint32_t length);
     int PushFrames(const float *frames, uint32_t length);
     int PushZero(uint32_t length);
-    void ScaleFrames(float scale);
     void SetBufferOffset(uint32_t offset);
 
 private:

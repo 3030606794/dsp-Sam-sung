@@ -227,7 +227,12 @@ void JamesDSPGlobalMemoryAllocation()
 {
 	benchmarkCompletionFlag = 0;
 	NSEEL_start();
-#ifdef JAMESDSP_REFERENCE_IMPL
+#ifdef DSP_FUSION_STREAMING
+	// Use the built-in partition cost table. Background benchmarking otherwise
+	// rebuilds active convolvers from the audio callback, discarding their tails.
+	benchmarkEnable = 0;
+	benchmarkCompletionFlag = 1;
+#elif defined(JAMESDSP_REFERENCE_IMPL)
 	pthread_t benchmarkThread;
 	pthread_create(&benchmarkThread, NULL, convBench, 0);
 #endif
@@ -274,6 +279,13 @@ void JamesDSPReallocateBlock(JamesDSPLib *jdsp, size_t n)
 }
 void JamesDSPRefreshConvolutions(JamesDSPLib *jdsp, char refreshAll)
 {
+#ifdef DSP_FUSION_STREAMING
+    // FFTConvolver already accepts arbitrary process lengths. Fusion may split
+    // a 960-frame callback into 512+448: rebuilding on each length change loses
+    // overlap/history twice per callback and turns a long IR into clicks/silence.
+    // Sample-rate and IR changes have their own explicit reconfiguration paths.
+    if (refreshAll) return;
+#endif
     // Temporary(?) bug fix when benchmarks are off
    if(!benchmarkEnable) {
 #ifdef DEBUG

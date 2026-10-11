@@ -3,37 +3,25 @@ package me.timschneeberger.rootlessjamesdsp.fusion
 /** Wire units match WSTxda/ViPERFX_RE v0.6.3 ViPER::DispatchCommand. */
 object ViperParameters {
     const val PREFS = "dsp_fusion_viper"
-    const val JAMES_ENABLE = "fusion_james_enabled"
-    const val VIPER_ENABLE = "fusion_viper_enabled"
 
     data class Control(
         val key: String, val title: String, val parameter: Int,
         val min: Int, val max: Int, val default: Int,
         val scale: Int = 1, val offset: Int = 0, val unit: String = "",
-        val choices: List<String> = emptyList(), val arrayIndex: Int? = null,
+        val choices: List<String> = emptyList(),
     ) {
         fun encode(value: Int) = (value.coerceIn(min, max) * scale) + offset
-        fun packet(value: Int): IntArray = arrayIndex?.let { intArrayOf(it, encode(value)) }
-            ?: intArrayOf(encode(value))
+        fun packet(value: Int): IntArray = intArrayOf(encode(value))
         fun label(value: Int) = choices.getOrNull(value) ?: "$value$unit"
     }
 
     data class Group(val key: String, val title: String, val enableParameter: Int?, val controls: List<Control>, val summary: String = "")
 
     val groups = listOf(
-        Group("v_output", "主限制器 / 输出", null, listOf(
-            Control("v_volume", "输出音量", 65586, 0, 100, 100, unit = "%"),
-            Control("v_pan", "左右平衡（负数偏左）", 65587, -100, 100, 0),
-            Control("v_limit", "峰值限制阈值", 65588, 10, 100, 100, unit = "%"),
-        )),
         Group("v_spectrum", "频谱扩展", 65548, listOf(
             Control("v_spectrum_freq", "参考频率", 65549, 3000, 12000, 7600, unit = " Hz"),
             Control("v_spectrum_amount", "谐波重建强度", 65550, 0, 560, 56, unit = "%"),
         )),
-        Group("v_eq", "ViPER 十段均衡器", 65551,
-            listOf("31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k").mapIndexed { i, frequency ->
-                Control("v_eq_$i", "$frequency Hz", 65552, -15, 15, 0, scale = 100, unit = " dB", arrayIndex = i)
-            }, "对应原应用的 FIR 均衡器；本驱动实际使用十段 IIR 滤波。"),
         Group("v_field", "环境声场", 65553, listOf(
             Control("v_field_widen", "立体声拓展", 65554, 0, 100, 0, unit = "%"),
             Control("v_field_center", "中央声像", 65555, 100, 200, 150, unit = "%"),
@@ -68,7 +56,6 @@ object ViperParameters {
         Group("v_analog", "AnalogX", 65584, listOf(
             Control("v_analog_mode", "模拟模式", 65585, 0, 2, 0, choices = listOf("轻度", "中度", "强")),
         )),
-        Group("v_speaker", "扬声器优化", 65603, emptyList(), "适用于手机扬声器，使用耳机时建议关闭。"),
     )
 
     // Public driver tuning values, not a private user preset.

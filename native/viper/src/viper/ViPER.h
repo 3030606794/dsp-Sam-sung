@@ -5,7 +5,6 @@
 #include "effects/Reverberation.h"
 #include "effects/DynamicSystem.h"
 #include "effects/ViPERClarity.h"
-#include "effects/SpeakerCorrection.h"
 #include "effects/AnalogX.h"
 #include "effects/TubeSimulator.h"
 #include "effects/Cure.h"
@@ -14,14 +13,11 @@
 #include "utils/AdaptiveBuffer.h"
 #include "effects/Convolver.h"
 #include "effects/ViPERDDC.h"
-#include "effects/IIRFilter.h"
 #include "effects/ColorfulMusic.h"
 #include "effects/FETCompressor.h"
 #include "effects/ViPERBass.h"
-#include "effects/SoftwareLimiter.h"
 #include "effects/PlaybackGain.h"
 #include "../ViPER4Android.h"
-#include <array>
 
 class ViPER {
 public:
@@ -44,7 +40,6 @@ public:
     VHE vhe;
     ViPERDDC viperDdc;
     SpectrumExtend spectrumExtend;
-    IIRFilter iirFilter;
     ColorfulMusic colorfulMusic;
     Reverberation reverberation;
     PlaybackGain playbackGain;
@@ -56,10 +51,5 @@ public:
     Cure cure;
     TubeSimulator tubeSimulator;
     AnalogX analogX;
-    SpeakerCorrection speakerCorrection;
-    std::array<SoftwareLimiter, 2> softwareLimiters;
 
-    float frameScale;
-    float leftPan;
-    float rightPan;
 };

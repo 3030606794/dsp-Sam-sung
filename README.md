@@ -1,31 +1,23 @@
-# DSP Fusion
+# dsp音效
 
-一个应用、一个 Magisk 模块，统一 JamesDSP、ViPER RE 与十项听感调节。
+一个 APK、一个 Magisk 驱动，整合 JamesDSP、ViPER RE 和十项听感调音。当前版本 **0.1.0-alpha4**，Android 8+，ARM64/ARMv7，需 root。应用包名和签名保持不变，可覆盖升级。
 
-应用及配套驱动：0.1.0-alpha3。Android 8+，ARM64/ARMv7。此版本需要 root 和配套模块。
+alpha4 调整主界面并修复可变音频块引起的卷积/交叉反馈重置，以及模拟处理的静音问题。驱动协议升级为 2，必须使用本版配套 APK 与驱动。
 
-alpha3 修复 ViPER 参数页初始化崩溃、旧应用身份检查拒绝新包名、驱动文件标签和三星系统音效资源预算兼容问题。旧版用户可覆盖升级 APK 和模块，重启后使用，无需清除设置。构建先生成草稿，实机验证后再发布。
+- 输出控制固定在顶部，保留阈值、释放、后增益，加入全链末端左右平衡；滚动参数时仍可操作。
+- 底部中央总开关控制整条音效链；删除两个处理段开关和顶部实现说明。
+- 删除 ViPER 输出音量/限制器、十段 EQ、扬声器优化的界面、命令和算法，以及 ViPER 重置入口。
+- 听感调音默认折叠，三档范围通过横向选择条切换。原“任意响应均衡器”显示为“参数均衡器”。
+- 使用用户提供的 SVG：固定黑色图案、白色背景，无系统主题色图层。
+- 保留 JamesDSP 的均衡器、动态低音、压扩器、混响、声场、交叉馈送、VDC、卷积、LiveProg，以及其余 ViPER 效果。
 
-## 下载和安装
+十项听感调音使用独立的滤波与动态模型近似海贝 MSEB 的调节方式，不分发海贝私有算法。参见 [映射说明](native/tone/README.md)。
 
-从本仓库 [Releases](https://github.com/3030606794/DSP-mobile-version/releases) 下载 APK 和 Driver ZIP。私有仓库需登录对应账号。
-
-安装前阅读 [新版与旧版兼容性、安装及回退](docs/COMPATIBILITY.zh-CN.md)。先禁用旧 JamesDSP、Viper 和 AML 模块并重启，再刷入新模块并重启。APK 包名是 `com.dspfusion.android`。
-
-## 功能
-
-- 保留 JamesDSP 1.6.14 原有功能与预设管理。
-- 新增 ViPER RE 已实现的频谱扩展、十段均衡、环绕声场、差分环绕、混响、动态系统、电子管、低音、清晰度、听觉保护、AnalogX、扬声器优化与输出控制。
-- DDC 和卷积共用 JamesDSP 的文件导入与处理入口。
-- 十项海贝式听感控制：温度、下潜、弹性、厚度、人声、女毒、两段齿音、瞬态和空气声。它们使用自主实现的滤波与动态处理，未宣称复制海贝专有算法。参见 [映射和测试](native/tone/README.md)。
-
-系统只注册一个融合效果，内部顺序为 JamesDSP → 听感调节 → ViPER。新增单项音效默认关闭，两套引擎可独立旁路，支持设备配置与预设。
+安装、升级与回退见 [兼容性说明](docs/COMPATIBILITY.zh-CN.md)。每次构建运行应用界面、参数、安装器及原生音频回归，先生成发布草稿；实机验证结果记录在 Releases。
 
 ## 构建
 
-GitHub Actions 同时构建签名 APK 与统一驱动，运行 JVM 参数测试和原生音频测试，通过后生成预发布。
-
-Java 17、Android SDK35、NDK26.3.11579264、CMake3.22.1、Gradle wrapper：
+使用 Java 17、SDK35、NDK26.3.11579264、CMake3.22.1 和仓库 Gradle wrapper：
 
 ```sh
 ./gradlew :app:assembleRootFdroidRelease :app:testRootFdroidReleaseUnitTest
@@ -34,4 +26,6 @@ cmake --build build/host
 ctest --test-dir build/host --output-on-failure
 ```
 
-发布签名仅保存在 GitHub Actions Secrets；仓库不包含私钥、手机备份或海贝二进制。源码及作者说明见 [第三方来源](docs/THIRD-PARTY.md) 和 [原应用说明](docs/UPSTREAM-APPLICATION-README.md)。
+源码构建保留单个融合库和单个公开音效实例，处理顺序为 JamesDSP → 听感调音 → ViPER → 左右平衡。
+
+签名私钥保存在 GitHub Actions Secrets，不提交手机备份、用户 IR 文件或海贝二进制。上游作者、许可证和改动出处见 [第三方说明](docs/THIRD-PARTY.md) 与 [原应用说明](docs/UPSTREAM-APPLICATION-README.md)。

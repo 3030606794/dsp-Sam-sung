@@ -34,8 +34,10 @@ object ViperController {
         // VDC and convolution use the JamesDSP implementation and its existing file library.
         send(65546, intArrayOf(0))
         send(65544, intArrayOf(0))
-        send(131072, intArrayOf(if (prefs.getBoolean(ViperParameters.JAMES_ENABLE, true)) 1 else 0))
-        send(131073, intArrayOf(if (prefs.getBoolean(ViperParameters.VIPER_ENABLE, true)) 1 else 0))
+        // The one AudioEffect power switch owns the complete chain. Legacy stage-off
+        // preferences must not silently bypass effects after upgrading or importing a preset.
+        send(131072, intArrayOf(1))
+        send(131073, intArrayOf(1))
         return success
     }
 

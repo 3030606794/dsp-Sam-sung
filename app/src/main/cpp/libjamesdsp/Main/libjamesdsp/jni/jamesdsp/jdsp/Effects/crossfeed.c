@@ -77,7 +77,7 @@ void CrossfeedEnable(JamesDSPLib *jdsp, char enable)
 	if (jdsp->advXF.mode < 2)
 	{
 		memset(&jdsp->advXF.bs2b, 0, sizeof(jdsp->advXF.bs2b));
-		BS2BInit(&jdsp->advXF.bs2b[0], (unsigned int)jdsp->fs, BS2B_DEFAULT_CLEVEL);
+		BS2BInit(&jdsp->advXF.bs2b[0], (unsigned int)jdsp->fs, BS2B_CMOY_CLEVEL);
 		BS2BInit(&jdsp->advXF.bs2b[1], (unsigned int)jdsp->fs, BS2B_JMEIER_CLEVEL);
 	}
 	if (enable)
@@ -98,7 +98,7 @@ void CrossfeedChangeMode(JamesDSPLib *jdsp, int nMode)
 	{
 		memset(&jdsp->advXF.bs2b, 0, sizeof(jdsp->advXF.bs2b));
 		if (!nMode)
-			BS2BInit(&jdsp->advXF.bs2b[1], (unsigned int)jdsp->fs, BS2B_CMOY_CLEVEL);
+			BS2BInit(&jdsp->advXF.bs2b[0], (unsigned int)jdsp->fs, BS2B_CMOY_CLEVEL);
 		else
 			BS2BInit(&jdsp->advXF.bs2b[1], (unsigned int)jdsp->fs, BS2B_JMEIER_CLEVEL);
 	}

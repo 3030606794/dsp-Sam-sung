@@ -76,10 +76,7 @@ class DspFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListen
             .replace(R.id.card_device_profiles, DeviceProfilesCardFragment.newInstance())
             .replace(R.id.card_fusion_viper, ViperPreferenceFragment())
             .replace(R.id.card_fusion_tone, TonePreferenceFragment())
-            .replace(
-                R.id.card_output_control, PreferenceGroupFragment.newInstance(Constants.PREF_OUTPUT,
-                    R.xml.dsp_output_control_preferences
-                ))
+            .replace(R.id.card_output_control, OutputControlFragment())
             .replace(
                 R.id.card_compressor, PreferenceGroupFragment.newInstance(Constants.PREF_COMPANDER,
                     R.xml.dsp_compander_preferences

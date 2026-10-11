@@ -20,7 +20,6 @@ AnalogX::AnalogX() {
     this->processingModel = 0;
     this->enable = false;
     this->gain = 0.0;
-    this->freqRange = 0;
     Reset();
 }
 
@@ -40,11 +39,6 @@ void AnalogX::Process(float *samples, uint32_t size) {
             outR = this->lowPass[1].ProcessSample(inR + outR * this->gain);
             outR = this->peak[1].ProcessSample(outR * 0.8);
             samples[i + 1] = (float) outR;
-        }
-
-        if (this->freqRange < this->samplingRate / 4) {
-            this->freqRange += size;
-            memset(samples, 0, size * 2 * sizeof(float));
         }
     }
 }
@@ -92,7 +86,6 @@ void AnalogX::Reset() {
         }
     }
 
-    this->freqRange = 0;
 }
 
 void AnalogX::SetEnable(bool enable) {

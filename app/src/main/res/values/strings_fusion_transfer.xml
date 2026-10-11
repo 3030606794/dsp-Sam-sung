@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="message_convolver_transfer_failed">脉冲响应未能应用，卷积已暂时旁路。请重新开关卷积，或选择较短的脉冲响应重试。</string>
+</resources>

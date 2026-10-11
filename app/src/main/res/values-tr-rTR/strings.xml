@@ -497,7 +497,7 @@
     <!-- Root: Library load failure -->
     <string name="load_fail_header">Magisk modülü kurulu değil</string>
     <string name="load_fail_card_title">Libjamesdsp.so yüklenemedi</string>
-    <string name="load_fail_card">Install the DSP Fusion driver module and reboot. Disable old JamesDSP, Viper and AML modules first.</string>
+    <string name="load_fail_card">Install the DSP音效 driver module and reboot. Disable old JamesDSP, Viper and AML modules first.</string>
     <string name="load_fail_rootless_card_title">Köksüz bir alternatif mi arıyorsunuz?</string>
     <string name="load_fail_rootless_card">JamesDSP\'nin bu çeşidi, köklü/değiştirilmiş bir cihazla kullanılmak üzere tasarlanmıştır. Bazı sınırlamalara sahip kök olmayan bir alternatif de mevcuttur. Ayrıntılar için buraya dokunun.</string>
     <string name="load_fail_arch_card_title">Modül zaten kurulu mu?</string>
@@ -581,7 +581,7 @@
     <string name="device_profile_manage_copy_select">Kopyalanacak profili seçin</string>
     <string name="device_profile_manage_paste_select">Üzerine yazılacak profilleri seçin</string>
     <!-- Root version check -->
-    <string name="version_mismatch_root">DSP Fusion driver version mismatch</string>
-    <string name="version_mismatch_root_description">Install the matching DSP Fusion driver and APK from this repository, then reboot. Open the downloads page?</string>
-    <string name="version_mismatch_root_toast">Cannot start: check the DSP Fusion driver and version.</string>
+    <string name="version_mismatch_root">DSP音效 driver version mismatch</string>
+    <string name="version_mismatch_root_description">Install the matching DSP音效 driver and APK from this repository, then reboot. Open the downloads page?</string>
+    <string name="version_mismatch_root_toast">Cannot start: check the DSP音效 driver and version.</string>
 </resources>

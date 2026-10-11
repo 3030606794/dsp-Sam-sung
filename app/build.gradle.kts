@@ -119,7 +119,7 @@ android {
         create("root") {
             dimension = "version"
 
-            manifestPlaceholders["label"] = "DSP Fusion"
+            manifestPlaceholders["label"] = "dsp音效"
             project.setProperty("archivesBaseName", "DSP-Fusion-v${AndroidConfig.versionName}")
             applicationId = "com.dspfusion.android"
             AndroidConfig.minSdk = 26

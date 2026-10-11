@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <integer name="fusion_output_columns">2</integer>
+    <string name="fusion_output_precision_hint">点数值精调</string>
+    <string name="fusion_output_threshold_short">阈值</string>
+    <string name="fusion_output_release_short">释放</string>
+    <string name="fusion_output_gain_short">后增益</string>
+    <string name="fusion_output_balance_short">平衡</string>
+    <string name="fusion_output_balance_title">左右平衡</string>
+    <string name="fusion_output_balance_center">居中</string>
+    <string name="fusion_output_balance_left">左 %1$d%%</string>
+    <string name="fusion_output_balance_right">右 %1$d%%</string>
+    <string name="fusion_output_value_range">请输入 %1$s～%2$s 之间的数值</string>
+</resources>

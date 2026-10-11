@@ -24,6 +24,7 @@ constexpr effect_uuid_t kViperUuid{0x90380da3,0x8536,0x4744,0xa6a3,{0x57,0x31,0x
 constexpr size_t kBlockFrames=512;
 constexpr size_t kMaxTransfer=32*1024*1024;
 constexpr uint32_t kJamesEnable=131072, kViperEnable=131073;
+constexpr uint32_t kBalance=131074;
 constexpr uint32_t kProtocol=131080, kCapabilities=131081, kTone=196608;
 // Retain the upstream engines' nominal policy charges (1 KB each). This legacy
 // descriptor field is admission accounting, not measured process RSS: a 1024 KB
@@ -89,6 +90,8 @@ struct Fusion {
     std::atomic<uint32_t> ioFormat{AUDIO_FORMAT_PCM_FLOAT | (AUDIO_FORMAT_PCM_FLOAT<<8)};
     std::atomic<bool> enabled{false};
     bool jamesEnabled=true, viperEnabled=true, configured=false;
+    int32_t balance=0;
+    float balanceCurrent=0.f, balanceSmoothing=.002f;
     uint32_t stringChunks=0,stringWritten=0,impulseChunks=0,impulseWritten=0;
     dspfusion::ToneProcessor tone;
     std::array<float,kBlockFrames*2> first{},second{};
@@ -128,6 +131,7 @@ int32_t setConfig(Fusion& f,const effect_config_t& cfg) {
     ret=childCommand(f.viper,EFFECT_CMD_SET_CONFIG,sizeof(internal),&internal);
     if(ret) return ret;
     f.tone.configure(in.samplingRate);
+    f.balanceSmoothing=1.f-std::exp(-1.f/(.01f*in.samplingRate));
     f.config=next;
     f.ioFormat.store(in.format | (uint32_t(out.format)<<8) | (uint32_t(out.accessMode==EFFECT_BUFFER_ACCESS_ACCUMULATE)<<16));
     f.configured=true;
@@ -173,7 +177,7 @@ int validateJames(Fusion& f,uint32_t id,const uint8_t* data,uint32_t n) {
         if(n!=16) return -EINVAL;
         int32_t length=valueAt<int32_t>(data),channels=valueAt<int32_t>(data,1),chunks=valueAt<int32_t>(data,3);
         if(length<=0 || (channels!=1 && channels!=2 && channels!=4) || chunks<=0 ||
-           length%channels || uint64_t(chunks)*4096*channels*4>kMaxTransfer ||
+           length%channels || uint64_t(chunks)*4096*4>kMaxTransfer ||
            uint64_t(length)>uint64_t(chunks)*4096 || uint64_t(chunks-1)*4096>=uint64_t(length)) return -EINVAL;
         f.impulseChunks=chunks; f.impulseWritten=0; return 0;
     }
@@ -219,22 +223,23 @@ int validateJames(Fusion& f,uint32_t id,const uint8_t* data,uint32_t n) {
     }
 }
 int validateViper(uint32_t id,const uint8_t* data,uint32_t n) {
+    // Removed effects must not silently accept values from an older app.
+    if(id==65551 || id==65552 || (id>=65586 && id<=65588) || id==65603) return -ENOSYS;
     if(id==65544) return n==4 && valueAt<int32_t>(data)==0 ? 0 : -ENOSYS;
     if(id==65538 || (id>=65540 && id<=65542) || id==65545 || id==65547 ||
        (id>=65565 && id<=65568) || (id>=65610 && id<=65626)) return -ENOSYS;
-    const bool pair=id==65552 || id==65570 || id==65571 || id==65572;
+    const bool pair=id==65570 || id==65571 || id==65572;
     if(n!=(pair?8u:4u)) return -EINVAL;
     int v=valueAt<int32_t>(data),second=pair?valueAt<int32_t>(data,1):0;
     switch(id) {
-        case 65546: case 65548: case 65551: case 65553: case 65557: case 65559:
-        case 65569: case 65574: case 65578: case 65581: case 65583: case 65584: case 65603:
+        case 65546: case 65548: case 65553: case 65557: case 65559:
+        case 65569: case 65574: case 65578: case 65581: case 65583: case 65584:
         case 0x9002: return v==0 || v==1 ? 0 : -EINVAL;
         case 0x9003: return 0;
         case 65543: case 65560: case 65561: case 65562: case 65563: case 65564:
-        case 65586: case 65588: return v>=0 && v<=100 ? 0 : -EINVAL;
+            return v>=0 && v<=100 ? 0 : -EINVAL;
         case 65549: return v>=100 && v<=20000 ? 0 : -EINVAL;
         case 65550: return v>=0 && v<=560 ? 0 : -EINVAL;
-        case 65552: return v>=0 && v<10 && second>=-1500 && second<=1500 ? 0 : -EINVAL;
         case 65554: case 65555: return v>=0 && v<=1000 ? 0 : -EINVAL;
         case 65556: return v>=0 && v<=32767 ? 0 : -EINVAL;
         case 65558: return v>=0 && v<=5000 ? 0 : -EINVAL;
@@ -243,7 +248,6 @@ int validateViper(uint32_t id,const uint8_t* data,uint32_t n) {
         case 65573: case 65577: case 65580: return v>=0 && v<=2100 ? 0 : -EINVAL;
         case 65575: case 65579: case 65582: case 65585: return v>=0 && v<=2 ? 0 : -EINVAL;
         case 65576: return v>=15 && v<=500 ? 0 : -EINVAL;
-        case 65587: return v>=-100 && v<=100 ? 0 : -EINVAL;
         default: return -EINVAL;
     }
 }
@@ -261,6 +265,9 @@ int32_t parameter(Fusion& f,bool set,uint32_t size,void* data,uint32_t* replySiz
             if(packet->vsize!=4 || (valueAt<int32_t>(values)!=0 && valueAt<int32_t>(values)!=1)) status=-EINVAL;
             else if(id==kJamesEnable) f.jamesEnabled=valueAt<int32_t>(values)!=0;
             else f.viperEnabled=valueAt<int32_t>(values)!=0;
+        } else if(id==kBalance) {
+            if(packet->vsize!=4 || valueAt<int32_t>(values)<-100 || valueAt<int32_t>(values)>100) status=-EINVAL;
+            else f.balance=valueAt<int32_t>(values);
         } else if(id==kTone) {
             std::array<int32_t,11> parameters{};
             if(packet->vsize!=sizeof(parameters)) status=-EINVAL;
@@ -281,10 +288,10 @@ int32_t parameter(Fusion& f,bool set,uint32_t size,void* data,uint32_t* replySiz
         return statusReply(replySize,reply,status);
     }
     if(packet->vsize!=4 || *replySize<sizeof(effect_param_t)+8) return -EINVAL;
-    if(id==kProtocol || id==kCapabilities || id==kJamesEnable || id==kViperEnable) {
+    if(id==kProtocol || id==kCapabilities || id==kJamesEnable || id==kViperEnable || id==kBalance) {
         auto* result=static_cast<effect_param_t*>(reply);
         result->status=0; result->psize=result->vsize=4;
-        uint32_t value=id==kProtocol?1:(id==kCapabilities?7:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled));
+        int32_t value=id==kProtocol?2:(id==kCapabilities?7:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)));
         std::memcpy(result->data,&id,4); std::memcpy(result->data+4,&value,4);
         *replySize=sizeof(effect_param_t)+8; return 0;
     }
@@ -328,8 +335,15 @@ int32_t process(effect_handle_t self,audio_buffer_t* in,audio_buffer_t* out) {
             a.f32=current; b.f32=current==f.first.data()?f.second.data():f.first.data();
             if(!(*f.viper)->process(f.viper,&a,&b)) current=b.f32;
         }
-        for(size_t i=0;i<count*2;++i)
-            writeSample(out->raw,offset*2+i,outputFormat,std::clamp(clean(current[i]),-1.f,1.f),accumulate);
+        for(size_t frame=0;frame<count;++frame) {
+            const float target=f.balance/100.f;
+            f.balanceCurrent+=(target-f.balanceCurrent)*f.balanceSmoothing;
+            if(std::abs(target-f.balanceCurrent)<1e-6f) f.balanceCurrent=target;
+            const float left=1.f-std::max(0.f,f.balanceCurrent);
+            const float right=1.f+std::min(0.f,f.balanceCurrent);
+            writeSample(out->raw,(offset+frame)*2,outputFormat,std::clamp(clean(current[frame*2])*left,-1.f,1.f),accumulate);
+            writeSample(out->raw,(offset+frame)*2+1,outputFormat,std::clamp(clean(current[frame*2+1])*right,-1.f,1.f),accumulate);
+        }
     }
     return 0;
 }

@@ -50,24 +50,12 @@ object AudioEffectExtensions {
     ) : Int {
         this ?: return AudioEffect.ERROR_NO_INIT
 
-        val frames = impulseResponse.size
-        val sendArray = FloatArray(MAX_IR_PARTITION_SIZE)
-        val partitionCount = ceil(frames.toDouble() / MAX_IR_PARTITION_SIZE).toInt()
-
-        // Send buffer info for module to allocate memory
-        setParameterIntArray(PARAM_FLOAT_BUFFER_INFO, intArrayOf(frames, channels, 0, partitionCount))
-
-        // Fill final array with zero padding
-        val finalArray = FloatArray(partitionCount * MAX_IR_PARTITION_SIZE)
-
-        System.arraycopy(impulseResponse, 0, finalArray, 0, frames)
-        for (i in 0 until partitionCount) {
-            System.arraycopy(finalArray, MAX_IR_PARTITION_SIZE * i, sendArray, 0, MAX_IR_PARTITION_SIZE)
-            setParameterFloatArray(parameterSend, sendArray)
-        }
-
-        // Commit buffer
-        return safeAccess { this.setParameter(parameterCommit, 1.toShort()) }
+        return me.timschneeberger.rootlessjamesdsp.interop.ImpulseResponseTransfer.send(
+            impulseResponse, channels,
+            prepare = { setParameterIntArray(PARAM_FLOAT_BUFFER_INFO, it) },
+            chunk = { setParameterFloatArray(parameterSend, it) },
+            commit = { safeAccess { this.setParameter(parameterCommit, 1.toShort()) } }
+        )
     }
 
     fun AudioEffectHidden?.setParameterFloatArray(parameter: Int, value: FloatArray): Int {
@@ -135,7 +123,6 @@ object AudioEffectExtensions {
     }
 
     private const val MAX_CHAR_PARTITION_SIZE = 256
-    private const val MAX_IR_PARTITION_SIZE = 4096
     private const val PARAM_CHAR_BUFFER_INFO = 8888
     private const val PARAM_FLOAT_BUFFER_INFO = 9999
 }

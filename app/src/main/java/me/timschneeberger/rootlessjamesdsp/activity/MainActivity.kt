@@ -643,6 +643,7 @@ class MainActivity : BaseActivity() {
                     )) {
                         ProcessorMessage.ConvolverErrorCode.Corrupted -> R.string.message_irs_corrupt
                         ProcessorMessage.ConvolverErrorCode.AdvParamsInvalid -> R.string.message_convolver_advimp_invalid
+                        ProcessorMessage.ConvolverErrorCode.TransferFailed -> R.string.message_convolver_transfer_failed
                         else -> null
                     }?.let {
                         makeSnackbar(getString(it)).show()

@@ -498,13 +498,16 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 						crc = (crc >> 1) ^ (0xEDB88320 & mask);
 					}
 				}
-				dspmain->engineImpulseResponseHash = ~crc;
+				if (success > 0)
+					dspmain->engineImpulseResponseHash = ~crc;
+				else
+					Convolver1DDisable(&dspmain->jdsp);
 				free(dspmain->tempImpulseIncoming);
 				dspmain->tempImpulseIncoming = 0;
 #ifdef DEBUG
 				LOGI("FFT convolver errCode: %d", success);
 #endif
-				*replyData = 0;
+				*replyData = success > 0 ? 0 : -ENOMEM;
 				return 0;
 			}
 			else if (cmd == 10006)
@@ -729,7 +732,8 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 				dspmain->numTime2Send = ((int32_t *)cep)[7];
 				free(dspmain->tempImpulseIncoming);
 				dspmain->samplesInc = 0;
-				dspmain->tempImpulseIncoming = (float*)calloc(4096 * dspmain->impChannels * dspmain->numTime2Send, sizeof(float));
+				// Packet count already includes all interleaved channels.
+				dspmain->tempImpulseIncoming = (float*)calloc((size_t)4096 * dspmain->numTime2Send, sizeof(float));
 				if (!dspmain->tempImpulseIncoming) return -ENOMEM;
 				*replyData = 0;
 				return 0;

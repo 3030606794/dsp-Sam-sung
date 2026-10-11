@@ -6,12 +6,15 @@
         android:title="@string/fusion_tone_title"
         android:defaultValue="false"
         app:iconSpaceReserved="false" />
-    <ListPreference
+    <Preference
+        android:key="fusion_tone_expand"
+        android:title="@string/fusion_tone_expand"
+        android:persistent="false"
+        app:iconSpaceReserved="false" />
+    <me.timschneeberger.rootlessjamesdsp.fusion.ToneRangePreference
         android:key="fusion_tone_range"
         android:title="@string/fusion_tone_range"
         android:defaultValue="100"
-        android:entries="@array/fusion_tone_ranges"
-        android:entryValues="@array/fusion_tone_range_values"
         app:iconSpaceReserved="false" />
     <Preference
         android:key="fusion_tone_reset"

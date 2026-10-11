@@ -515,7 +515,7 @@ Graphic eq</string>
     <!-- Root: Library load failure -->
     <string name="load_fail_header">Moduł Magisk nie jest zainstalowany</string>
     <string name="load_fail_card_title">Nie udało się załadować libjamesdsp.so</string>
-    <string name="load_fail_card">Install the DSP Fusion driver module and reboot. Disable old JamesDSP, Viper and AML modules first.</string>
+    <string name="load_fail_card">Install the DSP音效 driver module and reboot. Disable old JamesDSP, Viper and AML modules first.</string>
     <string name="load_fail_rootless_card_title">Szukasz alternatywy bez roota?</string>
     <string name="load_fail_rootless_card">Ten aromat JamesDSP został zaprojektowany do stosowania z przyrządem zrootowanym/zmodyfikowanym. Dostępna jest również alternatywa bez roota z pewnymi ograniczeniami. Kliknij tutaj, aby uzyskać szczegóły.</string>
     <string name="load_fail_arch_card_title">Moduł jest już zainstalowany?</string>
@@ -599,7 +599,7 @@ Graphic eq</string>
     <string name="device_profile_manage_copy_select">Wybierz profil do skopiowania</string>
     <string name="device_profile_manage_paste_select">Wybierz profile do nadpisania</string>
     <!-- Root version check -->
-    <string name="version_mismatch_root">DSP Fusion driver version mismatch</string>
-    <string name="version_mismatch_root_description">Install the matching DSP Fusion driver and APK from this repository, then reboot. Open the downloads page?</string>
-    <string name="version_mismatch_root_toast">Cannot start: check the DSP Fusion driver and version.</string>
+    <string name="version_mismatch_root">DSP音效 driver version mismatch</string>
+    <string name="version_mismatch_root_description">Install the matching DSP音效 driver and APK from this repository, then reboot. Open the downloads page?</string>
+    <string name="version_mismatch_root_toast">Cannot start: check the DSP音效 driver and version.</string>
 </resources>

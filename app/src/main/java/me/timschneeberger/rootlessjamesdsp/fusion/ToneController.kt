@@ -9,6 +9,7 @@ object ToneController {
     const val PARAMETER = 196608
     const val ENABLED = "fusion_tone_enabled"
     const val RANGE = "fusion_tone_range"
+    val RANGES = listOf(20, 40, 100)
     val KEYS = arrayOf(
         "fusion_tone_temperature", "fusion_tone_bass_depth", "fusion_tone_bass_impact",
         "fusion_tone_thickness", "fusion_tone_vocal", "fusion_tone_female",
@@ -21,7 +22,7 @@ object ToneController {
         context.getSharedPreferences(PREFS, Context.MODE_MULTI_PROCESS)
 
     fun range(preferences: SharedPreferences): Int =
-        preferences.getString(RANGE, "100")?.toIntOrNull()?.takeIf { it in arrayOf(20, 40, 100) } ?: 100
+        preferences.getString(RANGE, "100")?.toIntOrNull()?.takeIf { it in RANGES } ?: 100
 
     fun payload(context: Context): IntArray {
         val prefs = preferences(context)

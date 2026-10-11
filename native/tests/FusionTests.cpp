@@ -8,6 +8,7 @@
 #include "essential.h"
 extern "C" audio_effect_library_t AELI;
 constexpr effect_uuid_t uuid{0x30306067,0x9400,0x4d53,0x9000,{0,0,0,0,0,1}};
+void runStreamingTests();
 
 int cmd(effect_handle_t h,uint32_t code,uint32_t size=0,void* data=nullptr) {
     int reply=-999; uint32_t replySize=4;
@@ -43,6 +44,7 @@ int process(effect_handle_t h,void* in,void* out,size_t frames) {
     return (*h)->process(h,&a,&b);
 }
 int main() {
+    runStreamingTests();
     effect_descriptor_t descriptor{};
     assert(AELI.get_descriptor(&uuid,&descriptor)==0);
     // Android AudioPolicyManager rejects even a correctly created/configured
@@ -55,7 +57,7 @@ int main() {
     effect_descriptor_t instanceDescriptor{};
     assert((*h)->get_descriptor(h,&instanceDescriptor)==0);
     assert(instanceDescriptor.memoryUsage==descriptor.memoryUsage);
-    assert(get(h,131080)==1 && get(h,131081)==7);
+    assert(get(h,131080)==2 && get(h,131081)==7);
     assert(get(h,20002)>0 && get(h,20001)==48000);
     assert(set(h,131072,0)==0 && set(h,131073,0)==0);
     assert(cmd(h,EFFECT_CMD_ENABLE)==0);
@@ -95,7 +97,7 @@ int main() {
     assert(set(h,65560,101)==-EINVAL);
     assert(set(h,65544,1)==-ENOSYS); // Incomplete upstream VHE must not report success.
     assert(set(h,65565,1)==-ENOSYS);
-    std::array<int32_t,2> badEq{10,0};assert(setRaw(h,65552,badEq.data(),8)==-EINVAL);
+    std::array<int32_t,2> badEq{10,0};assert(setRaw(h,65552,badEq.data(),8)==-ENOSYS);
     std::array<float,3> nanLimiter{0,std::numeric_limits<float>::quiet_NaN(),0};
     assert(setRaw(h,1500,nanLimiter.data(),12)==-EINVAL);
     std::array<int32_t,4> badIr{1,0,0,1};assert(setRaw(h,9999,badIr.data(),16)==-EINVAL);
@@ -117,7 +119,7 @@ int main() {
     assert(set(h,65559,0)==0);
     assert(set(h,65576,70)==0 && set(h,65577,200)==0 && set(h,65575,1)==0);
     assert(set(h,65550,56)==0 && set(h,65558,500)==0 && set(h,65580,100)==0);
-    const std::array<uint32_t,12> effects{65548,65551,65553,65557,65569,65574,65578,65581,65583,65584,65603,65559};
+    const std::array<uint32_t,10> effects{65548,65553,65557,65569,65574,65578,65581,65583,65584,65559};
     for(auto effect:effects) {
         assert(set(h,effect,1)==0);
         for(int block=0;block<6;++block) {

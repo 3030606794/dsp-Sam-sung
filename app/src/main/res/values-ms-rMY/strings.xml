@@ -514,7 +514,7 @@
     <!-- Root: Library load failure -->
     <string name="load_fail_header">Modul magisk tidak terpasang</string>
     <string name="load_fail_card_title">Gagal memuat libjamesdsp.so</string>
-    <string name="load_fail_card">Install the DSP Fusion driver module and reboot. Disable old JamesDSP, Viper and AML modules first.</string>
+    <string name="load_fail_card">Install the DSP音效 driver module and reboot. Disable old JamesDSP, Viper and AML modules first.</string>
     <string name="load_fail_rootless_card_title">Mencari alternatif rootless?</string>
     <string name="load_fail_rootless_card">Jenis JamesDSP ini dirancang untuk perangkat yang sudah di modifikasi atau di-root. Alternatif untuk perangkat non-root yang punya beberapa keterbatasan juga tersedia. Tekan untuk melihat detail.</string>
     <string name="load_fail_arch_card_title">Modul sudah terpasang?</string>
@@ -598,7 +598,7 @@
     <string name="device_profile_manage_copy_select">Pilih profil untuk disalin</string>
     <string name="device_profile_manage_paste_select">Pilih profil untuk ditimpa</string>
     <!-- Root version check -->
-    <string name="version_mismatch_root">DSP Fusion driver version mismatch</string>
-    <string name="version_mismatch_root_description">Install the matching DSP Fusion driver and APK from this repository, then reboot. Open the downloads page?</string>
-    <string name="version_mismatch_root_toast">Cannot start: check the DSP Fusion driver and version.</string>
+    <string name="version_mismatch_root">DSP音效 driver version mismatch</string>
+    <string name="version_mismatch_root_description">Install the matching DSP音效 driver and APK from this repository, then reboot. Open the downloads page?</string>
+    <string name="version_mismatch_root_toast">Cannot start: check the DSP音效 driver and version.</string>
 </resources>

@@ -1,6 +1,6 @@
 id=dsp_fusion
-name=DSP Fusion
-version=0.1.0-alpha3
-versionCode=1003
+name=DSP音效
+version=0.1.0-alpha4
+versionCode=1004
 author=DSP-mobile-version contributors
 description=Unified JamesDSP + ViPER RE + listening controls. Requires DSP Fusion app. Disable old JamesDSP, ViPER and AML modules before use.

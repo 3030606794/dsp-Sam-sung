@@ -152,6 +152,8 @@ open class MainApplication : Application(), SharedPreferences.OnSharedPreference
             modules(appModule)
         }
 
+        me.timschneeberger.rootlessjamesdsp.fusion.FusionPreferenceMigration.migrate(this)
+
         // Depends on Koin
         profileManager = ProfileManager()
 

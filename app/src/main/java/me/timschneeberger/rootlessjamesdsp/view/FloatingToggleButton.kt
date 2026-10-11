@@ -1,6 +1,5 @@
 package me.timschneeberger.rootlessjamesdsp.view
 
-import android.animation.AnimatorInflater
 import android.content.Context
 import android.util.AttributeSet
 import com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -30,7 +29,9 @@ class FloatingToggleButton @JvmOverloads constructor(
             }
         }
 
-        stateListAnimator = AnimatorInflater.loadStateListAnimator(context, com.google.android.material.R.animator.mtrl_extended_fab_state_list_animator)
+        // The main switch sits inside the bottom bar rather than floating above it.
+        stateListAnimator = null
+        compatElevation = 0f
         supportBackgroundTintList = context.getColorStateList(R.color.selector_floating_toggle_tint)
         drawable.setTintList(context.getColorStateList(R.color.selector_floating_toggle_foreground_tint))
     }

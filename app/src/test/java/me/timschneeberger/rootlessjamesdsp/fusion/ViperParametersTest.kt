@@ -16,14 +16,11 @@ class ViperParametersTest {
         assertArrayEquals(intArrayOf(50), control("v_reverb_dry").packet(50))
     }
 
-    @Test fun equalizerSendsIndexAndHundredthsOfDb() {
-        val bands = ViperParameters.groups.single { it.key == "v_eq" }.controls
-        assertEquals(10, bands.size)
-        bands.forEachIndexed { i, band ->
-            assertEquals(65552, band.parameter)
-            assertArrayEquals(intArrayOf(i, -1200), band.packet(-12))
-            assertArrayEquals(intArrayOf(i, 600), band.packet(6))
-        }
+    @Test fun removedProcessorsAreAbsentFromAllParameterDefinitions() {
+        val removed = setOf(65551, 65552, 65586, 65587, 65588, 65603)
+        assertTrue(controls.none { it.parameter in removed })
+        assertTrue(ViperParameters.groups.none { it.enableParameter in removed })
+        assertTrue(ViperParameters.groups.none { it.key in setOf("v_output", "v_eq", "v_speaker") })
     }
 
     @Test fun scalarMappingsMatchOriginalDriverUnits() {
@@ -32,7 +29,6 @@ class ViperParametersTest {
         assertArrayEquals(intArrayOf(600), control("v_bass_amount").packet(11))
         assertArrayEquals(intArrayOf(200), control("v_clarity_amount").packet(4))
         assertArrayEquals(intArrayOf(1100), control("v_dynamic_strength").packet(50))
-        assertArrayEquals(intArrayOf(-100), control("v_pan").packet(-100))
     }
 
     @Test fun malformedValuesClampAndDefaultsStayInRange() {
