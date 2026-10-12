@@ -98,7 +98,7 @@ class PeqBandAdapter(
             slider.valueFrom = -state.gainRange.toFloat()
             slider.valueTo = state.gainRange.toFloat()
             slider.value = band.gain.coerceIn(-state.gainRange, state.gainRange).toFloat()
-            slider.contentDescription = context.getString(R.string.peq_band_title, index + 1, number(band.frequency))
+            slider.contentDescription = context.getString(R.string.peq_band_title, index + 1, number(band.frequency, 3))
             slider.setLabelFormatter { "${fixedNumber(it.toDouble(), 2)} dB" }
 
             fun currentBand() = state.bands.firstOrNull { it.id == band.id }
@@ -106,7 +106,7 @@ class PeqBandAdapter(
                 val current = currentBand() ?: return
                 renderGainColor(current.gain)
                 binding.peqBandWarning.isVisible = current.frequency == 0.0
-                binding.peqBandTitle.text = context.getString(R.string.peq_band_title, index + 1, number(current.frequency))
+                binding.peqBandTitle.text = context.getString(R.string.peq_band_title, index + 1, number(current.frequency, 3))
                 val bandwidth = usesBandwidth(current)
                 val details = if (bandwidth) {
                     context.getString(R.string.peq_band_detail_bw, typeLabel(context, current.type),
