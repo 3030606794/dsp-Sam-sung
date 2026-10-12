@@ -87,11 +87,27 @@ internal object BuiltinLiveprogMetadata {
     fun parameterLine(line: String): String {
         val separator = line.indexOf('>')
         if (separator < 0) return line
-        var definition = line.substring(0, separator + 1)
-        definition = Regex("""\{([^}]*)}""").replace(definition) { match ->
-            "{" + match.groupValues[1].split(',').joinToString(",") { text(it.trim()) } + "}"
+        val definition = line.substring(0, separator + 1)
+        // These are literal annotation delimiters, not a regular expression. Android's
+        // ICU regex engine rejects a bare closing brace that desktop Java accepts.
+        val localizedDefinition = buildString {
+            var cursor = 0
+            while (cursor < definition.length) {
+                val opening = definition.indexOf('{', cursor)
+                if (opening < 0) {
+                    append(definition, cursor, definition.length)
+                    break
+                }
+                val closing = definition.indexOf('}', opening + 1)
+                if (closing < 0) return line
+                append(definition, cursor, opening + 1)
+                append(definition.substring(opening + 1, closing).split(',')
+                    .joinToString(",") { text(it.trim()) })
+                append('}')
+                cursor = closing + 1
+            }
         }
-        return definition + text(line.substring(separator + 1).trim())
+        return localizedDefinition + text(line.substring(separator + 1).trim())
     }
 
     fun bassDefault(line: String): String =

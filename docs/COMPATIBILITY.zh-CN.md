@@ -1,8 +1,8 @@
-# DSP音效 0.1.0-alpha11：升级与兼容性
+# DSP音效 0.1.0-alpha12：升级与兼容性
 
 ## 安装
 
-本版 APK versionCode 1011，驱动协议仍为 5。本轮未改原生音频实现；已安装 alpha10 驱动时，只需覆盖安装 `DSP-Audio-0.1.0-alpha11.apk`。随附 alpha11 驱动与 alpha10 的音频实现一致。alpha9 驱动可处理音效，但首页采样率及处理活动查询需 alpha10 或更新驱动。包名、签名和模块 ID `dsp_fusion` 不变，无需卸载或清除数据。
+本版 APK versionCode 1012，驱动协议仍为 5。修复 alpha11 内置可编程 DSP 中文参数解析在 Android 上闪退的问题。本轮未改原生音频实现；已安装 alpha10 或 alpha11 驱动时，只需覆盖安装 `DSP-Audio-0.1.0-alpha12.apk`。随附 alpha12 驱动与 alpha10 的音频实现一致。alpha9 驱动可处理音效，但首页采样率及处理活动查询需 alpha10 或更新驱动。包名、签名和模块 ID `dsp_fusion` 不变，无需卸载或清除数据。
 
 alpha7/alpha8 协议 4、alpha6 协议 3 和更早驱动不可与本版 APK 混用。原 JamesDSP、ViPER RE/Fork/AIDL、AML 模块保持禁用。支持 Android 8+、ARM64/ARMv7，需 root；用户自行安装。
 

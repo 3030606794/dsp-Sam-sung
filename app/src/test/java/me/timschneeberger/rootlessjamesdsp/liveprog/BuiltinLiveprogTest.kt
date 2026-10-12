@@ -54,6 +54,46 @@ class BuiltinLiveprogTest {
         assertEquals(40, names.size)
     }
 
+    @Test fun translationPreservesEveryBuiltinParameterAndItsValues() {
+        assets.listFiles()!!.filter { it.extension == "eel" }.forEach { original ->
+            val script = file(original.name)
+            val english = parse(script, Locale.ENGLISH)
+            val chinese = parse(script)
+            assertEquals(original.name, english.contents, chinese.contents)
+            assertEquals(original.name, english.properties.map { it.key }, chinese.properties.map { it.key })
+            english.properties.zip(chinese.properties).forEach { (before, after) ->
+                val context = "${original.name}: ${before.key}"
+                assertEquals(context, before.javaClass, after.javaClass)
+                before as EelNumberRangeProperty<*>
+                after as EelNumberRangeProperty<*>
+                assertEquals(context, before.default, after.default)
+                assertEquals(context, before.value, after.value)
+                assertEquals(context, before.minimum, after.minimum)
+                assertEquals(context, before.maximum, after.maximum)
+                assertEquals(context, before.step, after.step)
+                if (before is EelListProperty && after is EelListProperty) {
+                    assertEquals(context, before.options.size, after.options.size)
+                }
+            }
+        }
+    }
+
+    @Test fun annotationTranslationPreservesNumericDefinitionAndListOrder() {
+        assertEquals("dBassGain:5<0,100,1>低音强度（%）",
+            BuiltinLiveprogMetadata.parameterLine("dBassGain:5<0,100,1>Bass strength (%)"))
+        assertEquals("choice:1<0,2,1{关闭,开启,Custom option}>预设",
+            BuiltinLiveprogMetadata.parameterLine("choice:1<0,2,1{Off, On, Custom option}>Preset"))
+        assertEquals("gain:0<-12,12,0.01>增益（dB）",
+            BuiltinLiveprogMetadata.parameterLine("gain:0<-12,12,0.01>Gain (dB)"))
+    }
+
+    @Test fun incompleteOrUnknownAnnotationIsLeftIntact() {
+        listOf("", "@init", "choice:0<0,1,1{Off,On>Preset", "gain:0<-12,12,0.01",
+            "choice:0<0,1,1{Custom A,Custom B}>User label {unchanged}").forEach { line ->
+            assertEquals(line, BuiltinLiveprogMetadata.parameterLine(line))
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     @Test fun savedBassAndPresetSurviveNewParserAndRestoreUsesFive() {
         val script = file("viper_dynamicbass_preset.eel")
