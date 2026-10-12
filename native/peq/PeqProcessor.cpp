@@ -26,7 +26,7 @@ bool PeqProcessor::design(const Band& band,uint32_t rate,Coeff& c) {
     const double a=std::pow(10.,band.gain/40000.);
     double high=1,mid=k,low=1;
     // RBJ transfer functions expressed as high/band/low state-variable outputs.
-    // Shelves still use Q, not slope S; band-pass has unity center gain.
+    // Shelves still use Q, not slope S; band-pass has unity center gain at 0 dB.
     // Trapezoidal integration is algebraically equivalent to the bilinear RBJ
     // biquad, without forming 1 +/- a1 + a2 (which can round to zero at Nyquist).
     // References: https://www.w3.org/TR/audio-eq-cookbook/
@@ -40,6 +40,12 @@ bool PeqProcessor::design(const Band& band,uint32_t rate,Coeff& c) {
         case Notch:mid=0;break;
         case BandPass:high=0;low=0;break;
         default:return false;
+    }
+    if(band.type>=LowPass) {
+        // Protocol 5: these filters keep their poles/zeros and apply gain to
+        // the complete filtered output. A zero gain does not bypass a filter.
+        const double gain=a*a;
+        high*=gain;mid*=gain;low*=gain;
     }
     const double inverse=1/(1+g*(g+k));
     c={inverse,(g+k)*inverse,g*inverse,g*(g+k)*inverse,g*g*inverse,high,mid,low};

@@ -41,7 +41,8 @@ class PeqRepository(private val preferences: SharedPreferences) {
 
     companion object {
         const val KEY_STATE = "fusion_peq_state"
-        const val SCHEMA = 1
+        // Schema 2 gives low/high-pass, notch and band-pass gain an audible meaning.
+        const val SCHEMA = 2
         const val MAX_JSON_LENGTH = 256 * 1024
 
         fun encode(state: PeqState): String {
@@ -52,6 +53,7 @@ class PeqRepository(private val preferences: SharedPreferences) {
                 put("gainStep", state.gainStep)
                 put("qStep", state.qStep)
                 put("frequencyStep", state.frequencyStep)
+                put("pinResponse", state.pinResponse)
                 put("showQSlider", state.showQSlider)
                 put("showFrequencySlider", state.showFrequencySlider)
                 put("bands", buildJsonArray {
@@ -73,7 +75,7 @@ class PeqRepository(private val preferences: SharedPreferences) {
             val root = Json.parseToJsonElement(json) as? JsonObject
                 ?: throw IllegalArgumentException("PEQ JSON must be an object")
             val schema = root.number("schema")
-            require(schema == SCHEMA.toDouble()) { "Unsupported PEQ schema" }
+            require(schema == 1.0 || schema == SCHEMA.toDouble()) { "Unsupported PEQ schema" }
             val bands = root["bands"] as? JsonArray
                 ?: throw IllegalArgumentException("bands must be an array")
             require(bands.size <= PeqModel.MAX_BANDS) { "At most 170 bands are supported" }
@@ -93,15 +95,19 @@ class PeqRepository(private val preferences: SharedPreferences) {
                         PeqQualityDisplay.entries.firstOrNull { it.name == name }
                             ?: throw IllegalArgumentException("Unknown quality display: $name")
                     } else PeqQualityDisplay.Q
-                    PeqBand(band.text("id"), type, enabled.boolean, band.number("frequency"),
-                        band.number("gain"), band.number("q"), qualityDisplay)
+                    val stored = PeqModel.validateBand(PeqBand(band.text("id"), type, enabled.boolean,
+                        band.number("frequency"), band.number("gain"), band.number("q"), qualityDisplay))
+                    // Older versions retained an inactive gain when switching filter types.
+                    // Keep their audible response on upgrade instead of activating that hidden value.
+                    if (schema == 1.0 && !type.isUnityAtZeroGain) stored.copy(gain = 0.0) else stored
                 },
                 gainRange = root.number("gainRange"),
                 gainStep = root.number("gainStep"),
                 qStep = if (root.containsKey("qStep")) root.number("qStep") else 0.01,
                 frequencyStep = if (root.containsKey("frequencyStep")) root.number("frequencyStep") else 1.0,
                 showQSlider = root.optionalBoolean("showQSlider", false),
-                showFrequencySlider = root.optionalBoolean("showFrequencySlider", false)
+                showFrequencySlider = root.optionalBoolean("showFrequencySlider", false),
+                pinResponse = root.optionalBoolean("pinResponse", true)
             ))
         }
 

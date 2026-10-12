@@ -2,7 +2,10 @@ package me.timschneeberger.rootlessjamesdsp.peq
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.ViewGroup
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
@@ -21,6 +24,8 @@ class PeqBandAdapter(
     private val onEdit: (String) -> Unit,
     private val onInteractionFinished: () -> Unit = {},
     private val onBandSelected: (String) -> Unit = {},
+    private val onLocate: (String) -> Unit = {},
+    private val onInteractionStarted: (String) -> Unit = {},
 ) : RecyclerView.Adapter<PeqBandAdapter.Holder>() {
     private var state = PeqState(emptyList())
     private val itemIds = mutableMapOf<String, Long>()
@@ -52,9 +57,30 @@ class PeqBandAdapter(
     override fun onBindViewHolder(holder: Holder, position: Int) = holder.bind(state.bands[position], position)
 
     inner class Holder(private val binding: PeqBandRowBinding) : RecyclerView.ViewHolder(binding.root) {
+        private val defaultGainThumbTint = binding.peqBandSlider.thumbTintList
+        private val defaultGainTrackTint = binding.peqBandSlider.trackActiveTintList
+        private val defaultGainHaloTint = binding.peqBandSlider.haloTintList
+        private var lastGainSign: Int? = null
+
+        private fun renderGainColor(gain: Double) {
+            val sign = when { gain > 0.0 -> 1; gain < 0.0 -> -1; else -> 0 }
+            if (lastGainSign == sign) return
+            lastGainSign = sign
+            val tint = when {
+                gain > 0.0 -> ColorStateList.valueOf(Color.rgb(211, 47, 47))
+                gain < 0.0 -> ColorStateList.valueOf(Color.rgb(25, 118, 210))
+                else -> null
+            }
+            binding.peqBandSlider.thumbTintList = tint ?: defaultGainThumbTint
+            binding.peqBandSlider.trackActiveTintList = tint ?: defaultGainTrackTint
+            binding.peqBandSlider.haloTintList = tint ?: defaultGainHaloTint
+        }
+
+        @SuppressLint("ClickableViewAccessibility")
         fun bind(band: PeqBand, index: Int) {
             val context = binding.root.context
             binding.root.isSaveFromParentEnabled = false
+            binding.peqBandLocate.setOnClickListener { onLocate(band.id) }
             binding.peqBandHeader.setOnClickListener { onBandSelected(band.id); onEdit(band.id) }
             binding.peqBandEdit.setOnClickListener { onBandSelected(band.id); onEdit(band.id) }
             binding.peqGainControls.isVisible = band.type.usesGain
@@ -69,17 +95,18 @@ class PeqBandAdapter(
             slider.valueTo = state.gainRange.toFloat()
             slider.value = band.gain.coerceIn(-state.gainRange, state.gainRange).toFloat()
             slider.contentDescription = context.getString(R.string.peq_band_title, index + 1, number(band.frequency))
-            slider.setLabelFormatter { "${number(it.toDouble(), 2)} dB" }
+            slider.setLabelFormatter { "${fixedNumber(it.toDouble(), 2)} dB" }
 
             fun currentBand() = state.bands.firstOrNull { it.id == band.id }
             fun renderLabels() {
                 val current = currentBand() ?: return
+                renderGainColor(current.gain)
                 binding.peqBandTitle.text = context.getString(R.string.peq_band_title, index + 1, number(current.frequency))
                 val bandwidth = usesBandwidth(current)
                 val details = if (bandwidth) {
                     context.getString(R.string.peq_band_detail_bw, typeLabel(context, current.type),
-                        number(PeqResponse.bandwidthOctaves(current.q, current.frequency), 6))
-                } else context.getString(R.string.peq_band_detail, typeLabel(context, current.type), number(current.q, 3))
+                        fixedNumber(PeqResponse.bandwidthOctaves(current.q, current.frequency), 3))
+                } else context.getString(R.string.peq_band_detail, typeLabel(context, current.type), fixedNumber(current.q, 3))
                 binding.peqBandSummary.text = if (current.enabled) details else
                     context.getString(R.string.peq_band_disabled, details)
                 binding.peqBandGain.text = if (current.type.usesGain)
@@ -90,7 +117,7 @@ class PeqBandAdapter(
                 val quality = displayedQuality(current)
                 val bounds = qualityBounds(current)
                 binding.peqQValue.text = context.getString(if (bandwidth) R.string.peq_bw_value else R.string.peq_q_value,
-                    number(quality, if (bandwidth) 6 else 3))
+                    fixedNumber(quality, 3))
                 binding.peqQSlider.contentDescription = context.getString(if (bandwidth) R.string.peq_bandwidth else R.string.peq_quality)
                 binding.peqQMinus.contentDescription = context.getString(if (bandwidth) R.string.peq_bw_decrease else R.string.peq_quality_decrease)
                 binding.peqQPlus.contentDescription = context.getString(if (bandwidth) R.string.peq_bw_increase else R.string.peq_quality_increase)
@@ -112,28 +139,30 @@ class PeqBandAdapter(
                 val current = currentBand() ?: return
                 if (!current.type.usesGain) return
                 onBandSelected(current.id)
-                val next = requested.coerceIn(-PeqModel.MAX_GAIN, PeqModel.MAX_GAIN)
+                val next = requested.coerceIn(-state.gainRange, state.gainRange)
                 if (next != current.gain) onBandChanged(current.copy(gain = next))
                 val updated = currentBand() ?: return
                 slider.value = updated.gain.coerceIn(-state.gainRange, state.gainRange).toFloat()
                 renderLabels()
             }
             slider.addOnChangeListener { _, changed, fromUser ->
-                if (fromUser) userGain(steppedGain(changed, state.gainRange, state.gainStep))
+                if (fromUser) userGain(dragGain(changed, state.gainRange))
             }
             slider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-                override fun onStartTrackingTouch(slider: Slider) = onBandSelected(band.id)
+                override fun onStartTrackingTouch(slider: Slider) = onInteractionStarted(band.id)
                 override fun onStopTrackingTouch(slider: Slider) = onInteractionFinished()
             })
             binding.peqBandMinus.setOnClickListener { currentBand()?.let {
-                userGain((it.gain - state.gainStep).coerceAtLeast(-state.gainRange))
+                userGain(it.gain - state.gainStep)
                 onInteractionFinished()
             } }
             binding.peqBandPlus.setOnClickListener { currentBand()?.let {
-                userGain((it.gain + state.gainStep).coerceAtMost(state.gainRange))
+                userGain(it.gain + state.gainStep)
                 onInteractionFinished()
             } }
-            SliderDoubleTapReset.install(slider) { userGain(0.0); onInteractionFinished() }
+            SliderDoubleTapReset.install(slider, onCancel = onInteractionFinished) {
+                userGain(0.0); onInteractionFinished()
+            }
             fun changeBand(next: PeqBand) {
                 onBandSelected(next.id)
                 if (next != currentBand()) onBandChanged(next)
@@ -153,11 +182,15 @@ class PeqBandAdapter(
                 currentBand()?.let { changeBand(withFrequency(it, requested)) }
             }
             fun bindLogSlider(control: Slider, bounds: (PeqBand) -> ClosedFloatingPointRange<Double>,
-                              step: () -> Double, origin: Double, label: (PeqBand, Double) -> String,
+                              draggedValue: (Float, Double, Double) -> Double, label: (PeqBand, Double) -> String,
                               update: (Double) -> Unit) {
                 control.clearOnChangeListeners()
                 control.clearOnSliderTouchListeners()
                 control.isSaveEnabled = false
+                control.setOnTouchListener { _, event ->
+                    if (event.actionMasked == MotionEvent.ACTION_CANCEL) onInteractionFinished()
+                    false
+                }
                 control.stepSize = 0f
                 control.valueFrom = 0f
                 control.valueTo = 1f
@@ -170,18 +203,18 @@ class PeqBandAdapter(
                     if (fromUser) {
                         val current = currentBand() ?: return@addOnChangeListener
                         val range = bounds(current)
-                        update(steppedLogarithmicValue(raw, range.start, range.endInclusive, step(), origin))
+                        update(draggedValue(raw, range.start, range.endInclusive))
                     }
                 }
                 control.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-                    override fun onStartTrackingTouch(slider: Slider) = onBandSelected(band.id)
+                    override fun onStartTrackingTouch(slider: Slider) = onInteractionStarted(band.id)
                     override fun onStopTrackingTouch(slider: Slider) = onInteractionFinished()
                 })
             }
-            bindLogSlider(binding.peqQSlider, ::qualityBounds, { state.qStep }, 0.0,
-                { current, value -> "${if (usesBandwidth(current)) "BW" else "Q"} ${number(value, 6)}" }, ::userQuality)
+            bindLogSlider(binding.peqQSlider, ::qualityBounds, ::dragQuality,
+                { current, value -> "${if (usesBandwidth(current)) "BW" else "Q"} ${fixedNumber(value, 3)}" }, ::userQuality)
             bindLogSlider(binding.peqFrequencySlider, { PeqModel.MIN_FREQUENCY..PeqModel.MAX_FREQUENCY },
-                { state.frequencyStep }, PeqModel.MIN_FREQUENCY, { _, value -> "${number(value, 2)} Hz" }, ::userFrequency)
+                { position, _, _ -> dragFrequency(position) }, { _, value -> "${number(value, 0)} Hz" }, ::userFrequency)
             binding.peqQMinus.setOnClickListener { currentBand()?.let {
                 userQuality(displayedQuality(it) - state.qStep)
                 onInteractionFinished()
@@ -225,20 +258,26 @@ class PeqBandAdapter(
             return band.copy(frequency = frequency, q = q)
         }
 
-        /** Snap the displayed parameter, while always allowing both real endpoints. */
-        fun steppedGain(value: Float, range: Double, step: Double): Double = when {
+        /** Drag precision is independent of the configured +/- button step. */
+        fun dragGain(value: Float, range: Double): Double = when {
             value <= -range.toFloat() -> -range
             value >= range.toFloat() -> range
-            else -> (round(value / step) * step).coerceIn(-range, range)
+            else -> (round(value.toDouble() * 100.0) / 100.0).coerceIn(-range, range)
         }
 
-        /** Snap the displayed parameter, while always allowing both real endpoints. */
-        fun steppedLogarithmicValue(position: Float, minimum: Double, maximum: Double,
-                                    step: Double, origin: Double = 0.0): Double {
+        fun dragQuality(position: Float, minimum: Double, maximum: Double): Double =
+            roundedLogarithmicValue(position, minimum, maximum, 1000.0)
+
+        fun dragFrequency(position: Float): Double = roundedLogarithmicValue(position,
+            PeqModel.MIN_FREQUENCY, PeqModel.MAX_FREQUENCY, 1.0)
+
+        /** Keep endpoints exact, including frequency-dependent BW endpoints. */
+        private fun roundedLogarithmicValue(position: Float, minimum: Double, maximum: Double,
+                                            scale: Double): Double {
             if (position <= 0f) return minimum
             if (position >= 1f) return maximum
             val value = logarithmicValue(position, minimum, maximum)
-            return (origin + round((value - origin) / step) * step).coerceIn(minimum, maximum)
+            return (round(value * scale) / scale).coerceIn(minimum, maximum)
         }
 
         fun logarithmicPosition(value: Double, minimum: Double, maximum: Double): Float =
@@ -248,7 +287,9 @@ class PeqBandAdapter(
             (minimum * exp(position.coerceIn(0f, 1f) * ln(maximum / minimum))).coerceIn(minimum, maximum)
 
         fun number(value: Double, decimals: Int = 2): String =
-            String.format(Locale.ROOT, "%.${decimals}f", value).trimEnd('0').trimEnd('.')
+            fixedNumber(value, decimals).let { if (decimals == 0) it else it.trimEnd('0').trimEnd('.') }
+
+        fun fixedNumber(value: Double, decimals: Int): String = String.format(Locale.ROOT, "%.${decimals}f", value)
 
         fun typeLabel(context: Context, type: PeqFilterType): String = context.getString(when (type) {
             PeqFilterType.PEAK -> R.string.peq_filter_peak

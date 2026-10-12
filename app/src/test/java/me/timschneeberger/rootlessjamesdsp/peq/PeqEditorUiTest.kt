@@ -107,6 +107,34 @@ class PeqEditorUiTest {
         })
     }
 
+    @Test fun addedBandStartsAtZeroHzZeroGainPeakAndHalfQAndCanBeAssignedAFrequency() {
+        val original = PeqModel.defaultState(1).copy(showQSlider = true, showFrequencySlider = true)
+        repository.save(original)
+        launch()
+        view<MaterialButton>(R.id.peq_add).performClick()
+        layout()
+        val added = repository.load().bands.last()
+        assertEquals(0.0, added.frequency, 0.0)
+        assertEquals(0.0, added.gain, 0.0)
+        assertEquals(PeqFilterType.PEAK, added.type)
+        assertEquals(0.5, added.q, 0.0)
+        assertEquals(original.bands.single(), repository.load().bands.first())
+        row(1).findViewById<MaterialButton>(R.id.peq_band_locate).performClick()
+        val edit = edit(1)
+        edit.findViewById<MaterialButton>(R.id.peq_quality_bw)!!.performClick()
+        edit.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertFalse(edit.isShowing)
+        assertEquals(0.0, repository.load().bands.last().frequency, 0.0)
+        assertEquals(0.5, repository.load().bands.last().q, 0.0)
+        row(1).findViewById<MaterialButton>(R.id.peq_frequency_plus).performClick()
+        assertEquals(20.0, repository.load().bands.last().frequency, 0.0)
+        assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
+        controller!!.recreate()
+        layout()
+        assertEquals(20.0, repository.load().bands.last().frequency, 0.0)
+    }
+
     @Test fun curveStaysPinnedAnd170BandsAreRecycledWithValuesSurvivingRotation() {
         val base = PeqModel.defaultState(170)
         repository.save(base.copy(bands = base.bands.mapIndexed { i, band ->
@@ -171,8 +199,37 @@ class PeqEditorUiTest {
         settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         layout()
-        assertEquals(PeqModel.resize(original, 1).bands, repository.load().bands)
+        assertEquals(original.bands.take(1), repository.load().bands)
         assertEquals(1, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
+    }
+
+    @Test fun countChangeCanAddAndRemoveAtTheFrontWithoutChangingExistingFrequencies() {
+        val original = PeqState(listOf(PeqBand(frequency = 123.0, gain = -4.5, q = 2.5),
+            PeqBand(frequency = 4567.0, gain = 3.25, type = PeqFilterType.HIGH_PASS,
+                qualityDisplay = PeqQualityDisplay.Q)), gainRange = 50.0)
+        repository.save(original)
+        launch()
+        val settings = settings()
+        settings.findViewById<EditText>(R.id.peq_band_count)!!.setText("5")
+        settings.findViewById<EditText>(R.id.peq_frequency_step)!!.setText("125")
+        settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        val confirmation = dialog()
+        assertFalse(confirmation.findViewById<MaterialSwitch>(R.id.peq_resize_redistribute)!!.isChecked)
+        confirmation.findViewById<View>(R.id.peq_resize_front)!!.performClick()
+        confirmation.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        val expanded = repository.load()
+        assertEquals(original.bands, expanded.bands.takeLast(2))
+        assertEquals(125.0, expanded.frequencyStep, 0.0)
+        assertTrue(expanded.bands.take(3).all { it.frequency == 0.0 && it.gain == 0.0 &&
+            it.q == 0.5 && it.type == PeqFilterType.PEAK })
+        val reduce = settings()
+        reduce.findViewById<EditText>(R.id.peq_band_count)!!.setText("2")
+        reduce.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        dialog().findViewById<View>(R.id.peq_resize_front)!!.performClick()
+        dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        assertEquals(expanded.copy(bands = original.bands), repository.load())
     }
 
     @Test fun settingSlidersAndNumberBoxesStayInSyncAtBothEndpointsAndCancelDiscardsDraft() {
@@ -290,7 +347,7 @@ class PeqEditorUiTest {
         assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
     }
 
-    @Test fun allFilterTypesCanBeEditedAndNonGainTypesHideInactiveControls() {
+    @Test fun everyFilterTypeExposesGainAndSavesItAlongsideFrequencyAndQ() {
         repository.save(PeqModel.defaultState(1))
         launch()
         PeqFilterType.entries.forEach { type ->
@@ -300,8 +357,8 @@ class PeqEditorUiTest {
             selector.onItemClickListener!!.onItemClick(null, null, type.ordinal, type.ordinal.toLong())
             dialog.findViewById<EditText>(R.id.peq_frequency_input)!!.setText("1234.5")
             dialog.findViewById<EditText>(R.id.peq_quality_input)!!.setText("3.25")
-            if (type.usesGain) dialog.findViewById<EditText>(R.id.peq_gain_input)!!.setText("-2.75")
-            assertEquals(if (type.usesGain) View.VISIBLE else View.GONE,
+            dialog.findViewById<EditText>(R.id.peq_gain_input)!!.setText("-2.75")
+            assertEquals(View.VISIBLE,
                 dialog.findViewById<View>(R.id.peq_gain_box)!!.visibility)
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
             layout()
@@ -310,8 +367,10 @@ class PeqEditorUiTest {
             assertEquals(1234.5, saved.frequency, 0.0)
             assertEquals(3.25, saved.q, 0.0)
             assertEquals(-2.75, saved.gain, 0.0)
-            assertEquals(if (type.usesGain) View.VISIBLE else View.GONE,
+            assertEquals(View.VISIBLE,
                 row(0).findViewById<View>(R.id.peq_gain_controls).visibility)
+            row(0).findViewById<MaterialButton>(R.id.peq_band_plus).performClick()
+            assertEquals(-2.65, repository.load().bands.single().gain, 1e-12)
         }
     }
 
@@ -458,6 +517,7 @@ class PeqEditorUiTest {
         settings.findViewById<EditText>(R.id.peq_band_count)!!.setText("3")
         settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         assertEquals(distributed, repository.load())
+        dialog().findViewById<MaterialSwitch>(R.id.peq_resize_redistribute)!!.performClick()
         dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         layout()
         val resized = repository.load()

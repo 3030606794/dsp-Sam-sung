@@ -6,10 +6,15 @@ import kotlin.math.pow
 
 enum class PeqFilterType(val wireId: Int, val usesGain: Boolean) {
     PEAK(0, true), LOW_SHELF(1, true), HIGH_SHELF(2, true),
-    LOW_PASS(3, false), HIGH_PASS(4, false), NOTCH(5, false), BAND_PASS(6, false)
+    LOW_PASS(3, true), HIGH_PASS(4, true), NOTCH(5, true), BAND_PASS(6, true);
+
+    /** Zero gain bypasses only peak/shelf filters; pass/notch filters keep their shape. */
+    val isUnityAtZeroGain: Boolean get() = this == PEAK || this == LOW_SHELF || this == HIGH_SHELF
 }
 
 enum class PeqQualityDisplay { Q, BW }
+enum class PeqResetTarget { Q, FREQUENCY, GAIN, ALL }
+enum class PeqResizeEdge { FRONT, BACK }
 
 data class PeqBand(
     val id: String = UUID.randomUUID().toString(),
@@ -29,7 +34,8 @@ data class PeqState(
     val showQSlider: Boolean = false,
     val showFrequencySlider: Boolean = false,
     val qStep: Double = 0.01,
-    val frequencyStep: Double = 1.0
+    val frequencyStep: Double = 1.0,
+    val pinResponse: Boolean = true
 )
 
 object PeqModel {
@@ -39,13 +45,28 @@ object PeqModel {
     const val MAX_GAIN = 100.0
     const val MIN_Q = 0.1
     const val MAX_Q = 100.0
+    const val DEFAULT_Q = 0.7071067811865476
+
+    /** A newly added 0 Hz band is an unset placeholder, not a DC filter. */
+    fun validFrequency(frequency: Double): Boolean = frequency.isFinite() &&
+        (frequency == 0.0 || frequency in MIN_FREQUENCY..MAX_FREQUENCY)
+
+    /** Reset only requested parameters, preserving the bank and editor preferences. */
+    fun reset(state: PeqState, target: PeqResetTarget): PeqState {
+        validate(state)
+        val next = state.copy(bands = state.bands.map { band ->
+            band.copy(q = if (target == PeqResetTarget.Q || target == PeqResetTarget.ALL) DEFAULT_Q else band.q,
+                gain = if (target == PeqResetTarget.GAIN || target == PeqResetTarget.ALL) 0.0 else band.gain)
+        })
+        return if (target == PeqResetTarget.FREQUENCY || target == PeqResetTarget.ALL) redistribute(next) else next
+    }
 
     fun validateBand(band: PeqBand): PeqBand {
         require(band.id.isNotBlank() && band.id.length <= 128 && band.id.none { it.isISOControl() }) {
             "Band id must be a non-empty, printable string of at most 128 characters"
         }
-        require(band.frequency.isFinite() && band.frequency in MIN_FREQUENCY..MAX_FREQUENCY) {
-            "Frequency must be between 20 and 20000 Hz"
+        require(validFrequency(band.frequency)) {
+            "Frequency must be 0 (unset), or between 20 and 20000 Hz"
         }
         require(band.gain.isFinite() && band.gain in -MAX_GAIN..MAX_GAIN) {
             "Gain must be between -100 and 100 dB"
@@ -80,6 +101,25 @@ object PeqModel {
         val retained = state.bands.take(count)
         val bands = retained + List((count - retained.size).coerceAtLeast(0)) { PeqBand() }
         return redistribute(state.copy(bands = bands))
+    }
+
+    /** New editor bands start unset; their parameters become audible only after setting a frequency. */
+    fun blankBand(): PeqBand = PeqBand(frequency = 0.0, gain = 0.0, q = 0.5)
+
+    /** Change one end of the bank, retaining every surviving band's identity and parameters. */
+    fun resize(state: PeqState, count: Int, edge: PeqResizeEdge, redistribute: Boolean): PeqState {
+        validate(state)
+        require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
+        val difference = count - state.bands.size
+        val resized = if (difference == 0) state else state.copy(bands = when {
+            difference > 0 -> {
+                val added = List(difference) { blankBand() }
+                if (edge == PeqResizeEdge.FRONT) added + state.bands else state.bands + added
+            }
+            edge == PeqResizeEdge.FRONT -> state.bands.takeLast(count)
+            else -> state.bands.take(count)
+        })
+        return if (redistribute) redistribute(resized) else resized
     }
 
     /** Explicitly requested operation: overwrite only the frequencies, including manually set ones. */

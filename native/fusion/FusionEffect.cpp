@@ -302,7 +302,7 @@ int32_t parameter(Fusion& f,bool set,uint32_t size,void* data,uint32_t* replySiz
     if(id==kProtocol || id==kCapabilities || id==kJamesEnable || id==kViperEnable || id==kBalance) {
         auto* result=static_cast<effect_param_t*>(reply);
         result->status=0; result->psize=result->vsize=4;
-        int32_t value=id==kProtocol?4:(id==kCapabilities?15:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)));
+        int32_t value=id==kProtocol?5:(id==kCapabilities?15:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)));
         std::memcpy(result->data,&id,4); std::memcpy(result->data+4,&value,4);
         *replySize=sizeof(effect_param_t)+8; return 0;
     }

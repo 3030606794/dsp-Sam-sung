@@ -9,12 +9,13 @@ import me.timschneeberger.rootlessjamesdsp.R
 
 /** Adds reset without consuming ordinary slider taps, drags or scrolling gestures. */
 object SliderDoubleTapReset {
-    fun install(slider: Slider, defaultValue: Float = 0f, onReset: () -> Unit) {
+    fun install(slider: Slider, defaultValue: Float = 0f, onCancel: () -> Unit = {}, onReset: () -> Unit) {
         // Preference rows can rebind after the first tap changes their stored value.
         // Keep the detector alive across that bind so the second tap is still recognized.
         val binding = (slider.getTag(R.id.slider_reset_binding) as? Binding)
             ?: Binding(slider).also { slider.setTag(R.id.slider_reset_binding, it) }
         binding.defaultValue = defaultValue
+        binding.onCancel = onCancel
         binding.onReset = onReset
     }
 
@@ -22,6 +23,7 @@ object SliderDoubleTapReset {
     private class Binding(private val slider: Slider) {
         var defaultValue = 0f
         var onReset: () -> Unit = {}
+        var onCancel: () -> Unit = {}
         private var resetGesture = false
 
         private fun reset(): Boolean {
@@ -45,6 +47,7 @@ object SliderDoubleTapReset {
                 val consumed = resetGesture
                 if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL)
                     resetGesture = false
+                if (event.actionMasked == MotionEvent.ACTION_CANCEL) onCancel()
                 // Consume the entire second tap, so ACTION_UP cannot move away from zero.
                 consumed
             }

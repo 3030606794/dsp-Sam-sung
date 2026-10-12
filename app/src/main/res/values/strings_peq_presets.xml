@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_presets">预设</string>
+    <string name="peq_presets_title">均衡器预设</string>
+    <string name="peq_presets_count">已保存 %1$d / %2$d 个预设</string>
+    <string name="peq_presets_hint">保存全部频段和均衡器设置。点击预设可应用或管理；应用时不会开启音效。</string>
+    <string name="peq_presets_empty">还没有预设，可先保存当前参数或导入 JSON 文件。</string>
+    <string name="peq_presets_full">已达到 %1$d 个预设上限。可覆盖已有预设，或删除后再保存。</string>
+    <string name="peq_presets_save">保存当前参数</string>
+    <string name="peq_presets_import">导入 JSON</string>
+    <string name="peq_presets_export_all">导出全部</string>
+    <string name="peq_preset_band_count">%1$d 段</string>
+    <string name="peq_preset_name">预设名称</string>
+    <string name="peq_preset_name_hint">最多 %1$d 个字符，支持中文</string>
+    <string name="peq_preset_save">保存</string>
+    <string name="peq_preset_apply">应用</string>
+    <string name="peq_preset_rename">改名</string>
+    <string name="peq_preset_overwrite">用当前参数覆盖</string>
+    <string name="peq_preset_export">导出此预设</string>
+    <string name="peq_preset_delete">删除</string>
+    <string name="peq_preset_overwrite_confirm">用当前的全部频段和均衡器设置覆盖“%1$s”？预设名称保持不变。</string>
+    <string name="peq_preset_delete_confirm">删除预设“%1$s”？当前均衡器参数保持不变。</string>
+    <string name="peq_preset_apply_failed">未能应用预设，请重试。</string>
+    <string name="peq_presets_error_title">预设操作失败</string>
+    <string name="peq_presets_error">%1$s</string>
+    <string name="peq_presets_unknown_error">无法完成操作，请重试。</string>
+    <string name="peq_presets_load_failed">无法读取预设，原始数据已保留。</string>
+    <string name="peq_preset_missing">此预设已不存在，请刷新列表后重试。</string>
+</resources>

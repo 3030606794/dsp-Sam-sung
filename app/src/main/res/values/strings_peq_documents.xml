@@ -1,0 +1,6 @@
+<resources>
+    <string name="peq_presets_imported">已导入 %1$d 个均衡器预设</string>
+    <string name="peq_presets_import_failed">未能导入均衡器预设</string>
+    <string name="peq_presets_exported">均衡器预设已导出</string>
+    <string name="peq_presets_export_failed">未能导出均衡器预设</string>
+</resources>

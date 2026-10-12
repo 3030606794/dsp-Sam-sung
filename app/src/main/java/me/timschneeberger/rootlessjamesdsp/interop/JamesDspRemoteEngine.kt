@@ -382,7 +382,7 @@ class JamesDspRemoteEngine(
         private const val FUSION_PROTOCOL = 131080
         private const val FUSION_CAPABILITIES = 131081
         private const val FUSION_BALANCE = 131074
-        private const val REQUIRED_PROTOCOL = 4
+        private const val REQUIRED_PROTOCOL = 5
 
         fun isPluginInstalled(): PluginState {
             // AIDL can omit custom effects from queryEffects. Probe the unique UUID and handshake.

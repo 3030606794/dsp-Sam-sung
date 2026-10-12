@@ -58,7 +58,7 @@ void testTransferFunctions() {
         for(int type:{1,2})
             assert(std::abs(measuredDb(packet({{type,1,1000000,12000,707}}),rate,1000)-6)<.002);
         for(int type:{3,4})
-            assert(std::abs(measuredDb(packet({{type,1,1000000,24000,707}}),rate,1000)-20*std::log10(.707))<.002);
+            assert(std::abs(measuredDb(packet({{type,1,1000000,24000,707}}),rate,1000)-24-20*std::log10(.707))<.002);
         assert(measuredDb(packet({{5,1,1000000,0,1000}}),rate,1000)<-90);
         assert(std::abs(measuredDb(packet({{6,1,1000000,0,1000}}),rate,1000))<.002);
     }
@@ -82,7 +82,7 @@ void testQualityBandwidthDirection() {
                 double previous=type==6?0:std::numeric_limits<double>::infinity();
                 for(int q:{100,250,500,1000,5000,20000,100000}) {
                     const double db=measuredDb(packet({{type,1,center*1000,gain,q}}),rate,probe);
-                    const double depth=std::abs(db);
+                    const double depth=std::abs(db-(type>=3?gain/1000.:0.));
                     assert(std::isfinite(db));
                     assert(type==6?depth>previous:depth<previous);
                     previous=depth;
@@ -105,7 +105,7 @@ void testQualityBandwidthDirection() {
             const int wireQ=int(std::lround(q*1000));
             assert(wireQ>=100&&wireQ<=100000&&wireQ<previousQ);
             const double db=measuredDb(packet({{type,1,center*1000,12000,wireQ}}),rate,center*1.1);
-            const double depth=std::abs(db);
+            const double depth=std::abs(db-(type>=3?12.:0.));
             assert(std::isfinite(db));
             assert(type==6?depth<previous:depth>previous);
             previous=depth;previousQ=wireQ;
@@ -136,6 +136,10 @@ std::vector<float> rbjReference(const Band& b,uint32_t rate,const std::vector<fl
         case 5:break;
         case 6:b0=alpha;b1=0;b2=-alpha;break;
     }
+    if(b[0]>=3) {
+        const long double gain=std::pow(10.L,b[3]/20000.L);
+        b0*=gain;b1*=gain;b2*=gain;
+    }
     std::vector<float> out(source.size());
     long double x1[2]{},x2[2]{},y1[2]{},y2[2]{};
     for(size_t frame=0;frame<source.size()/2;++frame) for(size_t channel=0;channel<2;++channel) {
@@ -145,6 +149,45 @@ std::vector<float> rbjReference(const Band& b,uint32_t rate,const std::vector<fl
         out[2*frame+channel]=float(y);
     }
     return out;
+}
+void testPassNotchOutputGain() {
+    // Compare complete stereo waveforms against the independently rendered
+    // zero-gain filter: gain changes amplitude only, including high-Q ringing.
+    for(uint32_t rate:{44100u,48000u,96000u,192000u}) for(int type:{3,4,5,6})
+        for(int frequency:{20000,731123,20000000}) for(int q:{100,100000}) {
+            auto source=signal(12000,rate,731);
+            source[0]+=.03125f;source[1]-=.025f;
+            PeqProcessor neutral;neutral.configure(rate);set(neutral,packet({{type,1,frequency,0,q}}));
+            assert(dspfusion::PeqTestAccess::preparedCount(neutral)==1);
+            auto reference=source;render(neutral,reference,333);
+            for(int gain:{-100000,-12000,12000,100000}) {
+                PeqProcessor changed;changed.configure(rate);set(changed,packet({{type,1,frequency,gain,q}}));
+                assert(dspfusion::PeqTestAccess::preparedCount(changed)==1);
+                auto processed=source;render(changed,processed,333);
+                const double scale=std::pow(10.,gain/20000.);
+                double error=0,energy=0;
+                for(size_t i=2*(rate/50+1);i<processed.size();++i) {
+                    const double expected=reference[i]*scale;
+                    assert(std::isfinite(processed[i]));
+                    error+=std::pow(processed[i]-expected,2);energy+=expected*expected;
+                }
+                assert(energy>1e-30);
+                assert(std::sqrt(error/energy)<2e-6);
+            }
+        }
+    // Explicit measured stop-band checks catch an accidental gain=0 bypass.
+    assert(measuredDb(packet({{3,1,1000000,0,707}}),48000,10000)<-40);
+    assert(measuredDb(packet({{4,1,1000000,0,707}}),48000,100)<-39);
+    assert(measuredDb(packet({{5,1,1000000,0,707}}),48000,1000)<-90);
+    assert(measuredDb(packet({{6,1,1000000,0,707}}),48000,100)<-15);
+    for(int type:{3,4,5,6}) for(double probe:{500.,1500.,5000.}) {
+        const double baseline=measuredDb(packet({{type,1,1000000,0,1000}}),48000,probe);
+        for(int gain:{-100000,-12000,12000,100000}) {
+            const double shifted=measuredDb(packet({{type,1,1000000,gain,1000}}),48000,probe);
+            assert(std::abs(shifted-baseline-gain/1000.)<.002);
+        }
+    }
+    std::puts("PEQ: low/high-pass, notch and band-pass preserve shape with measured +/-12/100 dB output gain; zero-gain filtering and Q0.1/Q100 stereo waveforms passed.");
 }
 void testExtendedRangeTransfer() {
     for(int gain:{-100000,100000}) {
@@ -156,9 +199,9 @@ void testExtendedRangeTransfer() {
         for(int type:{1,2})
             assert(std::abs(measuredDb(packet({{type,1,10000000,gain,100000}}),48000,10000,3)-gain/2000.)<.01);
         for(int type:{3,4})
-            assert(std::abs(measuredDb(packet({{type,1,10000000,gain,100000}}),48000,10000)-40)<.002);
-        assert(measuredDb(packet({{5,1,10000000,gain,100000}}),48000,10000)<-90);
-        assert(std::abs(measuredDb(packet({{6,1,10000000,gain,100000}}),48000,10000))<.002);
+            assert(std::abs(measuredDb(packet({{type,1,10000000,gain,100000}}),48000,10000)-40-gain/1000.)<.002);
+        assert(measuredDb(packet({{5,1,10000000,gain,100000}}),48000,10000)<gain/1000.-90);
+        assert(std::abs(measuredDb(packet({{6,1,10000000,gain,100000}}),48000,10000)-gain/1000.)<.002);
     }
     for(uint32_t rate:{44100u,48000u,96000u,192000u}) for(int type=0;type<=6;++type)
         for(int gain:{-100000,100000}) for(int frequency:{20000,731123,20000000}) {
@@ -328,6 +371,6 @@ void benchmark() {
 }
 int main() {
     std::setvbuf(stdout,nullptr,_IONBF,0);
-    testTransferFunctions();testQualityBandwidthDirection();testExtendedRangeTransfer();testNeutralValidationAndFullCount();testContinuityAndSmoothing();testExtremeTransitions();testFiniteAndConcurrentUpdates();testFullCountExtremes();benchmark();
+    testTransferFunctions();testQualityBandwidthDirection();testPassNotchOutputGain();testExtendedRangeTransfer();testNeutralValidationAndFullCount();testContinuityAndSmoothing();testExtremeTransitions();testFiniteAndConcurrentUpdates();testFullCountExtremes();benchmark();
     std::puts("PEQ audio tests passed.");
 }

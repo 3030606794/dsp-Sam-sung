@@ -8,7 +8,7 @@ It has up to 170 stereo second-order sections, with double coefficients and doub
 
 ## Protocol
 
-Fusion reports protocol **4** through GET 131080 and capabilities **15** through GET 131081 (PEQ adds bit 8). Existing parameter IDs and the PEQ packet layout remain supported. Protocol 4 expands the gain and Q ranges; older Fusion APKs that require protocol 2 or 3 reject this driver. Update the APK and module together.
+Fusion reports protocol **5** through GET 131080 and capabilities **15** through GET 131081 (PEQ adds bit 8). Existing parameter IDs and the PEQ packet layout remain supported. Protocol 4 expanded the gain and Q ranges; protocol 5 applies gain to all seven filter types. Alpha9 requires protocol 5 to prevent old drivers from silently ignoring low-pass/high-pass/notch/band-pass gain. Update the alpha9 APK and module together and reboot; protocol-4 alpha7/alpha8 drivers are incompatible.
 
 SET **1250** accepts one native-endian int32 array:
 
@@ -23,7 +23,9 @@ The length is exactly `4 * (3 + 5 * count)` bytes: at most 853 integers / 3412 b
 | Gain | −100000–100000 mdB (−100 to +100 dB) |
 | Q | 100–100000 (0.1–100) |
 
-Gain affects peak and shelf filters. Low/high pass, notch and band pass retain their filter response at gain 0; their gain field is ignored. Shelves use Q directly, with `alpha = sin(omega)/(2Q)`, so high Q can produce resonance. Band pass uses the constant 0 dB center-gain form. The UI converts octave bandwidth to Q before transmission; bandwidth is not a separate native field.
+Gain affects all seven types. Peak and shelf gain retain their RBJ definitions. Low/high pass, notch and band pass multiply the complete filtered output by `10^(gain/20)`, preserving poles, zeros and the frequency/Q shape; gain 0 keeps the underlying filter active. Shelves use Q directly, with `alpha = sin(omega)/(2Q)`, so high Q can produce resonance. Band pass uses the constant-center-gain form, with center gain equal to the selected gain. The UI converts octave bandwidth to Q before transmission; bandwidth is not a separate native field.
+
+The app's persisted JSON is independently versioned: schema 2 records the new gain semantics, while old JSON schema 1 migrates the formerly ignored four filter types' gain to 0 dB to preserve their previous sound. Reading does not overwrite the original JSON. This migration belongs in the application, not the driver; the SET 1250 binary packet always retains schema 1 and treats every received gain as intentional.
 
 Disabled bands and zero-gain peak/shelf bands are skipped. Frequencies at or above the current Nyquist frequency are bypassed without moving the requested frequency. Sample-rate changes redesign the saved settings. Normal 44.1/48/96 kHz playback supports the full requested 20–20000 Hz range.
 
@@ -38,10 +40,10 @@ For reproducibility, let `g0 = tan(pi*f/fs)`, `k0 = 1/Q` and `A = 10^(gain/40)`.
 | Peak | g0 | k0/A | 1, k0*A, 1 |
 | Low shelf | g0/sqrt(A) | k0 | 1, k0*A, A² |
 | High shelf | g0*sqrt(A) | k0 | A², k0*A, 1 |
-| Low pass | g0 | k0 | 0, 0, 1 |
-| High pass | g0 | k0 | 1, 0, 0 |
-| Notch | g0 | k0 | 1, 0, 1 |
-| Band pass | g0 | k0 | 0, k0, 0 |
+| Low pass | g0 | k0 | 0, 0, A² |
+| High pass | g0 | k0 | A², 0, 0 |
+| Notch | g0 | k0 | A², 0, A² |
+| Band pass | g0 | k0 | 0, k0*A², 0 |
 
 Direct high/band/low mixing preserves deep-cut precision instead of subtracting a large amplified signal from dry input. The app's response preview evaluates the equivalent RBJ analog polynomial after the same bilinear frequency mapping.
 
@@ -55,7 +57,7 @@ There is no hidden gain compensation or automatic preamp. Stacked boosts can eng
 
 ## Verification and performance
 
-`peq_audio` tests measured sine-wave transfer values for all seven types, equal-and-opposite peak cancellation, the 170th band, exact neutral bypass, packet rejection, stereo isolation, callback continuity, rate changes/reset, repeated/concurrent updates, nonfinite input, and all seven types at 170 bands with all gain/Q corners across 8–192 kHz. Extended-range cases compare against an independent long-double direct-form RBJ reference and check retention 0.001 Hz below Nyquist. Full-engine integration additionally verifies ±100 dB/Q100, the maximum 3412-byte SET 1250 packet, out-of-range rejection and that even a 170-band extreme cascade precedes the James limiter.
+`peq_audio` tests measured sine-wave transfer values for all seven types, equal-and-opposite peak cancellation, the 170th band, exact neutral bypass, packet rejection, stereo isolation, callback continuity, rate changes/reset, repeated/concurrent updates, nonfinite input, and all seven types at 170 bands with all gain/Q corners across 8–192 kHz. Low/high-pass, notch and band-pass tests compare stereo output against their zero-gain waveform scaled by ±12/100 dB across Q0.1/Q100, 20 Hz–20 kHz and 44.1–192 kHz; separate measured stop-band tests reject an accidental 0 dB bypass. Extended-range cases compare against an independent long-double direct-form RBJ reference and check retention 0.001 Hz below Nyquist. Full-engine integration additionally verifies the protocol-5 handshake, ±100 dB/Q100, the maximum 3412-byte SET 1250 packet, out-of-range rejection and that even a 170-band extreme cascade precedes the James limiter.
 
 Local Windows x86-64 validation (Zig 0.13/Clang `-O2`) measured a 10 kHz peak at Q 100 and 48 kHz sampling as **+100.000000 dB** and **−99.999989 dB**. The +100 dB test renders 25 seconds before measuring its final half-second so the high-Q poles can settle.
 

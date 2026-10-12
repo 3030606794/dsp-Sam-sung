@@ -4,6 +4,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PeqProtocolTest {
+    @Test fun unsetFrequencyIsKeptInSavedParametersButCannotActivateADriverFilter() {
+        for (type in PeqFilterType.entries) {
+            val pending = PeqBand("pending", type = type, frequency = 0.0, gain = 12.0, q = 0.5)
+            val state = PeqState(listOf(pending))
+            assertSame(state, PeqModel.validate(state))
+            val payload = PeqProtocol.payload(state, true)
+            assertArrayEquals(intArrayOf(type.wireId, 0, 20000, 12000, 500), payload.drop(3).toIntArray())
+            assertEquals(0.0, state.bands.single().frequency, 0.0)
+            assertTrue(state.bands.single().enabled)
+            val assigned = PeqProtocol.payload(state.copy(bands = listOf(pending.copy(frequency = 20.0))), true)
+            assertEquals(1, assigned[4])
+        }
+    }
+
     @Test fun packetPreservesEveryFilterAndFixedPointUnit() {
         val types = PeqFilterType.entries
         val bands = List(170) { index -> PeqBand("band-$index", types[index % types.size],

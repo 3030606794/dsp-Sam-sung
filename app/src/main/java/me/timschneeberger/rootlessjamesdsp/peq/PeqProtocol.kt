@@ -18,8 +18,10 @@ object PeqProtocol {
             state.bands.forEachIndexed { index, band ->
                 val offset = HEADER_INTS + index * BAND_INTS
                 this[offset] = band.type.wireId
-                this[offset + 1] = if (band.enabled) 1 else 0
-                this[offset + 2] = milli(band.frequency)
+                // The driver only accepts real filter frequencies. Keep unset bands
+                // in the saved bank but send a disabled legal placeholder on the wire.
+                this[offset + 1] = if (band.enabled && band.frequency > 0.0) 1 else 0
+                this[offset + 2] = milli(band.frequency.coerceAtLeast(PeqModel.MIN_FREQUENCY))
                 this[offset + 3] = milli(band.gain)
                 this[offset + 4] = milli(band.q)
             }

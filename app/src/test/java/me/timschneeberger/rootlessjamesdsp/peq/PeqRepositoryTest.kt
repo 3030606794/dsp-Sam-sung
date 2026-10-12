@@ -65,7 +65,7 @@ class PeqRepositoryTest {
         repository.save(working)
         val valid = repository.exportJson(working)
         val bad = listOf(
-            valid.replace("\"schema\":1", "\"schema\":2"),
+            valid.replace("\"schema\":2", "\"schema\":999"),
             valid.replace("\"type\":\"PEAK\"", "\"type\":\"UNKNOWN\""),
             valid.replace("\"enabled\":true", "\"enabled\":\"true\""),
             valid.replace("\"frequency\":1000.0", "\"frequency\":\"1000\""),
@@ -100,6 +100,29 @@ class PeqRepositoryTest {
         assertEquals(PeqQualityDisplay.Q, loaded.state.bands.single().qualityDisplay)
         assertEquals(31.5, loaded.state.bands.single().frequency, 0.0)
         assertEquals(old, preferences.getString(PeqRepository.KEY_STATE, null))
+    }
+
+    @Test fun oldInactiveFilterGainsMigrateToZeroWithoutRewritingStoredProfileUntilSaved() {
+        val original = PeqState(PeqFilterType.entries.map { type ->
+            PeqBand(type.name, type = type, frequency = 1234.5, gain = 37.125, q = 3.125,
+                qualityDisplay = PeqQualityDisplay.BW)
+        }, gainRange = 50.0, pinResponse = false)
+        val old = repository.exportJson(original).replace("\"schema\":2", "\"schema\":1")
+        preferences.edit().putString(PeqRepository.KEY_STATE, old).commit()
+        val result = repository.loadResult()
+        assertFalse(result.corrupt)
+        val expected = original.copy(bands = original.bands.map {
+            if (it.type.isUnityAtZeroGain) it else it.copy(gain = 0.0)
+        })
+        assertEquals(expected, result.state)
+        assertEquals(old, preferences.getString(PeqRepository.KEY_STATE, null))
+        assertTrue(repository.save(result.state))
+        assertTrue(preferences.getString(PeqRepository.KEY_STATE, null)!!.contains("\"schema\":2"))
+        assertEquals(expected, repository.load())
+        // New-format gains are active for every type, including after saving/loading twice.
+        assertTrue(repository.save(original))
+        assertEquals(original, repository.load())
+        assertEquals(original, repository.importJson(repository.exportJson(repository.load())))
     }
 
     @Test fun newDisplayOptionsAndExtendedLimitsRoundTripWhileWrongTypesAreRejected() {

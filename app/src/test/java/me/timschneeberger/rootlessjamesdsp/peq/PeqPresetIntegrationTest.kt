@@ -50,11 +50,11 @@ class PeqPresetIntegrationTest {
         return preset to metadata
     }
 
-    @Test fun neutralBankRequiresAlpha7EvenWithoutJson() {
+    @Test fun neutralBankRequiresAlpha9EvenWithoutJson() {
         prefs.edit().putString(nodesKey, legacyCurve).putBoolean(enabledKey, true).commit()
         assertFalse(PeqRepository(app).hasSavedState())
         val (preset, metadata) = export()
-        assertEquals("1008", metadata[Preset.META_MIN_VERSION_CODE])
+        assertEquals("1009", metadata[Preset.META_MIN_VERSION_CODE])
         val folder = temporary.newFolder()
         Tar.Reader(preset.file().inputStream()).extract(folder)
         val document = DocumentBuilderFactory.newInstance().newDocumentBuilder()
@@ -70,7 +70,7 @@ class PeqPresetIntegrationTest {
     @Test fun retiredModeIsArchivedButCannotLowerRequiredVersion() {
         prefs.edit().putString(nodesKey, legacyCurve).putBoolean(enabledKey, true)
             .putString("fusion_peq_mode", "legacy").commit()
-        assertEquals("1008", export().second[Preset.META_MIN_VERSION_CODE])
+        assertEquals("1009", export().second[Preset.META_MIN_VERSION_CODE])
     }
 
     @Test fun savedExtremePeqIsProtectedAgainstOlderImporters() {
@@ -78,15 +78,16 @@ class PeqPresetIntegrationTest {
             bands = it.bands.map { b -> b.copy(gain = 100.0, q = 100.0) },
             gainRange = 100.0, gainStep = 2.0, showQSlider = true, showFrequencySlider = true) }
         assertTrue(PeqRepository(app).save(state))
-        assertEquals("1008", export().second[Preset.META_MIN_VERSION_CODE])
+        assertEquals("1009", export().second[Preset.META_MIN_VERSION_CODE])
     }
 
-    @Test fun profileArchiveRestoresAll170BandsDisplayControlsAndUnchangedLegacyNodes() {
+    @Test fun profileArchiveRestoresAll170BandsDisplayPinStepsAndUnchangedLegacyNodes() {
         val original = PeqModel.defaultState(170).let { state -> state.copy(
             bands = state.bands.mapIndexed { index, band -> band.copy(
                 type = PeqFilterType.entries[index % 7], enabled = index % 2 == 0,
                 gain = if (index % 2 == 0) 100.0 else -100.0, q = 100.0) },
-            gainRange = 100.0, gainStep = 1.5, showQSlider = true, showFrequencySlider = true) }
+            gainRange = 100.0, gainStep = 1.5, showQSlider = true, showFrequencySlider = true,
+            qStep = 0.125, frequencyStep = 12.5, pinResponse = false) }
         PeqRepository(app).save(original)
         prefs.edit()
             .putString(nodesKey, legacyCurve).putBoolean(enabledKey, true).commit()

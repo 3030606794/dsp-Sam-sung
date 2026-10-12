@@ -12,8 +12,7 @@ import android.view.View
 import androidx.core.graphics.ColorUtils
 import com.google.android.material.color.MaterialColors
 import me.timschneeberger.rootlessjamesdsp.R
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.log10
 import kotlin.math.ln
@@ -37,19 +36,26 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ColorUtils.setAlphaComponent(primary, 26) }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ColorUtils.setAlphaComponent(foreground, 35)
-        strokeWidth = density
+        strokeWidth = 0.5f * density
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ColorUtils.setAlphaComponent(foreground, 180)
         textSize = 10f * resources.displayMetrics.scaledDensity
     }
-    private val markerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(220, 40, 40) }
+    private val markerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(160, 220, 40, 40) }
+    private val crosshairPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ColorUtils.setAlphaComponent(markerPaint.color, 105)
+        strokeWidth = 0.5f * density
+    }
     private val markerBackgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ColorUtils.setAlphaComponent(surface, 235)
     }
+    private val markerHaloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ColorUtils.setAlphaComponent(surface, 100)
+    }
     private val markerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = foreground
-        textSize = 11f * resources.displayMetrics.scaledDensity
+        textSize = 9f * resources.displayMetrics.scaledDensity
     }
     private val graphBounds = RectF()
     private val line = Path()
@@ -59,9 +65,13 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private var gainRange = 18.0
     private var requestedWidth = -1
     private var animator: ValueAnimator? = null
-    private var worker: ExecutorService? = null
+    private var worker: PeqResponse.PreviewWorker? = null
     private val generation = AtomicInteger()
+    private val lifecycleGeneration = AtomicInteger()
+    private var displayedRevision = -1
     private var selectedBandId: String? = null
+    var isMarkerVisible: Boolean = false
+        private set
     var requestedState: PeqState? = null
         private set
     data class AxisLabel(val text: String, val position: Float, val bounds: RectF)
@@ -69,18 +79,25 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         private set
     internal var renderedGainLabels: List<AxisLabel> = emptyList()
         private set
+    internal data class MarkerLine(val x1: Float, val y1: Float, val x2: Float, val y2: Float)
     /** Actual parameters remain available even when the marker is clamped to the visible plot. */
     internal data class BandMarker(
         val bandId: String,
         val frequency: Double,
         val gain: Double,
+        val q: Double,
+        val bw: Double?,
         val x: Float,
         val y: Float,
         val radius: Float,
         val frequencyText: String,
         val gainText: String,
+        val qText: String,
+        val bwText: String?,
         val labelBounds: RectF,
-        val plotBounds: RectF
+        val plotBounds: RectF,
+        val horizontalCrosshair: MarkerLine,
+        val verticalCrosshair: MarkerLine
     )
     internal var renderedMarker: BandMarker? = null
         private set
@@ -91,30 +108,66 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     }
 
     fun setState(state: PeqState, animate: Boolean = true) {
-        if (state == requestedState && requestedWidth == width && worker?.isShutdown == false) return
+        val previousState = requestedState
+        val sameResponse = previousState != null && sameFilters(previousState, state)
+        val sameWidth = requestedWidth == width
+        if (!animate && animator?.isRunning == true) {
+            if (sameResponse) animator?.end() else animator?.cancel()
+        }
         requestedState = state
         updateMarkerDescription()
         requestedWidth = width
         gainRange = state.gainRange
         invalidate()
+        // Display preferences and Q/BW mode do not alter the filter response. Let an
+        // already-running calculation finish, retaining its pending parameter update.
+        if (sameResponse && sameWidth && worker?.isClosed == false) return
         val revision = generation.incrementAndGet()
         val points = (requestedWidth / density * 4).roundToInt().coerceIn(BASE_POINTS, 4096)
-        val executor = worker?.takeUnless { it.isShutdown } ?: Executors.newSingleThreadExecutor { task ->
-            Thread(task, "peq-response-preview").apply { isDaemon = true }
-        }.also { worker = it }
-        executor.execute {
-            if (revision != generation.get()) return@execute
-            val next = PeqResponse.adaptiveCurve(state, points = points)
-            post {
-                if (revision == generation.get()) updateCurve(next, animate)
-            }
-        }
+        val current = worker?.takeUnless { it.isClosed } ?: createPreviewWorker().also { worker = it }
+        // Conflate drag events: at most one computation and one newest request exist.
+        current.submit(PeqResponse.PreviewWorker.Request(state, points, revision, animate))
     }
 
-    /** Selection only redraws the overlay; it never rebuilds or changes the audio filters. */
+    private fun sameFilters(first: PeqState, second: PeqState): Boolean =
+        first.bands.size == second.bands.size && first.bands.indices.all { index ->
+            val left = first.bands[index]
+            val right = second.bands[index]
+            left.id == right.id && left.type == right.type && left.enabled == right.enabled &&
+                left.frequency == right.frequency && left.gain == right.gain && left.q == right.q
+        }
+
+    private fun createPreviewWorker(): PeqResponse.PreviewWorker {
+        val lifecycle = lifecycleGeneration.get()
+        return PeqResponse.PreviewWorker(onComplete = { request, next ->
+            post {
+                if (lifecycle == lifecycleGeneration.get() && request.revision > displayedRevision) {
+                    displayedRevision = request.revision
+                    updateCurve(next, request.animate && request.revision == generation.get())
+                }
+            }
+        })
+    }
+
+    /** Selection never reveals a hidden marker or changes the audio filters. */
     fun setSelectedBand(id: String?) {
         if (selectedBandId == id) return
         selectedBandId = id
+        updateMarkerDescription()
+        invalidate()
+    }
+
+    /** The fragment owns interaction timing; this view only controls the overlay's visibility. */
+    fun showMarker(id: String? = selectedBandId) {
+        setSelectedBand(id)
+        isMarkerVisible = true
+        updateMarkerDescription()
+        invalidate()
+    }
+
+    fun hideMarker() {
+        isMarkerVisible = false
+        renderedMarker = null
         updateMarkerDescription()
         invalidate()
     }
@@ -125,16 +178,31 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
 
     private fun markerFrequencyText(band: PeqBand) = "${PeqBandAdapter.number(band.frequency, 3)} Hz"
 
-    private fun markerGain(band: PeqBand) = if (band.type.usesGain) band.gain else 0.0
+    private fun markerGain(band: PeqBand) = band.gain
 
     private fun markerGainText(band: PeqBand): String {
         val gain = markerGain(band)
-        return "${if (gain > 0) "+" else ""}${PeqBandAdapter.number(gain, 2)} dB"
+        return "${if (gain > 0) "+" else ""}${PeqBandAdapter.fixedNumber(gain, 2)} dB"
+    }
+
+    private fun markerBandwidth(band: PeqBand): Double? = when (band.type) {
+        PeqFilterType.PEAK, PeqFilterType.NOTCH, PeqFilterType.BAND_PASS ->
+            PeqResponse.bandwidthOctaves(band.q, band.frequency)
+        else -> null
+    }
+
+    private fun markerQText(band: PeqBand) = "Q: ${String.format(Locale.ROOT, "%.3f", band.q)}"
+
+    private fun markerBwText(band: PeqBand): String? = markerBandwidth(band)?.let {
+        "BW: ${String.format(Locale.ROOT, "%.3f", it)}"
     }
 
     private fun updateMarkerDescription() {
         val title = context.getString(R.string.peq_response_title)
-        contentDescription = selectedBand()?.let { "$title, ${markerFrequencyText(it)}, ${markerGainText(it)}" } ?: title
+        contentDescription = selectedBand()?.takeIf { isMarkerVisible }?.let {
+            listOfNotNull(title, markerFrequencyText(it), markerGainText(it), markerQText(it), markerBwText(it))
+                .joinToString(", ")
+        } ?: title
     }
 
     private fun updateCurve(points: List<PeqResponse.Point>, animate: Boolean) {
@@ -174,7 +242,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        requestedState?.takeIf { worker == null || worker!!.isShutdown }?.let { setState(it, false) }
+        requestedState?.takeIf { worker == null || worker!!.isClosed }?.let { setState(it, false) }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -184,8 +252,9 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
 
     override fun onDetachedFromWindow() {
         generation.incrementAndGet()
+        lifecycleGeneration.incrementAndGet()
         animator?.cancel()
-        worker?.shutdownNow()
+        worker?.close()
         worker = null
         super.onDetachedFromWindow()
     }
@@ -262,48 +331,64 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     }
 
     private fun drawSelectedBand(canvas: Canvas) {
+        if (!isMarkerVisible) return
         val band = selectedBand() ?: return
-        val radius = minOf(4f * density, graphBounds.width() / 4, graphBounds.height() / 4)
+        val radius = minOf(3f * density, graphBounds.width() / 4, graphBounds.height() / 4)
         val markerX = x(band.frequency).coerceIn(graphBounds.left + radius, graphBounds.right - radius)
         val gain = markerGain(band)
         val markerY = y(gain).coerceIn(graphBounds.top + radius, graphBounds.bottom - radius)
         val frequencyText = markerFrequencyText(band)
         val gainText = markerGainText(band)
+        val qText = markerQText(band)
+        val bwText = markerBwText(band)
+        val labelLines = listOfNotNull(frequencyText, gainText, qText, bwText)
+        val horizontalCrosshair = MarkerLine(graphBounds.left, markerY, graphBounds.right, markerY)
+        val verticalCrosshair = MarkerLine(markerX, graphBounds.top, markerX, graphBounds.bottom)
         val padding = 4f * density
         val gap = radius + 5f * density
-        markerTextPaint.textSize = 11f * resources.displayMetrics.scaledDensity
-        // Keep both values readable on compact displays without clipping the graph's axes.
-        val naturalWidth = maxOf(markerTextPaint.measureText(frequencyText), markerTextPaint.measureText(gainText))
+        markerTextPaint.textSize = 9f * resources.displayMetrics.scaledDensity
+        // Keep all values readable on compact displays without clipping the graph's axes.
+        val naturalWidth = labelLines.maxOf { markerTextPaint.measureText(it) }
         val availableWidth = (graphBounds.width() - padding * 2).coerceAtLeast(1f)
         val naturalMetrics = markerTextPaint.fontMetrics
-        val naturalHeight = 2 * (naturalMetrics.descent - naturalMetrics.ascent)
+        val naturalHeight = labelLines.size * (naturalMetrics.descent - naturalMetrics.ascent)
         val availableHeight = (graphBounds.height() - padding * 2).coerceAtLeast(1f)
         markerTextPaint.textSize *= minOf(1f, availableWidth / naturalWidth, availableHeight / naturalHeight)
         val metrics = markerTextPaint.fontMetrics
         val lineHeight = metrics.descent - metrics.ascent
-        val labelWidth = maxOf(markerTextPaint.measureText(frequencyText), markerTextPaint.measureText(gainText)) + padding * 2
-        val labelHeight = lineHeight * 2 + padding * 2
+        val labelWidth = labelLines.maxOf { markerTextPaint.measureText(it) } + padding * 2
+        val labelHeight = lineHeight * labelLines.size + padding * 2
         val preferredLeft = if (markerX + gap + labelWidth <= graphBounds.right) markerX + gap
             else markerX - gap - labelWidth
         val labelLeft = preferredLeft.coerceIn(graphBounds.left, maxOf(graphBounds.left, graphBounds.right - labelWidth))
         val labelTop = (markerY - labelHeight / 2).coerceIn(graphBounds.top, maxOf(graphBounds.top, graphBounds.bottom - labelHeight))
         val label = RectF(labelLeft, labelTop, labelLeft + labelWidth, labelTop + labelHeight)
-        renderedMarker = BandMarker(band.id, band.frequency, gain, markerX, markerY, radius,
-            frequencyText, gainText, RectF(label), RectF(graphBounds))
+        renderedMarker = BandMarker(band.id, band.frequency, gain, band.q, markerBandwidth(band),
+            markerX, markerY, radius, frequencyText, gainText, qText, bwText, RectF(label), RectF(graphBounds),
+            horizontalCrosshair, verticalCrosshair)
+        canvas.save()
+        canvas.clipRect(graphBounds)
+        canvas.drawLine(horizontalCrosshair.x1, horizontalCrosshair.y1,
+            horizontalCrosshair.x2, horizontalCrosshair.y2, crosshairPaint)
+        canvas.drawLine(verticalCrosshair.x1, verticalCrosshair.y1,
+            verticalCrosshair.x2, verticalCrosshair.y2, crosshairPaint)
+        canvas.restore()
         canvas.drawRoundRect(label, 3f * density, 3f * density, markerBackgroundPaint)
         val baseline = label.top + padding - metrics.ascent
-        canvas.drawText(frequencyText, label.left + padding, baseline, markerTextPaint)
-        canvas.drawText(gainText, label.left + padding, baseline + lineHeight, markerTextPaint)
+        labelLines.forEachIndexed { index, text ->
+            canvas.drawText(text, label.left + padding, baseline + lineHeight * index, markerTextPaint)
+        }
         // Draw last so a tiny viewport or an edge-clamped label cannot hide the red point.
-        canvas.drawCircle(markerX, markerY, radius + density, markerBackgroundPaint)
+        canvas.drawCircle(markerX, markerY, radius + density, markerHaloPaint)
         canvas.drawCircle(markerX, markerY, radius, markerPaint)
     }
 
     private fun y(db: Double): Float = graphBounds.centerY() -
         (db.coerceIn(-gainRange * 2, gainRange * 2) / (2 * gainRange) * graphBounds.height()).toFloat()
 
-    private fun x(frequency: Double): Float = graphBounds.left +
-        (log10(frequency / PeqModel.MIN_FREQUENCY) / 3.0 * graphBounds.width()).toFloat()
+    private fun x(frequency: Double): Float = if (frequency <= PeqModel.MIN_FREQUENCY) graphBounds.left
+        else graphBounds.left +
+            (log10(frequency / PeqModel.MIN_FREQUENCY) / 3.0 * graphBounds.width()).toFloat()
 
     companion object { private const val BASE_POINTS = 1024 }
 }

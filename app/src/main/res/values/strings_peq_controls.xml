@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="peq_locate_band">定位频段</string>
     <string name="peq_bw_value">BW：%1$s</string>
     <string name="peq_quality_decrease">减小 Q</string>
     <string name="peq_quality_increase">增大 Q</string>
