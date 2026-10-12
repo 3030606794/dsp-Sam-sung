@@ -165,11 +165,13 @@ class MainActivity : BaseActivity() {
         // Setup views
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
-        supportActionBar?.setTitle(R.string.jamesdsp)
+        supportActionBar?.setDisplayShowTitleEnabled(false)
+        binding.toolbar.isVisible = false
+        binding.appBarLayout.isVisible = false
 
         actionBar?.setDisplayHomeAsUpEnabled(true)
         actionBar?.setHomeButtonEnabled(true)
-        actionBar?.setDisplayShowTitleEnabled(true)
+        actionBar?.setDisplayShowTitleEnabled(false)
         binding.appBarLayout.statusBarForeground = MaterialShapeDrawable.createWithElevationOverlay(this)
 
         if(firstBoot) {

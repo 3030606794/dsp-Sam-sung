@@ -8,6 +8,7 @@ import android.media.audiofx.AudioEffect
 import android.media.audiofx.AudioEffectHidden
 import me.timschneeberger.rootlessjamesdsp.fusion.ToneController
 import me.timschneeberger.rootlessjamesdsp.fusion.ViperController
+import me.timschneeberger.rootlessjamesdsp.fusion.OutputRuntimeStatus
 import me.timschneeberger.rootlessjamesdsp.peq.PeqController
 import me.timschneeberger.rootlessjamesdsp.interop.structure.EelVmVariable
 import me.timschneeberger.rootlessjamesdsp.model.ProcessorMessage
@@ -347,6 +348,24 @@ class JamesDspRemoteEngine(
     override fun freezeLiveprogExecution(freeze: Boolean) {}
 
     // Status
+    private var diagnosticsEffect: AudioEffectHidden? = null
+    private var diagnosticsAvailable: Boolean? = null
+
+    /** Optional alpha10 diagnostics; older protocol-5 drivers keep working without rate reporting. */
+    fun outputRuntimeSession(): OutputRuntimeStatus.Session? {
+        val liveEffect = effect ?: return null
+        if (diagnosticsEffect !== liveEffect) {
+            diagnosticsEffect = liveEffect
+            diagnosticsAvailable = null
+        }
+        // Probe unsupported optional queries once per effect, avoiding a log failure every second.
+        val rate = if (diagnosticsAvailable != false) liveEffect.getParameterInt(131082) else null
+        if (diagnosticsAvailable == null) diagnosticsAvailable = rate != null
+        val frames = if (diagnosticsAvailable == true) liveEffect.getParameterInt(131083) else null
+        return OutputRuntimeStatus.Session(liveEffect, liveEffect.enabled,
+            rate?.takeIf { it in 8000..192000 }, frames?.takeIf { it >= 0 })
+    }
+
     val pid: Int
         get() = effect.getParameterInt(20002) ?: -1
     val isPidValid: Boolean

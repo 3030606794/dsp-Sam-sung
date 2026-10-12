@@ -13,7 +13,7 @@ class PeqPresetCodecTest {
 
     @Test fun singleAndTwentyBankBundlesRoundTripAllFieldsWithoutExposingLocalIdentities() {
         val state = PeqModel.defaultState(170).copy(gainRange = 83.0, gainStep = 1.5,
-            qStep = 17.75, frequencyStep = 333.5, pinResponse = false, showQSlider = true, showFrequencySlider = true)
+            qStep = 17.75, qRange = 0.25, frequencyStep = 333.5, pinResponse = false, showQSlider = true, showFrequencySlider = true)
         val presets = (1..20).map { PeqPreset(UUID.randomUUID().toString(), "配置 $it", state) }
         val encoded = PeqPresetCodec.encode(presets)
         assertTrue(encoded.toByteArray(Charsets.UTF_8).size < PeqPresetStore.MAX_IMPORT_BYTES)
@@ -23,6 +23,18 @@ class PeqPresetCodecTest {
         assertEquals(20, decoded.map { it.id }.toSet().size)
         assertTrue(decoded.none { next -> presets.any { it.id == next.id } })
         assertEquals(state, PeqPresetCodec.decode(PeqPresetCodec.encode(presets.take(1))).single().state)
+    }
+
+    @Test fun presetQRangeDefaultsForOldFilesAndNeverClipsPreciseOrRepeatedBands() {
+        val state = PeqState(listOf(PeqBand("one", q = 99.123456789), PeqBand("two", q = 12.3456789)), qRange = 0.1)
+        val json = PeqPresetCodec.encode(listOf(PeqPreset(UUID.randomUUID().toString(), "精确参数", state)))
+        assertEquals(state, PeqPresetCodec.decode(json).single().state)
+        assertEquals(state.copy(qRange = 100.0), PeqPresetCodec.decode(json.replace("\"qRange\":0.1,", "")).single().state)
+        listOf("0", "100.1", "\"100\"", "null", "1e999").forEach { value ->
+            assertThrows(IllegalArgumentException::class.java) {
+                PeqPresetCodec.decode(json.replace("\"qRange\":0.1", "\"qRange\":$value"))
+            }
+        }
     }
 
     @Test fun badHeadersEmptyOversizedAndMalformedEntriesAreRejected() {

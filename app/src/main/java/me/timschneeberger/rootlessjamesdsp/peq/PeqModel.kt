@@ -13,7 +13,7 @@ enum class PeqFilterType(val wireId: Int, val usesGain: Boolean) {
 }
 
 enum class PeqQualityDisplay { Q, BW }
-enum class PeqResetTarget { Q, FREQUENCY, GAIN, ALL }
+enum class PeqResetTarget { Q, FREQUENCY, GAIN, FILTER_TYPE, ALL }
 enum class PeqResizeEdge { FRONT, BACK }
 
 data class PeqBand(
@@ -35,7 +35,8 @@ data class PeqState(
     val showFrequencySlider: Boolean = false,
     val qStep: Double = 0.01,
     val frequencyStep: Double = 1.0,
-    val pinResponse: Boolean = true
+    val pinResponse: Boolean = true,
+    val qRange: Double = 100.0
 )
 
 object PeqModel {
@@ -55,8 +56,9 @@ object PeqModel {
     fun reset(state: PeqState, target: PeqResetTarget): PeqState {
         validate(state)
         val next = state.copy(bands = state.bands.map { band ->
-            band.copy(q = if (target == PeqResetTarget.Q || target == PeqResetTarget.ALL) DEFAULT_Q else band.q,
-                gain = if (target == PeqResetTarget.GAIN || target == PeqResetTarget.ALL) 0.0 else band.gain)
+            band.copy(q = if (target == PeqResetTarget.Q || target == PeqResetTarget.ALL) DEFAULT_Q.coerceAtMost(state.qRange) else band.q,
+                gain = if (target == PeqResetTarget.GAIN || target == PeqResetTarget.ALL) 0.0 else band.gain,
+                type = if (target == PeqResetTarget.FILTER_TYPE || target == PeqResetTarget.ALL) PeqFilterType.PEAK else band.type)
         })
         return if (target == PeqResetTarget.FREQUENCY || target == PeqResetTarget.ALL) redistribute(next) else next
     }
@@ -80,6 +82,7 @@ object PeqModel {
         require(state.gainRange.isFinite() && state.gainRange in 1.0..100.0) { "Gain range must be between 1 and 100 dB" }
         require(state.gainStep.isFinite() && state.gainStep in 0.01..2.0) { "Gain step must be between 0.01 and 2 dB" }
         require(state.qStep.isFinite() && state.qStep in 0.01..100.0) { "Q/BW step must be between 0.01 and 100" }
+        require(state.qRange.isFinite() && state.qRange in MIN_Q..MAX_Q) { "Q range must be between 0.1 and 100" }
         require(state.frequencyStep.isFinite() && state.frequencyStep in 1.0..1000.0) { "Frequency step must be between 1 and 1000 Hz" }
         state.bands.forEach(::validateBand)
         require(state.bands.map { it.id }.toSet().size == state.bands.size) { "Band ids must be unique" }

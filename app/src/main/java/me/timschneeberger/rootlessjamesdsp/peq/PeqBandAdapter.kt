@@ -27,6 +27,7 @@ class PeqBandAdapter(
     private val onBandSelected: (String) -> Unit = {},
     private val onLocate: (String) -> Unit = {},
     private val onInteractionStarted: (String) -> Unit = {},
+    private val onEditField: (String, PeqEditField) -> Unit = { id, _ -> onEdit(id) },
 ) : RecyclerView.Adapter<PeqBandAdapter.Holder>() {
     private var state = PeqState(emptyList())
     private val itemIds = mutableMapOf<String, Long>()
@@ -41,7 +42,7 @@ class PeqBandAdapter(
         next.bands.forEach { itemIds.getOrPut(it.id) { nextItemId++ } }
         if (previous.bands.map { it.id } != next.bands.map { it.id } ||
             previous.gainRange != next.gainRange || previous.gainStep != next.gainStep ||
-            previous.qStep != next.qStep || previous.frequencyStep != next.frequencyStep ||
+            previous.qStep != next.qStep || previous.qRange != next.qRange || previous.frequencyStep != next.frequencyStep ||
             previous.showQSlider != next.showQSlider || previous.showFrequencySlider != next.showFrequencySlider) {
             notifyDataSetChanged()
         } else {
@@ -87,6 +88,12 @@ class PeqBandAdapter(
             }
             binding.peqBandHeader.setOnClickListener { onBandSelected(band.id); onEdit(band.id) }
             binding.peqBandEdit.setOnClickListener { onBandSelected(band.id); onEdit(band.id) }
+            fun editField(field: PeqEditField) { onBandSelected(band.id); onEditField(band.id, field) }
+            binding.peqBandGain.setOnClickListener { editField(PeqEditField.GAIN) }
+            binding.peqBandSummary.setOnClickListener { editField(PeqEditField.QUALITY) }
+            binding.peqQValue.setOnClickListener { editField(PeqEditField.QUALITY) }
+            binding.peqBandTitle.setOnClickListener { editField(PeqEditField.FREQUENCY) }
+            binding.peqFrequencyValue.setOnClickListener { editField(PeqEditField.FREQUENCY) }
             binding.peqGainControls.isVisible = band.type.usesGain
             binding.peqQControls.isVisible = state.showQSlider
             binding.peqFrequencyControls.isVisible = state.showFrequencySlider
@@ -120,7 +127,7 @@ class PeqBandAdapter(
                 binding.peqBandMinus.isEnabled = current.gain > -state.gainRange
                 binding.peqBandPlus.isEnabled = current.gain < state.gainRange
                 val quality = displayedQuality(current)
-                val bounds = qualityBounds(current)
+                val bounds = qualityBounds(current, state.qRange)
                 binding.peqQValue.text = context.getString(if (bandwidth) R.string.peq_bw_value else R.string.peq_q_value,
                     fixedNumber(quality, 3))
                 binding.peqQSlider.contentDescription = context.getString(if (bandwidth) R.string.peq_bandwidth else R.string.peq_quality)
@@ -135,7 +142,8 @@ class PeqBandAdapter(
             fun renderSliders() {
                 val current = currentBand() ?: return
                 slider.value = current.gain.coerceIn(-state.gainRange, state.gainRange).toFloat()
-                val bounds = qualityBounds(current)
+                val bounds = qualityBounds(current, state.qRange)
+                binding.peqQSlider.isEnabled = bounds.start < bounds.endInclusive
                 binding.peqQSlider.value = logarithmicPosition(displayedQuality(current), bounds.start, bounds.endInclusive)
                 binding.peqFrequencySlider.value = logarithmicPosition(current.frequency,
                     PeqModel.MIN_FREQUENCY, PeqModel.MAX_FREQUENCY)
@@ -178,13 +186,10 @@ class PeqBandAdapter(
             }
             fun userQuality(requested: Double) {
                 val current = currentBand() ?: return
-                val bounds = qualityBounds(current)
-                val value = requested.coerceIn(bounds.start, bounds.endInclusive)
-                val q = if (usesBandwidth(current)) PeqResponse.qFromBandwidth(value, current.frequency) else value
-                changeBand(current.copy(q = q.coerceIn(PeqModel.MIN_Q, PeqModel.MAX_Q)))
+                changeBand(withQuality(current, requested, state.qRange))
             }
             fun userFrequency(requested: Double) {
-                currentBand()?.let { changeBand(withFrequency(it, requested)) }
+                currentBand()?.let { changeBand(withFrequency(it, requested, state.qRange)) }
             }
             fun bindLogSlider(control: Slider, bounds: (PeqBand) -> ClosedFloatingPointRange<Double>,
                               draggedValue: (Float, Double, Double) -> Double, label: (PeqBand, Double) -> String,
@@ -216,7 +221,7 @@ class PeqBandAdapter(
                     override fun onStopTrackingTouch(slider: Slider) = onInteractionFinished()
                 })
             }
-            bindLogSlider(binding.peqQSlider, ::qualityBounds, ::dragQuality,
+            bindLogSlider(binding.peqQSlider, { qualityBounds(it, state.qRange) }, ::dragQuality,
                 { current, value -> "${if (usesBandwidth(current)) "BW" else "Q"} ${fixedNumber(value, 3)}" }, ::userQuality)
             bindLogSlider(binding.peqFrequencySlider, { PeqModel.MIN_FREQUENCY..PeqModel.MAX_FREQUENCY },
                 { position, _, _ -> dragFrequency(position) }, { _, value -> "${number(value, 0)} Hz" }, ::userFrequency)
@@ -242,23 +247,34 @@ class PeqBandAdapter(
     }
 
     companion object {
-        fun usesBandwidth(band: PeqBand): Boolean = band.qualityDisplay == PeqQualityDisplay.BW &&
-            band.type in listOf(PeqFilterType.PEAK, PeqFilterType.NOTCH, PeqFilterType.BAND_PASS)
+        fun usesBandwidth(band: PeqBand): Boolean = band.qualityDisplay == PeqQualityDisplay.BW
 
         fun displayedQuality(band: PeqBand): Double = if (usesBandwidth(band))
             PeqResponse.bandwidthOctaves(band.q, band.frequency) else band.q
 
-        fun qualityBounds(band: PeqBand): ClosedFloatingPointRange<Double> = if (usesBandwidth(band))
-            PeqResponse.bandwidthOctaves(PeqModel.MAX_Q, band.frequency)..
+        fun qualityBounds(band: PeqBand, qRange: Double = PeqModel.MAX_Q): ClosedFloatingPointRange<Double> = if (usesBandwidth(band))
+            PeqResponse.bandwidthOctaves(qRange, band.frequency)..
                 PeqResponse.bandwidthOctaves(PeqModel.MIN_Q, band.frequency)
-        else PeqModel.MIN_Q..PeqModel.MAX_Q
+        else PeqModel.MIN_Q..qRange
+
+        /** Range changes preserve stored Q; only an explicit quality edit applies the current limit. */
+        fun withQuality(band: PeqBand, requested: Double, qRange: Double = PeqModel.MAX_Q): PeqBand {
+            val bounds = qualityBounds(band, qRange)
+            val value = requested.coerceIn(bounds.start, bounds.endInclusive)
+            val q = if (!usesBandwidth(band)) value else when {
+                value <= bounds.start -> qRange
+                value >= bounds.endInclusive -> PeqModel.MIN_Q
+                else -> PeqResponse.qFromBandwidth(value, band.frequency)
+            }
+            return band.copy(q = q.coerceIn(PeqModel.MIN_Q, qRange))
+        }
 
         /** Keep the edited unit stable when moving its center frequency. */
-        fun withFrequency(band: PeqBand, requested: Double): PeqBand {
+        fun withFrequency(band: PeqBand, requested: Double, qRange: Double = PeqModel.MAX_Q): PeqBand {
             val frequency = requested.coerceIn(PeqModel.MIN_FREQUENCY, PeqModel.MAX_FREQUENCY)
             if (frequency == band.frequency) return band
             val q = if (usesBandwidth(band))
-                PeqResponse.qFromBandwidth(displayedQuality(band), frequency).coerceIn(PeqModel.MIN_Q, PeqModel.MAX_Q)
+                PeqResponse.qFromBandwidth(displayedQuality(band), frequency).coerceIn(PeqModel.MIN_Q, qRange)
             else band.q
             return band.copy(frequency = frequency, q = q)
         }
@@ -286,7 +302,8 @@ class PeqBandAdapter(
         }
 
         fun logarithmicPosition(value: Double, minimum: Double, maximum: Double): Float =
-            (ln(value.coerceIn(minimum, maximum) / minimum) / ln(maximum / minimum)).toFloat().coerceIn(0f, 1f)
+            if (minimum == maximum) 0f else
+                (ln(value.coerceIn(minimum, maximum) / minimum) / ln(maximum / minimum)).toFloat().coerceIn(0f, 1f)
 
         fun logarithmicValue(position: Float, minimum: Double, maximum: Double): Double =
             (minimum * exp(position.coerceIn(0f, 1f) * ln(maximum / minimum))).coerceIn(minimum, maximum)

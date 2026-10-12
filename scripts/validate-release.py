@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 root = Path(__file__).resolve().parents[1]
 for file in root.joinpath('module').glob('*.sh'):
     subprocess.run(['sh', '-n', str(file)], check=True)
-with ZipFile(root / 'dist/DSP-Audio-Driver-0.1.0-alpha9.zip') as z:
+with ZipFile(root / 'dist/DSP-Audio-Driver-0.1.0-alpha10.zip') as z:
     assert z.testzip() is None
     for suffix, elf_class, machine in [('lib64', 2, 183), ('lib', 1, 40)]:
         blob = z.read(f'system/vendor/{suffix}/soundfx/libdspfusion.so')

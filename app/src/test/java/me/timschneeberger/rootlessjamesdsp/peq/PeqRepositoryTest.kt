@@ -20,6 +20,26 @@ class PeqRepositoryTest {
 
     @Before fun clearPreferences() { preferences.edit().clear().commit() }
 
+    @Test fun qRangeRoundTripsAndMissingRangeDefaultsTo100WithoutChangingStoredQuality() {
+        val original = PeqState(listOf(PeqBand("high-q", q = 77.123456), PeqBand("same-frequency", q = 12.5)),
+            qRange = 0.25, qStep = 2.5)
+        assertTrue(repository.save(original))
+        assertEquals(original, repository.load())
+        val encoded = repository.exportJson(original)
+        assertEquals(original, repository.importJson(encoded))
+        val old = encoded.replace("\"qRange\":0.25,", "")
+        assertFalse(old.contains("qRange"))
+        assertEquals(original.copy(qRange = 100.0), repository.importJson(old))
+        val before = preferences.all.toMap()
+        listOf("0.099", "100.001", "\"1\"", "null", "1e999").forEach { value ->
+            assertThrows(IllegalArgumentException::class.java) {
+                repository.importJson(encoded.replace("\"qRange\":0.25", "\"qRange\":$value"))
+            }
+        }
+        assertEquals(before, preferences.all)
+        assertEquals(original, repository.load())
+    }
+
     @Test fun all170BandsAndUiMetadataRoundTripWithoutLegacyChanges() {
         val legacy = "GraphicEQ: 20 3; 1000 -2; 20000 0;"
         preferences.edit().putString("geq_nodes", legacy).putBoolean("geq_enable", false).commit()

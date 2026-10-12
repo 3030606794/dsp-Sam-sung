@@ -52,6 +52,7 @@ class PeqRepository(private val preferences: SharedPreferences) {
                 put("gainRange", state.gainRange)
                 put("gainStep", state.gainStep)
                 put("qStep", state.qStep)
+                put("qRange", state.qRange)
                 put("frequencyStep", state.frequencyStep)
                 put("pinResponse", state.pinResponse)
                 put("showQSlider", state.showQSlider)
@@ -104,6 +105,7 @@ class PeqRepository(private val preferences: SharedPreferences) {
                 gainRange = root.number("gainRange"),
                 gainStep = root.number("gainStep"),
                 qStep = if (root.containsKey("qStep")) root.number("qStep") else 0.01,
+                qRange = if (root.containsKey("qRange")) root.number("qRange") else PeqModel.MAX_Q,
                 frequencyStep = if (root.containsKey("frequencyStep")) root.number("frequencyStep") else 1.0,
                 showQSlider = root.optionalBoolean("showQSlider", false),
                 showFrequencySlider = root.optionalBoolean("showFrequencySlider", false),

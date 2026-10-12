@@ -111,7 +111,7 @@ class PeqEditorUiTest {
         val original = PeqModel.defaultState(1).copy(showQSlider = true, showFrequencySlider = true)
         repository.save(original)
         launch()
-        view<MaterialButton>(R.id.peq_add).performClick()
+        view<MaterialButton>(R.id.peq_add_back).performClick()
         layout()
         val added = repository.load().bands.last()
         assertEquals(0.0, added.frequency, 0.0)

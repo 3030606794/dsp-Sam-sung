@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="output_driver_connected">驱动：已连接</string>
+    <string name="output_driver_disconnected">驱动：未连接</string>
+    <string name="output_rate_value">处理采样率：%1$s kHz</string>
+    <string name="output_rate_idle">处理采样率：未处理</string>
+    <string name="output_rate_unknown">处理采样率：未知</string>
+    <string name="output_route_value">输出：%1$s</string>
+    <string name="output_route_unknown">未知设备</string>
+</resources>

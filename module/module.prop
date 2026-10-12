@@ -1,6 +1,6 @@
 id=dsp_fusion
 name=DSP音效
-version=0.1.0-alpha9
-versionCode=1009
+version=0.1.0-alpha10
+versionCode=1010
 author=DSP-mobile-version contributors
-description=Unified 170-band parametric EQ + JamesDSP + MSEB + ViPER RE. Requires matching dsp音效 alpha9 APK (protocol 5, gain supported by every PEQ filter type). Update APK and driver together, then reboot. Disable old JamesDSP, ViPER and AML modules before use.
+description=Unified 170-band parametric EQ + JamesDSP + MSEB + ViPER RE. Protocol 5; alpha10 adds live host sample-rate reporting. Update driver then reboot for the new status card. Disable old JamesDSP, ViPER and AML modules before use.

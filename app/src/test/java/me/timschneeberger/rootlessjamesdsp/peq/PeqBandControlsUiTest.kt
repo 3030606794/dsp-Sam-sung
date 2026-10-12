@@ -277,8 +277,7 @@ class PeqBandControlsUiTest {
     @Test fun bandwidthLimitsAndHugeStepsStayFiniteAndCanReachBothEnds() {
         PeqFilterType.entries.forEach { type ->
             val band = PeqBand(type = type, qualityDisplay = PeqQualityDisplay.BW)
-            assertEquals(type in listOf(PeqFilterType.PEAK, PeqFilterType.NOTCH, PeqFilterType.BAND_PASS),
-                PeqBandAdapter.usesBandwidth(band))
+            assertTrue(PeqBandAdapter.usesBandwidth(band))
         }
         listOf(20.0, 1000.0, 20000.0).forEach { frequency ->
             val band = PeqBand(frequency = frequency, qualityDisplay = PeqQualityDisplay.BW)
@@ -297,6 +296,64 @@ class PeqBandControlsUiTest {
         assertEquals(20000.0, PeqBandAdapter.dragFrequency(1f), 0.0)
         assertEquals(20.0, PeqBandAdapter.dragFrequency(0f), 0.0)
         assertEquals("1000", PeqBandAdapter.number(1000.0, 0))
+    }
+
+    @Test fun configuredQualityRangePreservesStoredValuesUntilEditedAndConstrainsQAndBandwidth() {
+        val original = PeqState(listOf(PeqBand("q", q = 20.123456789),
+            PeqBand("bw", type = PeqFilterType.LOW_SHELF, q = 20.123456789, qualityDisplay = PeqQualityDisplay.BW)),
+            showQSlider = true, showFrequencySlider = true, qRange = 3.25, qStep = 0.01)
+        launch(original)
+        val qRow = row(0)
+        assertEquals(1f, qRow.findViewById<Slider>(R.id.peq_q_slider).value, 0f)
+        assertTrue(qRow.findViewById<TextView>(R.id.peq_q_value).text.endsWith("20.123"))
+        val bwRow = row(1)
+        assertEquals(0f, bwRow.findViewById<Slider>(R.id.peq_q_slider).value, 0f)
+        assertTrue(bwRow.findViewById<TextView>(R.id.peq_q_value).text.startsWith("BW"))
+        assertEquals(original, repository.load())
+        press(row(0), R.id.peq_q_minus)
+        assertEquals(3.25, repository.load().bands[0].q, 0.0)
+        press(row(1), R.id.peq_q_plus)
+        assertEquals(3.25, repository.load().bands[1].q, 0.0)
+        dragTo(row(0).findViewById(R.id.peq_q_slider), 0f)
+        assertEquals(0.1, repository.load().bands[0].q, 0.0)
+        dragTo(row(0).findViewById(R.id.peq_q_slider), 1f)
+        assertEquals(3.25, repository.load().bands[0].q, 0.0)
+        dragTo(row(1).findViewById(R.id.peq_q_slider), 1f)
+        assertEquals(0.1, repository.load().bands[1].q, 0.0)
+        dragTo(row(1).findViewById(R.id.peq_q_slider), 0f)
+        assertEquals(3.25, repository.load().bands[1].q, 0.0)
+    }
+
+    @Test fun everyFilterSupportsBandwidthWithExactConfiguredBoundsAndSingleValueRangesStayFinite() {
+        PeqFilterType.entries.forEach { type ->
+            for (frequency in listOf(0.0, 20.0, 1000.0, 20000.0)) {
+                for (qRange in listOf(0.1, 0.5, 3.25, 100.0)) {
+                    val band = PeqBand(type = type, frequency = frequency, q = 20.123456789, qualityDisplay = PeqQualityDisplay.BW)
+                    val bounds = PeqBandAdapter.qualityBounds(band, qRange)
+                    assertEquals(qRange, PeqResponse.qFromBandwidth(bounds.start, frequency), 1e-11)
+                    assertEquals(0.1, PeqResponse.qFromBandwidth(bounds.endInclusive, frequency), 1e-14)
+                    assertEquals(qRange, PeqBandAdapter.withQuality(band, bounds.start, qRange).q, 0.0)
+                    assertEquals(0.1, PeqBandAdapter.withQuality(band, bounds.endInclusive, qRange).q, 0.0)
+                    assertTrue(PeqBandAdapter.logarithmicPosition(PeqBandAdapter.displayedQuality(band),
+                        bounds.start, bounds.endInclusive).isFinite())
+                    assertTrue(PeqBandAdapter.withFrequency(band, if (frequency == 20000.0) 20.0 else 20000.0,
+                        qRange).q in 0.1..qRange)
+                }
+            }
+        }
+        launch(PeqState(listOf(PeqBand("q", q = 5.123),
+            PeqBand("bw", q = 5.123, qualityDisplay = PeqQualityDisplay.BW)), qRange = 0.1, showQSlider = true))
+        for (index in 0..1) {
+            val current = row(index)
+            val slider = current.findViewById<Slider>(R.id.peq_q_slider)
+            assertEquals(0f, slider.value, 0f)
+            assertFalse(slider.isEnabled)
+            assertEquals(5.123, repository.load().bands[index].q, 0.0)
+            press(current, if (index == 0) R.id.peq_q_minus else R.id.peq_q_plus)
+            assertEquals(0.1, repository.load().bands[index].q, 0.0)
+            assertFalse(current.findViewById<MaterialButton>(R.id.peq_q_minus).isEnabled)
+            assertFalse(current.findViewById<MaterialButton>(R.id.peq_q_plus).isEnabled)
+        }
     }
 
     @Test fun gainStepLargerThanDisplayRangeCannotSaveAnOutOfRangeGain() {
@@ -371,11 +428,12 @@ class PeqBandControlsUiTest {
     }
 
     @Test fun locatorHasItsOwnCallbackAndDraggingSignalsStartAndFinish() {
-        var state = PeqState(listOf(PeqBand(q = 2.0)), showQSlider = true)
+        var state = PeqState(listOf(PeqBand(q = 2.0)), showQSlider = true, showFrequencySlider = true)
         launch(state)
         val located = mutableListOf<String>()
         val selected = mutableListOf<String>()
         val started = mutableListOf<String>()
+        val editFields = mutableListOf<Pair<String, PeqEditField>>()
         var finished = 0
         var edited = 0
         lateinit var adapter: PeqBandAdapter
@@ -385,14 +443,16 @@ class PeqBandControlsUiTest {
             true
         }, onEdit = { edited++ }, onBandSelected = { selected.add(it) },
             onLocate = { located.add(it) }, onInteractionStarted = { started.add(it) },
-            onInteractionFinished = { finished++ })
+            onInteractionFinished = { finished++ }, onEditField = { id, field -> editFields.add(id to field) })
         val list = fragment().requireView().findViewById<RecyclerView>(R.id.peq_band_list)
         list.adapter = adapter
         adapter.submitState(state)
         val current = row()
         val button = current.findViewById<MaterialButton>(R.id.peq_band_locate)
-        assertEquals("定位频段", button.text.toString())
-        assertEquals((button.parent as View).width.toDouble(), (button.left + button.right).toDouble(), 1.0)
+        assertEquals("定位频段", button.contentDescription.toString())
+        assertTrue(button.text.isEmpty())
+        assertNotNull(button.icon)
+        assertSame(current.findViewById<View>(R.id.peq_band_header), (button.parent as View).parent)
         button.performClick()
         assertEquals(listOf(state.bands.single().id), located)
         assertTrue(selected.isEmpty())
@@ -410,6 +470,20 @@ class PeqBandControlsUiTest {
         assertTrue(selected.isNotEmpty())
         assertEquals(listOf(state.bands.single().id), located)
         assertEquals(0, edited)
+        val fields = listOf(R.id.peq_band_gain to PeqEditField.GAIN,
+            R.id.peq_q_value to PeqEditField.QUALITY, R.id.peq_band_summary to PeqEditField.QUALITY,
+            R.id.peq_band_title to PeqEditField.FREQUENCY, R.id.peq_frequency_value to PeqEditField.FREQUENCY)
+        fields.forEach { (id, _) -> current.findViewById<View>(id).performClick() }
+        assertEquals(fields.map { state.bands.single().id to it.second }, editFields)
+        assertEquals(0, edited)
+        press(current, R.id.peq_band_edit)
+        assertEquals(1, edited)
+        state = state.copy(qRange = 0.5)
+        adapter.submitState(state)
+        val rebound = row()
+        assertEquals(4.321, state.bands.single().q, 1e-12)
+        assertEquals(1f, rebound.findViewById<Slider>(R.id.peq_q_slider).value, 0f)
+        assertTrue(rebound.findViewById<TextView>(R.id.peq_q_value).text.endsWith("4.321"))
     }
 
     @Test fun editingAnotherBandMovesTheMarkerAndLocatorRestoresVisibilityAfterRotation() {

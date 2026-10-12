@@ -101,6 +101,12 @@ class PeqMarkerTest {
         assertEquals(after.x, after.verticalCrosshair.x1, 0f)
         assertTrue(after.horizontalCrosshair.y1 < before.horizontalCrosshair.y1)
         assertTrue(after.verticalCrosshair.x1 > before.verticalCrosshair.x1)
+        assertEquals(after.plotBounds.left, after.gainAxisMarker.x, 0f)
+        assertEquals(after.y, after.gainAxisMarker.y, 0f)
+        assertEquals(after.x, after.frequencyAxisMarker.x, 0f)
+        assertEquals(after.plotBounds.bottom, after.frequencyAxisMarker.y, 0f)
+        assertTrue(after.gainAxisMarker.y < before.gainAxisMarker.y)
+        assertTrue(after.frequencyAxisMarker.x > before.frequencyAxisMarker.x)
         assertEquals("+9.50 dB", after.gainText)
     }
 
@@ -145,6 +151,21 @@ class PeqMarkerTest {
                 assertEquals(marker.plotBounds.bottom, marker.verticalCrosshair.y2, 0f)
                 assertEquals(marker.x, marker.verticalCrosshair.x1, 0f)
                 assertEquals(marker.x, marker.verticalCrosshair.x2, 0f)
+                val density = curve.resources.displayMetrics.density
+                assertEquals(1.25f * density, marker.horizontalCrosshair.strokeWidth, 0f)
+                assertEquals(1.25f * density, marker.verticalCrosshair.strokeWidth, 0f)
+                assertEquals(marker.horizontalCrosshair.x1, marker.gainAxisMarker.x, 0f)
+                assertEquals(marker.horizontalCrosshair.y1, marker.gainAxisMarker.y, 0f)
+                assertEquals(marker.verticalCrosshair.x2, marker.frequencyAxisMarker.x, 0f)
+                assertEquals(marker.verticalCrosshair.y2, marker.frequencyAxisMarker.y, 0f)
+                for (dot in listOf(marker.gainAxisMarker, marker.frequencyAxisMarker)) {
+                    assertEquals(marker.radius, dot.radius, 0f)
+                    val outerRadius = dot.radius + density
+                    assertTrue(dot.x - outerRadius >= 0f)
+                    assertTrue(dot.x + outerRadius <= curve.width)
+                    assertTrue(dot.y - outerRadius >= 0f)
+                    assertTrue(dot.y + outerRadius <= curve.height)
+                }
                 if (frequency == 20.0) assertTrue(marker.labelBounds.left > marker.x)
                 else assertTrue(marker.labelBounds.right < marker.x)
                 assertEquals(band, curve.requestedState!!.bands.single())
@@ -162,13 +183,17 @@ class PeqMarkerTest {
         assertEquals(0.0, marker.frequency, 0.0)
         assertEquals("0 Hz", marker.frequencyText)
         assertEquals("0.00 dB", marker.gainText)
-        assertEquals("Q: 0.500", marker.qText)
+        assertNull(marker.qText)
+        assertEquals("BW: 2.543", marker.bwText)
         assertEquals(PeqResponse.bandwidthOctaves(0.5, 0.0), marker.bw!!, 0.0)
         assertTrue(marker.bw!!.isFinite())
         assertEquals(marker.plotBounds.left + marker.radius, marker.x, 0f)
         assertTrue(marker.plotBounds.contains(marker.labelBounds))
         assertEquals(marker.x, marker.verticalCrosshair.x1, 0f)
         assertEquals(marker.plotBounds.left, marker.horizontalCrosshair.x1, 0f)
+        assertEquals(marker.plotBounds.left, marker.gainAxisMarker.x, 0f)
+        assertEquals(marker.x, marker.frequencyAxisMarker.x, 0f)
+        assertEquals(marker.plotBounds.bottom, marker.frequencyAxisMarker.y, 0f)
     }
 
     @Test fun landscapeStillKeepsRightmostSelectedBandLabelInsideGraph() {
@@ -181,30 +206,39 @@ class PeqMarkerTest {
         assertTrue(marker.labelBounds.right < marker.x)
     }
 
-    @Test fun bandwidthTypesShowBothQAndBwToThreeDecimalPlacesInEitherMode() {
+    @Test fun everyFilterShowsOnlyTheSelectedQualityModeToThreeDecimalPlaces() {
         val curve = launch()
-        for (type in listOf(PeqFilterType.PEAK, PeqFilterType.NOTCH, PeqFilterType.BAND_PASS)) {
+        for (type in PeqFilterType.entries) {
+            val original = PeqBand(type = type, frequency = 4321.125, q = 1.234567)
             for (mode in PeqQualityDisplay.entries) {
-                val band = PeqBand(type = type, frequency = 4321.125, q = 1.234567, qualityDisplay = mode)
+                val band = original.copy(qualityDisplay = mode)
                 curve.setState(PeqState(listOf(band)), false)
                 curve.showMarker()
                 val marker = draw(curve)!!
                 val expectedBw = PeqResponse.bandwidthOctaves(band.q, band.frequency)
                 assertEquals(band.q, marker.q, 0.0)
-                assertEquals(expectedBw, marker.bw!!, 0.0)
-                assertEquals("Q: 1.235", marker.qText)
-                assertEquals("BW: ${String.format(Locale.ROOT, "%.3f", expectedBw)}", marker.bwText)
-                assertTrue(curve.contentDescription.contains(marker.qText))
-                assertTrue(curve.contentDescription.contains(marker.bwText!!))
+                if (mode == PeqQualityDisplay.Q) {
+                    assertEquals("Q: 1.235", marker.qText)
+                    assertNull(marker.bw)
+                    assertNull(marker.bwText)
+                    assertTrue(curve.contentDescription.contains(marker.qText!!))
+                    assertFalse(curve.contentDescription.contains("BW:"))
+                } else {
+                    assertEquals(expectedBw, marker.bw!!, 0.0)
+                    assertEquals("BW: ${String.format(Locale.ROOT, "%.3f", expectedBw)}", marker.bwText)
+                    assertNull(marker.qText)
+                    assertTrue(curve.contentDescription.contains(marker.bwText!!))
+                    assertFalse(curve.contentDescription.contains("Q:"))
+                }
+                assertEquals(band, curve.requestedState!!.bands.single())
                 assertFalse(curve.contentDescription.contains("倍频程"))
             }
         }
     }
 
-    @Test fun nonBandwidthTypesShowOnlyQWithTrailingZeroPrecision() {
+    @Test fun qModeShowsTrailingZeroPrecisionForEveryFilter() {
         val curve = launch()
-        for (type in listOf(PeqFilterType.LOW_SHELF, PeqFilterType.HIGH_SHELF,
-            PeqFilterType.LOW_PASS, PeqFilterType.HIGH_PASS)) {
+        for (type in PeqFilterType.entries) {
             val band = PeqBand(type = type, q = 2.0)
             curve.setState(PeqState(listOf(band)), false)
             curve.showMarker()
@@ -218,7 +252,7 @@ class PeqMarkerTest {
 
     @Test fun qAndBwLabelValuesUpdateWhileMarkerIsVisible() {
         val curve = launch()
-        val band = PeqBand(id = "selected", frequency = 600.0, q = 0.5)
+        val band = PeqBand(id = "selected", frequency = 600.0, q = 0.5, qualityDisplay = PeqQualityDisplay.BW)
         curve.setState(PeqState(listOf(band)), false)
         curve.showMarker(band.id)
         val before = draw(curve)!!
@@ -226,9 +260,15 @@ class PeqMarkerTest {
         curve.setState(PeqState(listOf(updated)), false)
         val after = draw(curve)!!
         assertEquals(updated.q, after.q, 0.0)
-        assertEquals("Q: 4.322", after.qText)
+        assertNull(after.qText)
         assertTrue(after.bw!! < before.bw!!)
         assertNotEquals(before.bwText, after.bwText)
+        curve.setState(PeqState(listOf(updated.copy(qualityDisplay = PeqQualityDisplay.Q))), false)
+        val switched = draw(curve)!!
+        assertEquals("Q: 4.322", switched.qText)
+        assertNull(switched.bwText)
+        assertEquals(after.x, switched.x, 0f)
+        assertEquals(after.y, switched.y, 0f)
     }
 
     class HostActivity : FragmentActivity() {

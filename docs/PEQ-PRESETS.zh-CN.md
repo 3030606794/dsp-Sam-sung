@@ -39,6 +39,7 @@
         "gainRange": 18,
         "gainStep": 0.1,
         "qStep": 0.01,
+        "qRange": 100,
         "frequencyStep": 1,
         "pinResponse": true,
         "showQSlider": true,
@@ -60,6 +61,6 @@
 }
 ```
 
-频段类型为 `PEAK`、`LOW_SHELF`、`HIGH_SHELF`、`LOW_PASS`、`HIGH_PASS`、`NOTCH` 或 `BAND_PASS`。每个预设中的频段 `id` 必须唯一；收藏自身的本地 ID 不写入外部文件，导入时重新生成。`qualityDisplay` 为 `Q` 或 `BW`；BW 编辑适用于峰值、带阻和带通。
+频段类型为 `PEAK`、`LOW_SHELF`、`HIGH_SHELF`、`LOW_PASS`、`HIGH_PASS`、`NOTCH` 或 `BAND_PASS`。每个预设中的频段 `id` 必须唯一；频率允许重复。收藏自身的本地 ID 不写入外部文件，导入时重新生成。`qualityDisplay` 为 `Q` 或 `BW`，七类均可切换，保持实际 Q 不变。`qRange` 是 Q 编辑上限，范围 0.1–100，旧文件缺省为 100；其限制同时用于 Q/BW 滑杆、按钮和手动输入。缩小范围时原频段不自动裁剪，导出仍保留原值。使用 alpha10 或更新版本可完整保留此设置。
 
 收藏格式 `version: 1`、参数对象 `schema: 2` 和驱动协议 `5` 是独立版本。收藏可读取旧参数对象 schema 1，并按 alpha9 规则将旧通带/阻带类型未生效的隐藏增益迁移为 0 dB；后续导出使用 schema 2。原有设备/全局预设文件请继续从对应入口导入，不使用本收藏入口。

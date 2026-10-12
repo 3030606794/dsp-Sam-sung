@@ -27,6 +27,8 @@ constexpr size_t kMaxTransfer=32*1024*1024;
 constexpr uint32_t kJamesEnable=131072, kViperEnable=131073;
 constexpr uint32_t kBalance=131074;
 constexpr uint32_t kProtocol=131080, kCapabilities=131081, kTone=196608;
+// Optional protocol-5 diagnostics. Unlike James GET 20001, this is the host I/O rate.
+constexpr uint32_t kHostRate=131082, kProcessedFrames=131083;
 constexpr uint32_t kPeq=1250;
 // Retain the upstream engines' nominal policy charges (1 KB each). This legacy
 // descriptor field is admission accounting, not measured process RSS: a 1024 KB
@@ -91,6 +93,7 @@ struct Fusion {
     effect_config_t config{};
     std::atomic<uint32_t> ioFormat{AUDIO_FORMAT_PCM_FLOAT | (AUDIO_FORMAT_PCM_FLOAT<<8)};
     std::atomic<bool> enabled{false};
+    std::atomic<uint32_t> hostRate{0}, processedFrames{0};
     bool jamesEnabled=true, viperEnabled=true, configured=false;
     int32_t balance=0;
     float balanceCurrent=0.f, balanceSmoothing=.002f;
@@ -299,10 +302,13 @@ int32_t parameter(Fusion& f,bool set,uint32_t size,void* data,uint32_t* replySiz
         return statusReply(replySize,reply,status);
     }
     if(packet->vsize!=4 || *replySize<sizeof(effect_param_t)+8) return -EINVAL;
-    if(id==kProtocol || id==kCapabilities || id==kJamesEnable || id==kViperEnable || id==kBalance) {
+    if(id==kProtocol || id==kCapabilities || id==kJamesEnable || id==kViperEnable || id==kBalance ||
+       id==kHostRate || id==kProcessedFrames) {
         auto* result=static_cast<effect_param_t*>(reply);
         result->status=0; result->psize=result->vsize=4;
-        int32_t value=id==kProtocol?5:(id==kCapabilities?15:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)));
+        int32_t value=id==kHostRate?static_cast<int32_t>(f.hostRate.load()):
+            (id==kProcessedFrames?static_cast<int32_t>(f.processedFrames.load()&0x7fffffffu):
+            (id==kProtocol?5:(id==kCapabilities?15:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)))));
         std::memcpy(result->data,&id,4); std::memcpy(result->data+4,&value,4);
         *replySize=sizeof(effect_param_t)+8; return 0;
     }
@@ -357,11 +363,19 @@ int32_t process(effect_handle_t self,audio_buffer_t* in,audio_buffer_t* out) {
             writeSample(out->raw,(offset+frame)*2+1,outputFormat,std::clamp(clean(current[frame*2+1])*right,-1.f,1.f),accumulate);
         }
     }
+    f.processedFrames.fetch_add(static_cast<uint32_t>(in->frameCount),std::memory_order_relaxed);
     return 0;
 }
 int32_t commandInternal(effect_handle_t self,uint32_t code,uint32_t size,void* data,uint32_t* replySize,void* reply) {
     if(!self) return -EINVAL;
     auto& f=*reinterpret_cast<Fusion*>(self);
+    // Runtime polling must never contend with the audio processing mutex.
+    if(code==EFFECT_CMD_GET_PARAM && data && size>=sizeof(effect_param_t)+4) {
+        const auto* packet=static_cast<const effect_param_t*>(data);
+        const auto id=valueAt<uint32_t>(packet->data);
+        if(packet->psize==4 && (id==kHostRate || id==kProcessedFrames))
+            return parameter(f,false,size,data,replySize,reply);
+    }
     // PEQ owns its own pending-snapshot lock. Designing 170 filters must not
     // make the existing audio-thread try_lock emit dry audio while dragging.
     if(code==EFFECT_CMD_SET_PARAM && data && size>=sizeof(effect_param_t)+4) {
@@ -374,7 +388,11 @@ int32_t commandInternal(effect_handle_t self,uint32_t code,uint32_t size,void* d
         case EFFECT_CMD_INIT: return statusReply(replySize,reply,0);
         case EFFECT_CMD_SET_CONFIG:
             if(size!=sizeof(effect_config_t) || !data || !replySize || !reply || *replySize<4) return -EINVAL;
-            return statusReply(replySize,reply,setConfig(f,*static_cast<effect_config_t*>(data)));
+            {
+                const int32_t status=setConfig(f,*static_cast<effect_config_t*>(data));
+                if(!status) f.hostRate.store(f.config.inputCfg.samplingRate);
+                return statusReply(replySize,reply,status);
+            }
         case EFFECT_CMD_GET_CONFIG:
             if(!replySize || !reply || *replySize<sizeof(effect_config_t)) return -EINVAL;
             std::memcpy(reply,&f.config,sizeof(f.config)); *replySize=sizeof(f.config); return 0;

@@ -45,6 +45,34 @@ int process(effect_handle_t h,void* in,void* out,size_t frames) {
 }
 int main() {
     runStreamingTests();
+    {
+        effect_handle_t statusHandle=nullptr;
+        assert(AELI.create_effect(&uuid,0,0,&statusHandle)==0);
+        // Constructor defaults are not evidence of an Android host configuration.
+        assert(get(statusHandle,131082)==0 && get(statusHandle,131083)==0);
+        std::array<float,64> source{},destination{};
+        int frames=0;
+        for(uint32_t rate:{44100u,48000u,96000u,192000u}) {
+            auto actual=config(rate);
+            assert(cmd(statusHandle,EFFECT_CMD_SET_CONFIG,sizeof(actual),&actual)==0);
+            assert(get(statusHandle,131082)==static_cast<int>(rate));
+            assert(get(statusHandle,131083)==frames); // James preallocation is not host processing.
+            assert(cmd(statusHandle,EFFECT_CMD_ENABLE)==0);
+            assert(process(statusHandle,source.data(),destination.data(),32)==0);
+            frames+=32;
+            assert(get(statusHandle,131083)==frames);
+            assert(cmd(statusHandle,EFFECT_CMD_DISABLE)==0);
+            assert(process(statusHandle,source.data(),destination.data(),32)==-ENODATA);
+            assert(get(statusHandle,131083)==frames); // Dry bypass never reports processed audio.
+        }
+        auto invalid=config(384000);
+        assert(cmd(statusHandle,EFFECT_CMD_SET_CONFIG,sizeof(invalid),&invalid)==-EINVAL);
+        assert(get(statusHandle,131082)==192000 && get(statusHandle,131083)==frames);
+        assert(set(statusHandle,131082,48000)!=0 && set(statusHandle,131083,0)!=0);
+        assert(get(statusHandle,131082)==192000 && get(statusHandle,131083)==frames);
+        AELI.release_effect(statusHandle);
+        std::puts("Host runtime diagnostics passed: real 44.1/48/96/192 kHz, no default/internal-rate substitution, processed-only frame count.");
+    }
     effect_descriptor_t descriptor{};
     assert(AELI.get_descriptor(&uuid,&descriptor)==0);
     // Android AudioPolicyManager rejects even a correctly created/configured

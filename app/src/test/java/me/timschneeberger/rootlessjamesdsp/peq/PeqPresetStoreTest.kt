@@ -26,7 +26,7 @@ class PeqPresetStoreTest {
     private lateinit var store: PeqPresetStore
     private val state = PeqState(listOf(PeqBand("test-band", gain = 3.125, q = 2.3456789,
         frequency = 777.123456, qualityDisplay = PeqQualityDisplay.BW)), gainRange = 50.0,
-        gainStep = 0.25, qStep = 0.02, frequencyStep = 31.0, pinResponse = false)
+        gainStep = 0.25, qStep = 0.02, frequencyStep = 31.0, pinResponse = false, qRange = 0.25)
 
     @Before fun setup() {
         file = File(temporary.newFolder(), PeqPresetStore.FILE_NAME)

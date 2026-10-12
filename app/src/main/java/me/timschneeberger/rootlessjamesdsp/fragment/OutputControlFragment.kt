@@ -14,9 +14,23 @@ import android.widget.TextView
 import androidx.annotation.IdRes
 import androidx.annotation.StringRes
 import androidx.fragment.app.Fragment
+import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import me.timschneeberger.rootlessjamesdsp.R
+import me.timschneeberger.rootlessjamesdsp.MainApplication
+import me.timschneeberger.rootlessjamesdsp.fusion.OutputRuntimeStatus
+import me.timschneeberger.rootlessjamesdsp.model.root.RemoteEffectSession
+import me.timschneeberger.rootlessjamesdsp.utils.RoutingObserver
+import me.timschneeberger.rootlessjamesdsp.utils.preferences.Preferences
+import org.koin.android.ext.android.inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.SliderDoubleTapReset
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.dpToPx
@@ -28,9 +42,13 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** Kept outside the parameter scroll view; uses the existing per-device output store. */
-class OutputControlFragment : Fragment(R.layout.fragment_output_control) {
+class OutputControlFragment : Fragment(R.layout.fragment_output_control), RoutingObserver.RoutingChangedCallback {
     private lateinit var preferences: SharedPreferences
     private val controls = mutableListOf<Control>()
+    private val routingObserver: RoutingObserver by inject()
+    private val appPreferences: Preferences.App by inject()
+    private val runtimeTracker = OutputRuntimeStatus.Tracker()
+    private val appPreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> renderRoute() }
 
     private data class Control(
         val tile: View,
@@ -77,6 +95,25 @@ class OutputControlFragment : Fragment(R.layout.fragment_output_control) {
         reloadValues()
         preferences.registerOnSharedPreferenceChangeListener(preferenceListener)
         requireContext().registerLocalReceiver(presetReceiver, IntentFilter(Constants.ACTION_PRESET_LOADED))
+        routingObserver.registerOnRoutingChangeListener(this)
+        appPreferences.registerOnSharedPreferenceChangeListener(appPreferenceListener)
+        renderRoute()
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                // Snapshot the session map on the main thread; native reads run off the UI thread.
+                runtimeTracker.clear()
+                while (true) {
+                    val app = context?.applicationContext as? MainApplication
+                    val engines = app?.rootSessionDatabase?.sessionList?.values
+                        ?.mapNotNull { (it as? RemoteEffectSession)?.effect }.orEmpty()
+                    val sessions = withContext(Dispatchers.IO) {
+                        engines.mapNotNull { engine -> runCatching { engine.outputRuntimeSession() }.getOrNull() }
+                    }
+                    renderRuntimeStatus(runtimeTracker.update(sessions))
+                    delay(1000)
+                }
+            }
+        }
     }
 
     override fun onViewStateRestored(savedInstanceState: Bundle?) {
@@ -154,6 +191,32 @@ class OutputControlFragment : Fragment(R.layout.fragment_output_control) {
         control.valueRow.contentDescription = "${control.title}: $text"
     }
 
+    internal fun renderRuntimeStatus(status: OutputRuntimeStatus.Snapshot) {
+        val root = view ?: return
+        root.findViewById<TextView>(R.id.output_driver_status).setText(
+            if (status.connected) R.string.output_driver_connected else R.string.output_driver_disconnected)
+        root.findViewById<TextView>(R.id.output_sample_rate).text = when (status.processing) {
+            OutputRuntimeStatus.Processing.IDLE -> getString(R.string.output_rate_idle)
+            OutputRuntimeStatus.Processing.UNKNOWN -> getString(R.string.output_rate_unknown)
+            OutputRuntimeStatus.Processing.ACTIVE -> getString(R.string.output_rate_value,
+                status.rates.joinToString(" / ") { rate ->
+                    if (rate % 1000 == 0) (rate / 1000).toString()
+                    else String.format(Locale.ROOT, "%.3f", rate / 1000.0).trimEnd('0').trimEnd('.')
+                })
+        }
+    }
+
+    override fun onRoutingDeviceChanged(device: RoutingObserver.Device?) { renderRoute() }
+
+    private fun renderRoute() {
+        view?.findViewById<TextView>(R.id.output_route)?.apply {
+            // The existing profile row already shows the current output route when enabled.
+            isVisible = !appPreferences.get<Boolean>(R.string.key_device_profiles_enable)
+            text = getString(R.string.output_route_value,
+                routingObserver.currentDevice?.name ?: getString(R.string.output_route_unknown))
+        }
+    }
+
     private fun showValueDialog(control: Control) {
         val input = EditText(requireContext()).apply {
             id = android.R.id.edit
@@ -191,6 +254,9 @@ class OutputControlFragment : Fragment(R.layout.fragment_output_control) {
     }
 
     override fun onDestroyView() {
+        routingObserver.unregisterOnRoutingChangeListener(this)
+        appPreferences.unregisterOnSharedPreferenceChangeListener(appPreferenceListener)
+        runtimeTracker.clear()
         preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         requireContext().unregisterLocalReceiver(presetReceiver)
         controls.clear()

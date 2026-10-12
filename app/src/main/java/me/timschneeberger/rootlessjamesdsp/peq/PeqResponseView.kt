@@ -45,7 +45,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private val markerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(160, 220, 40, 40) }
     private val crosshairPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ColorUtils.setAlphaComponent(markerPaint.color, 105)
-        strokeWidth = 0.5f * density
+        strokeWidth = curvePaint.strokeWidth
     }
     private val markerBackgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ColorUtils.setAlphaComponent(surface, 235)
@@ -79,7 +79,9 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         private set
     internal var renderedGainLabels: List<AxisLabel> = emptyList()
         private set
-    internal data class MarkerLine(val x1: Float, val y1: Float, val x2: Float, val y2: Float)
+    internal data class MarkerLine(val x1: Float, val y1: Float, val x2: Float, val y2: Float,
+                                   val strokeWidth: Float)
+    internal data class MarkerDot(val x: Float, val y: Float, val radius: Float)
     /** Actual parameters remain available even when the marker is clamped to the visible plot. */
     internal data class BandMarker(
         val bandId: String,
@@ -92,12 +94,14 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val radius: Float,
         val frequencyText: String,
         val gainText: String,
-        val qText: String,
+        val qText: String?,
         val bwText: String?,
         val labelBounds: RectF,
         val plotBounds: RectF,
         val horizontalCrosshair: MarkerLine,
-        val verticalCrosshair: MarkerLine
+        val verticalCrosshair: MarkerLine,
+        val gainAxisMarker: MarkerDot,
+        val frequencyAxisMarker: MarkerDot
     )
     internal var renderedMarker: BandMarker? = null
         private set
@@ -185,13 +189,11 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         return "${if (gain > 0) "+" else ""}${PeqBandAdapter.fixedNumber(gain, 2)} dB"
     }
 
-    private fun markerBandwidth(band: PeqBand): Double? = when (band.type) {
-        PeqFilterType.PEAK, PeqFilterType.NOTCH, PeqFilterType.BAND_PASS ->
-            PeqResponse.bandwidthOctaves(band.q, band.frequency)
-        else -> null
-    }
+    private fun markerBandwidth(band: PeqBand): Double? = if (band.qualityDisplay == PeqQualityDisplay.BW)
+        PeqResponse.bandwidthOctaves(band.q, band.frequency) else null
 
-    private fun markerQText(band: PeqBand) = "Q: ${String.format(Locale.ROOT, "%.3f", band.q)}"
+    private fun markerQText(band: PeqBand): String? = if (band.qualityDisplay == PeqQualityDisplay.Q)
+        "Q: ${String.format(Locale.ROOT, "%.3f", band.q)}" else null
 
     private fun markerBwText(band: PeqBand): String? = markerBandwidth(band)?.let {
         "BW: ${String.format(Locale.ROOT, "%.3f", it)}"
@@ -342,8 +344,10 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val qText = markerQText(band)
         val bwText = markerBwText(band)
         val labelLines = listOfNotNull(frequencyText, gainText, qText, bwText)
-        val horizontalCrosshair = MarkerLine(graphBounds.left, markerY, graphBounds.right, markerY)
-        val verticalCrosshair = MarkerLine(markerX, graphBounds.top, markerX, graphBounds.bottom)
+        val horizontalCrosshair = MarkerLine(graphBounds.left, markerY, graphBounds.right, markerY, crosshairPaint.strokeWidth)
+        val verticalCrosshair = MarkerLine(markerX, graphBounds.top, markerX, graphBounds.bottom, crosshairPaint.strokeWidth)
+        val gainAxisMarker = MarkerDot(horizontalCrosshair.x1, horizontalCrosshair.y1, radius)
+        val frequencyAxisMarker = MarkerDot(verticalCrosshair.x2, verticalCrosshair.y2, radius)
         val padding = 4f * density
         val gap = radius + 5f * density
         markerTextPaint.textSize = 9f * resources.displayMetrics.scaledDensity
@@ -365,7 +369,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val label = RectF(labelLeft, labelTop, labelLeft + labelWidth, labelTop + labelHeight)
         renderedMarker = BandMarker(band.id, band.frequency, gain, band.q, markerBandwidth(band),
             markerX, markerY, radius, frequencyText, gainText, qText, bwText, RectF(label), RectF(graphBounds),
-            horizontalCrosshair, verticalCrosshair)
+            horizontalCrosshair, verticalCrosshair, gainAxisMarker, frequencyAxisMarker)
         canvas.save()
         canvas.clipRect(graphBounds)
         canvas.drawLine(horizontalCrosshair.x1, horizontalCrosshair.y1,
@@ -379,6 +383,10 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
             canvas.drawText(text, label.left + padding, baseline + lineHeight * index, markerTextPaint)
         }
         // Draw last so a tiny viewport or an edge-clamped label cannot hide the red point.
+        for (dot in listOf(gainAxisMarker, frequencyAxisMarker)) {
+            canvas.drawCircle(dot.x, dot.y, dot.radius + density, markerHaloPaint)
+            canvas.drawCircle(dot.x, dot.y, dot.radius, markerPaint)
+        }
         canvas.drawCircle(markerX, markerY, radius + density, markerHaloPaint)
         canvas.drawCircle(markerX, markerY, radius, markerPaint)
     }

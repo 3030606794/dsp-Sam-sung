@@ -21,6 +21,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputLayout
+import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import org.junit.After
@@ -250,13 +251,15 @@ class PeqWorkflowUiTest {
             layout()
             view<MaterialButton>(R.id.peq_reset).performClick()
             val reset = dialog()
-            assertEquals(4, reset.listView.adapter.count)
+            assertEquals(5, reset.listView.adapter.count)
             reset.listView.performItemClick(null, target.ordinal, target.ordinal.toLong())
             idle()
             val saved = repository.load()
             assertEquals(original.copy(bands = saved.bands), saved)
             original.bands.forEachIndexed { index, band ->
                 val expected = band.copy(
+                    type = if (target == PeqResetTarget.FILTER_TYPE || target == PeqResetTarget.ALL)
+                        PeqFilterType.PEAK else band.type,
                     frequency = if (target == PeqResetTarget.FREQUENCY || target == PeqResetTarget.ALL)
                         20.0 * 1000.0.pow(index / 2.0) else band.frequency,
                     q = if (target == PeqResetTarget.Q || target == PeqResetTarget.ALL) 0.7071067811865476 else band.q,
@@ -304,6 +307,105 @@ class PeqWorkflowUiTest {
         assertEquals(100.0, repository.load().bands.single().gain, 0.0)
         assertEquals(original.bands.single().frequency, repository.load().bands.single().frequency, 0.0)
         assertEquals(original.bands.single().q, repository.load().bands.single().q, 0.0)
+    }
+
+    @Test fun footerHasThreeEqualButtonsAndShortcutsAddBlankBandsAtEitherEdge() {
+        val original = PeqModel.defaultState(3)
+        launch(original)
+        val footer = listOf(R.id.peq_settings, R.id.peq_reset, R.id.peq_presets).map { view<View>(it) }
+        assertTrue(footer.all { it.parent === footer.first().parent })
+        assertTrue(footer.maxOf { it.width } - footer.minOf { it.width } <= 1)
+        view<View>(R.id.peq_add_front).performClick()
+        assertEquals(original.bands, repository.load().bands.drop(1))
+        val first = repository.load().bands.first()
+        assertEquals(0.0, first.frequency, 0.0)
+        assertEquals(0.0, first.gain, 0.0)
+        assertEquals(0.5, first.q, 0.0)
+        assertEquals(PeqFilterType.PEAK, first.type)
+        view<View>(R.id.peq_add_back).performLongClick()
+        val menu = dialog()
+        assertEquals(5, menu.listView.adapter.count)
+        menu.listView.performItemClick(null, 1, 1) // Ten at the back.
+        idle()
+        assertEquals(14, repository.load().bands.size)
+        assertEquals(original.bands, repository.load().bands.subList(1, 4))
+        assertTrue(repository.load().bands.takeLast(10).all { it.frequency == 0.0 && it.q == 0.5 })
+        assertEquals(14, repository.load().bands.map { it.id }.toSet().size)
+    }
+
+    @Test fun customBatchRejectsOverflowAndStopsExactlyAt170() {
+        launch(PeqModel.defaultState(160))
+        view<View>(R.id.peq_add_front).performLongClick()
+        dialog().listView.performItemClick(null, 4, 4)
+        val custom = dialog()
+        custom.findViewById<EditText>(R.id.peq_add_count)!!.setText("11")
+        custom.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        assertTrue(custom.isShowing)
+        assertNotNull(custom.findViewById<TextInputLayout>(R.id.peq_add_count_box)!!.error)
+        assertEquals(160, repository.load().bands.size)
+        custom.findViewById<EditText>(R.id.peq_add_count)!!.setText("10")
+        custom.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertFalse(custom.isShowing)
+        assertEquals(170, repository.load().bands.size)
+        assertFalse(view<View>(R.id.peq_add_front).isEnabled)
+        assertFalse(view<View>(R.id.peq_add_back).isEnabled)
+    }
+
+    @Test fun everyFilterCanSwitchBandwidthAndPreciseInputObeysSameQRange() {
+        val original = PeqState(listOf(PeqBand(frequency = 1000.0, q = 3.0)), qRange = 3.0)
+        launch(original)
+        PeqFilterType.entries.forEach { type ->
+            val edit = edit()
+            val dropdown = edit.findViewById<MaterialAutoCompleteTextView>(R.id.peq_band_type)!!
+            dropdown.onItemClickListener!!.onItemClick(null, null, type.ordinal, type.ordinal.toLong())
+            val bw = edit.findViewById<MaterialButton>(R.id.peq_quality_bw)!!
+            assertTrue(bw.isShown)
+            bw.performClick()
+            val value = edit.findViewById<EditText>(R.id.peq_quality_input)!!
+            value.setText(PeqResponse.bandwidthOctaves(3.01, 1000.0).toString())
+            edit.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            assertTrue(edit.isShowing)
+            assertNotNull(edit.findViewById<TextInputLayout>(R.id.peq_quality_box)!!.error)
+            value.setText(PeqResponse.bandwidthOctaves(3.0, 1000.0).toString())
+            edit.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            idle()
+            assertFalse(edit.isShowing)
+            assertEquals(3.0, repository.load().bands.single().q, 1e-9)
+            assertEquals(type, repository.load().bands.single().type)
+            assertEquals(PeqQualityDisplay.BW, repository.load().bands.single().qualityDisplay)
+            val qEdit = edit()
+            qEdit.findViewById<MaterialButton>(R.id.peq_quality_q)!!.performClick()
+            qEdit.findViewById<EditText>(R.id.peq_quality_input)!!.setText("3.01")
+            qEdit.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            assertTrue(qEdit.isShowing)
+            qEdit.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+            idle()
+        }
+    }
+
+    @Test fun settingsQRangePersistsWithoutChangingBandsAndValueTapsFocusCorrectInput() {
+        val original = PeqState(listOf(PeqBand(frequency = 1234.0, q = 8.0)),
+            showQSlider = true, showFrequencySlider = true)
+        launch(original)
+        val settings = settings()
+        settings.findViewById<EditText>(R.id.peq_q_range)!!.setText("2.5")
+        settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        assertEquals(2.5, repository.load().qRange, 0.0)
+        assertEquals(original.bands, repository.load().bands)
+        listOf(R.id.peq_band_gain to R.id.peq_gain_input,
+            R.id.peq_q_value to R.id.peq_quality_input,
+            R.id.peq_frequency_value to R.id.peq_frequency_input).forEach { (label, input) ->
+            row().findViewById<View>(label).performClick()
+            val editor = dialog()
+            val field = editor.findViewById<EditText>(input)!!
+            assertTrue(field.hasFocus())
+            assertEquals(0, field.selectionStart)
+            assertEquals(field.text.length, field.selectionEnd)
+            editor.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+            idle()
+        }
     }
 
     class HostActivity : AppCompatActivity() {

@@ -31,6 +31,8 @@ Use Android `EFFECT_CMD_SET_PARAM` / `EFFECT_CMD_GET_PARAM`, `effect_param_t.psi
 | 1250 | SET | PEQ snapshot, schema 1; see [`peq/README.md`](peq/README.md) |
 | 131080 | GET | Protocol version, int32 = 5 |
 | 131081 | GET | Capability bits, int32 = 15 |
+| 131082 | GET | Optional host input/output sample rate in Hz; 0 until Android accepts an explicit configuration |
+| 131083 | GET | Optional processed-frame counter, lower 31 bits; advances only for successful active processing |
 | 196608 | SET | 44 bytes: int32 enable followed by ten int32 controls |
 
 The ten listening controls retain the screenshot order: temperature, bass extension, bass punch, thickness, vocal presence, female vocal coloration, low sibilance, high sibilance, transients, air. Values are −100 to +100. This is an independent DSP model; it does not contain HiBy's proprietary engine or claim bit-identical MSEB output. See [`tone/README.md`](tone/README.md) and the application compatibility document for the model's scope.
@@ -38,6 +40,8 @@ The ten listening controls retain the screenshot order: temperature, bass extens
 Existing JamesDSP IDs are retained, including 2-byte switches/presets, float arrays, segmented strings/IRs, and GET 19998–20002 / 30000–30003. These IDs intentionally retain their original units. In particular, James tube drive (ID 150) is an int16 in thousandths of a dB, whereas the ViPER tube switch (65583) is an int32 boolean.
 
 Legacy James GET 20001 reports the James engine's internal processing rate, not necessarily the host rate: at a 96 kHz host rate it reports 48 kHz because James uses its existing internal resampler. `EFFECT_CMD_GET_CONFIG` returns the actual host input/output rate. The ViPER and listening-control stages run at that host rate.
+
+Since alpha10, optional GET 131082/131083 provide the host rate and a processing-progress counter through lock-free atomic reads. A configured rate alone does not prove playback: the application displays a current processing rate only when consecutive samples show frame progress on an enabled effect. Constructor defaults, disabled bypass and engine preallocation do not advance this counter. These queries do not change protocol 5 or its capability bits; older protocol-5 drivers remain usable and display an unknown rate. This is the Fusion host processing rate, not a claim about the physical DAC's final rate after any downstream conversion. The status queries are read-only and cannot select a sample rate.
 
 ViPER controls use their original 32-bit integer protocol. IDs 65570/65571 (dynamic-system frequency pairs) and 65572 (side gains) take two int32 values. Reverb IDs 65560–65564 use integer percentages 0–100; their meanings are room size, width, damping, wet, dry. Differential delay is hundredths of a millisecond. The application's `ViperParameters.kt` is the UI range and encoding specification.
 

@@ -11,7 +11,41 @@ class PeqModelTest {
             -88.123 + index * 24.567, 0.1 + index * 11.123456,
             if (index % 2 == 0) PeqQualityDisplay.BW else PeqQualityDisplay.Q)
     }, gainRange = 3.25, gainStep = 1.23, showQSlider = true, showFrequencySlider = true,
-        qStep = 45.678, frequencyStep = 987.654, pinResponse = false)
+        qStep = 45.678, frequencyStep = 987.654, pinResponse = false, qRange = 2.345)
+
+    @Test fun qRangeValidatesItsOwnLimitsWithoutClippingSavedBandsOrForbiddingRepeatedFrequencies() {
+        val bands = listOf(PeqBand("first", q = 100.0), PeqBand("second", q = 23.456789))
+        val state = PeqState(bands, qRange = 0.1)
+        assertSame(state, PeqModel.validate(state))
+        assertEquals(bands, state.bands)
+        assertEquals(100.0, PeqState(emptyList()).qRange, 0.0)
+        assertSame(state, PeqModel.resize(state, 2, PeqResizeEdge.BACK, false))
+        listOf(0.0, 0.099, 100.001, Double.NaN, Double.POSITIVE_INFINITY).forEach { invalid ->
+            assertThrows(IllegalArgumentException::class.java) { PeqModel.validate(state.copy(qRange = invalid)) }
+        }
+        PeqModel.validate(state.copy(qRange = 100.0))
+        assertThrows(IllegalArgumentException::class.java) {
+            PeqModel.validate(state.copy(bands = listOf(bands.first().copy(q = 100.001))))
+        }
+    }
+
+    @Test fun filterTypeResetOnlyChangesTypesAndAllResetAlsoHonorsTheConfiguredQRange() {
+        val original = customBank().copy(qRange = 0.25)
+        val typesReset = PeqModel.reset(original, PeqResetTarget.FILTER_TYPE)
+        assertEquals(original.copy(bands = original.bands.map { it.copy(type = PeqFilterType.PEAK) }), typesReset)
+        val qReset = PeqModel.reset(original, PeqResetTarget.Q)
+        assertEquals(original.copy(bands = original.bands.map { it.copy(q = 0.25) }), qReset)
+        val allReset = PeqModel.reset(original, PeqResetTarget.ALL)
+        val frequencies = PeqModel.defaultState(original.bands.size).bands.map { it.frequency }
+        assertEquals(original.copy(bands = original.bands.mapIndexed { index, band ->
+            band.copy(type = PeqFilterType.PEAK, frequency = frequencies[index], gain = 0.0, q = 0.25)
+        }), allReset)
+        assertEquals(original.bands.map { it.id }, allReset.bands.map { it.id })
+        assertEquals(original.bands.map { it.enabled }, allReset.bands.map { it.enabled })
+        assertEquals(original.bands.map { it.qualityDisplay }, allReset.bands.map { it.qualityDisplay })
+        assertEquals(PeqModel.DEFAULT_Q, PeqModel.reset(original.copy(qRange = 100.0),
+            PeqResetTarget.Q).bands.first().q, 0.0)
+    }
 
     @Test fun addingAtEitherEndKeepsExistingBandObjectsAndEveryEditorSetting() {
         val original = customBank()

@@ -67,9 +67,8 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                     META_APP_VERSION to BuildConfig.VERSION_NAME,
                     META_APP_FLAVOR to BuildConfig.FLAVOR,
                     META_LIVEPROG_INCLUDED to false.toString(),
-                    // Earlier apps cannot preserve the response pin preference;
-                    // alpha7 also rejects continuous gain ranges and adjustment steps.
-                    META_MIN_VERSION_CODE to "1009"
+                    // Earlier apps do not preserve the configured Q/BW range limit.
+                    META_MIN_VERSION_CODE to "1010"
                 )
 
                 currentPath(ctx)

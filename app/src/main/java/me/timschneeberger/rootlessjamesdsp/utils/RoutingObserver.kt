@@ -150,8 +150,14 @@ class RoutingObserver(val context: Context) : MediaRouter.Callback(), KoinCompon
                 0
             )
         }
+        // A device may already be connected before the first observer is registered.
+        if (currentDevice == null) {
+            currentDevice = runCatching { router.selectedRoute.findOutputDevice() }
+                .onFailure { Timber.w(it, "Unable to identify the selected output route") }
+                .getOrNull()
+        }
         callbacks.add(callback)
-        currentDevice?.let(callback::onRoutingDeviceChanged)
+        callback.onRoutingDeviceChanged(currentDevice)
     }
 
     fun unregisterOnRoutingChangeListener(callback: RoutingChangedCallback) {

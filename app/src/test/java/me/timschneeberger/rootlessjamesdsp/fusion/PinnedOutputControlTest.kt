@@ -246,6 +246,44 @@ class PinnedOutputControlTest {
         assertTrue(broadcasts > 0)
     }
 
+    @Test fun runtimeHeaderUsesHostRateAndClearsItForIdleOrUnsupportedDriver() {
+        val activity = launch()
+        val fragment = activity.supportFragmentManager.findFragmentById(R.id.card_output_control) as OutputControlFragment
+        val rate = activity.findViewById<TextView>(R.id.output_sample_rate)
+        val driver = activity.findViewById<TextView>(R.id.output_driver_status)
+        val tracker = OutputRuntimeStatus.Tracker()
+        val sample = OutputRuntimeStatus.Session("real-session", true, 96000, 100)
+        fragment.renderRuntimeStatus(tracker.update(listOf(sample)))
+        assertEquals(app.getString(R.string.output_rate_unknown), rate.text.toString())
+        fragment.renderRuntimeStatus(tracker.update(listOf(sample.copy(processedFrames = 612))))
+        assertEquals(app.getString(R.string.output_rate_value, "96"), rate.text.toString())
+        assertEquals(app.getString(R.string.output_driver_connected), driver.text.toString())
+        fragment.renderRuntimeStatus(tracker.update(listOf(sample.copy(processedFrames = 612))))
+        assertEquals(app.getString(R.string.output_rate_idle), rate.text.toString())
+        fragment.renderRuntimeStatus(tracker.update(listOf(sample.copy(hostRate = null, processedFrames = null))))
+        assertEquals(app.getString(R.string.output_rate_unknown), rate.text.toString())
+        fragment.renderRuntimeStatus(tracker.update(emptyList()))
+        assertEquals(app.getString(R.string.output_driver_disconnected), driver.text.toString())
+        assertEquals(app.getString(R.string.output_rate_idle), rate.text.toString())
+    }
+
+    @Test fun currentOutputRemainsVisibleWhenDeviceProfileControlsAreHidden() {
+        val activity = launch()
+        val settings = app.getSharedPreferences(Constants.PREF_APP, Context.MODE_PRIVATE)
+        settings.edit().putBoolean(app.getString(R.string.key_device_profiles_enable), false).commit()
+        routingObserver.currentDevice = routingObserver.Device("FiiO KA17", "usb", RoutingObserver.DeviceGroup.USB)
+        layout(activity)
+        val route = activity.findViewById<TextView>(R.id.output_route)
+        assertTrue(route.isShown)
+        assertTrue(route.text.toString().contains("FiiO KA17"))
+        routingObserver.currentDevice = null
+        idle()
+        assertEquals(app.getString(R.string.output_route_value, app.getString(R.string.output_route_unknown)), route.text.toString())
+        settings.edit().putBoolean(app.getString(R.string.key_device_profiles_enable), true).commit()
+        idle()
+        assertEquals(View.GONE, route.visibility)
+    }
+
     class OutputHostActivity : FragmentActivity() {
         override fun onCreate(savedInstanceState: Bundle?) {
             setTheme(R.style.Theme_RootlessJamesDSP)

@@ -48,7 +48,7 @@ class DeviceProfilesCardFragment : PreferenceFragmentCompat(), RoutingObserver.R
     }
 
     override fun onRoutingDeviceChanged(device: RoutingObserver.Device?) {
-        profileActive?.summary = device?.name ?: getString(R.string.unknown_error)
+        profileActive?.summary = device?.name ?: getString(R.string.output_route_unknown)
         profileActive?.icon = context?.let { ctx ->
             ContextCompat.getDrawable(ctx, when(device?.group) {
                 RoutingObserver.DeviceGroup.ANALOG -> R.drawable.ic_twotone_headphones_24dp
