@@ -111,8 +111,20 @@ class MainWindowInsetsTest {
         activity = controller!!.get()
         dispatch(activity, insets(72, 60))
         assertEquals(activity.baseTop + 72, activity.findViewById<View>(R.id.main_content).paddingTop)
-        dispatch(activity, WindowInsetsCompat.Builder().build())
-        assertEquals(activity.baseTop, activity.findViewById<View>(R.id.main_content).paddingTop)
+        // An untouched Builder is already CONSUMED on API 35: ViewGroup will not
+        // dispatch it to children. Hidden system bars still send an unconsumed zero update.
+        val hiddenBars = WindowInsetsCompat.Builder()
+            .setInsets(WindowInsetsCompat.Type.systemBars(), Insets.NONE)
+            .setVisible(WindowInsetsCompat.Type.systemBars(), false)
+            .build()
+        assertFalse("The zero update must reach the real content listener", hiddenBars.isConsumed)
+        dispatch(activity, hiddenBars)
+        val content = activity.findViewById<View>(R.id.main_content)
+        assertEquals(activity.baseTop, content.paddingTop)
+        assertEquals(0, content.paddingBottom)
+        dispatch(activity, insets(72, 60))
+        assertEquals(activity.baseTop + 72, content.paddingTop)
+        assertEquals(60, content.paddingBottom)
     }
 
     class InsetsHostActivity : Activity() {
