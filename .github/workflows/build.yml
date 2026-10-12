@@ -108,4 +108,4 @@ jobs:
           cd release
           sha256sum *.apk *.zip > SHA256SUMS.txt
           TAG="v0.1.0-alpha11-build.${{ github.run_number }}"
-          gh release create "$TAG" --target "$GITHUB_SHA" --draft --prerelease --title "DSP音效 0.1.0 alpha 10 · 均衡器交互与输出状态 · build ${{ github.run_number }}" --notes-file ../docs/RELEASE-NOTES.zh-CN.md ./*
+          gh release create "$TAG" --target "$GITHUB_SHA" --draft --prerelease --title "DSP音效 0.1.0 alpha 11 · 批量参数与紧凑界面 · build ${{ github.run_number }}" --notes-file ../docs/RELEASE-NOTES.zh-CN.md ./*
