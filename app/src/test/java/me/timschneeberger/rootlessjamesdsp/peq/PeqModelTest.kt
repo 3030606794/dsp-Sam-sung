@@ -13,6 +13,56 @@ class PeqModelTest {
     }, gainRange = 3.25, gainStep = 1.23, showQSlider = true, showFrequencySlider = true,
         qStep = 45.678, frequencyStep = 987.654, pinResponse = false)
 
+    @Test fun assignedFrequencyConflictsUseDriverPrecisionAndAllowAnyNumberOfUnsetBands() {
+        val first = PeqBand("first", enabled = false, frequency = 1000.0001)
+        val state = PeqState(listOf(first, PeqBand("second", frequency = 1000.001),
+            PeqModel.blankBand(), PeqModel.blankBand()))
+        assertSame(state, PeqModel.validate(state))
+        assertSame(first, PeqModel.frequencyConflict(state, 1000.0004))
+        assertNull(PeqModel.frequencyConflict(state, 1000.0004, excludingBandId = first.id))
+        assertEquals("second", PeqModel.frequencyConflict(state, 1000.0005)?.id)
+        assertNull(PeqModel.frequencyConflict(state, 1000.0015))
+        assertNull(PeqModel.frequencyConflict(state, 0.0))
+        assertNull(PeqModel.frequencyConflict(state, -0.0))
+        assertEquals(1000001L, PeqModel.frequencyKey(1000.0005))
+        assertThrows(IllegalArgumentException::class.java) {
+            PeqModel.validate(state.copy(bands = state.bands + PeqBand("duplicate", frequency = 1000.0004)))
+        }
+        assertThrows(IllegalArgumentException::class.java) { PeqModel.frequencyConflict(state, Double.NaN) }
+    }
+
+    @Test fun duplicateMigrationPreservesFirstFrequencyAndAllOtherBandAndEditorFields() {
+        val first = customBank().bands.first().copy(frequency = 777.1231, enabled = false)
+        val second = customBank().bands[1].copy(frequency = 777.1234)
+        val third = customBank().bands[2].copy(frequency = 777.1232)
+        val zero = PeqModel.blankBand()
+        val distinct = customBank().bands[3].copy(frequency = 777.1236)
+        val state = customBank().copy(bands = listOf(first, second, zero, third, distinct, PeqModel.blankBand()))
+        val normalized = PeqModel.normalizeDuplicateFrequencies(state)
+        assertEquals(state.copy(bands = listOf(first, second.copy(frequency = 0.0), zero,
+            third.copy(frequency = 0.0), distinct, state.bands.last())), normalized)
+        assertSame(first, normalized.bands.first())
+        assertSame(zero, normalized.bands[2])
+        assertSame(distinct, normalized.bands[4])
+        assertSame(normalized, PeqModel.normalizeDuplicateFrequencies(normalized))
+        assertEquals(777.1234, state.bands[1].frequency, 0.0)
+        assertThrows(IllegalArgumentException::class.java) {
+            PeqModel.normalizeDuplicateFrequencies(state.copy(bands = state.bands + second.copy(q = Double.NaN)))
+        }
+    }
+
+    @Test fun everyDistributionAndResetCountProducesUniqueWireFrequencies() {
+        for (count in 0..PeqModel.MAX_BANDS) {
+            val blank = PeqState(List(count) { PeqModel.blankBand() })
+            PeqModel.validate(blank)
+            val distributed = PeqModel.redistribute(blank)
+            assertEquals(count, distributed.bands.map { PeqModel.frequencyKey(it.frequency) }.toSet().size)
+            PeqModel.validate(distributed)
+            assertEquals(distributed, PeqModel.reset(blank, PeqResetTarget.FREQUENCY))
+            PeqModel.validate(PeqModel.defaultState(count))
+        }
+    }
+
     @Test fun addingAtEitherEndKeepsExistingBandObjectsAndEveryEditorSetting() {
         val original = customBank()
         PeqResizeEdge.entries.forEach { edge ->
@@ -161,11 +211,12 @@ class PeqModelTest {
 
     @Test fun explicitRedistributionOnlyChangesFrequencyAndSameCountDoesNothing() {
         val state = PeqState(List(170) { index -> PeqBand("custom-$index",
-            PeqFilterType.entries[index % 7], index % 2 == 0, 1234.567,
+            PeqFilterType.entries[index % 7], index % 2 == 0, 1234.567 + index,
             99.125, 100.0, PeqQualityDisplay.BW) }, 100.0, 1.5, true, true)
         assertSame(state, PeqModel.resize(state, 170))
         val next = PeqModel.redistribute(state)
-        assertEquals(state, next.copy(bands = next.bands.map { it.copy(frequency = 1234.567) }))
+        assertEquals(state, next.copy(bands = next.bands.mapIndexed { index, band ->
+            band.copy(frequency = 1234.567 + index) }))
         assertEquals(20.0, next.bands.first().frequency, 0.0)
         assertEquals(20000.0, next.bands.last().frequency, 0.0)
         PeqModel.validate(next.copy(gainStep = 2.0))

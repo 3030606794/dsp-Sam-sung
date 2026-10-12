@@ -70,7 +70,7 @@ class PeqRepository(private val preferences: SharedPreferences) {
             }.toString()
         }
 
-        fun decode(json: String): PeqState {
+        fun decode(json: String, normalizeDuplicates: Boolean = true): PeqState {
             require(json.length <= MAX_JSON_LENGTH) { "PEQ JSON is too large" }
             val root = Json.parseToJsonElement(json) as? JsonObject
                 ?: throw IllegalArgumentException("PEQ JSON must be an object")
@@ -79,7 +79,7 @@ class PeqRepository(private val preferences: SharedPreferences) {
             val bands = root["bands"] as? JsonArray
                 ?: throw IllegalArgumentException("bands must be an array")
             require(bands.size <= PeqModel.MAX_BANDS) { "At most 170 bands are supported" }
-            return PeqModel.validate(PeqState(
+            val state = PeqState(
                 bands = bands.map { element ->
                     val band = element as? JsonObject
                         ?: throw IllegalArgumentException("Each band must be an object")
@@ -108,7 +108,8 @@ class PeqRepository(private val preferences: SharedPreferences) {
                 showQSlider = root.optionalBoolean("showQSlider", false),
                 showFrequencySlider = root.optionalBoolean("showFrequencySlider", false),
                 pinResponse = root.optionalBoolean("pinResponse", true)
-            ))
+            )
+            return if (normalizeDuplicates) PeqModel.normalizeDuplicateFrequencies(state) else PeqModel.validate(state)
         }
 
         private fun JsonObject.text(key: String): String {

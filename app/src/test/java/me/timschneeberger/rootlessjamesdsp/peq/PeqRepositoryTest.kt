@@ -103,8 +103,8 @@ class PeqRepositoryTest {
     }
 
     @Test fun oldInactiveFilterGainsMigrateToZeroWithoutRewritingStoredProfileUntilSaved() {
-        val original = PeqState(PeqFilterType.entries.map { type ->
-            PeqBand(type.name, type = type, frequency = 1234.5, gain = 37.125, q = 3.125,
+        val original = PeqState(PeqFilterType.entries.mapIndexed { index, type ->
+            PeqBand(type.name, type = type, frequency = 1234.5 + index, gain = 37.125, q = 3.125,
                 qualityDisplay = PeqQualityDisplay.BW)
         }, gainRange = 50.0, pinResponse = false)
         val old = repository.exportJson(original).replace("\"schema\":2", "\"schema\":1")
@@ -123,6 +123,43 @@ class PeqRepositoryTest {
         assertTrue(repository.save(original))
         assertEquals(original, repository.load())
         assertEquals(original, repository.importJson(repository.exportJson(repository.load())))
+    }
+
+    @Test fun duplicateAssignedFrequenciesMigrateForEitherSchemaWithoutRewritingPreferences() {
+        val valid = PeqState(listOf(
+            PeqBand("first", enabled = false, frequency = 777.1231, gain = 12.3, q = 7.89),
+            PeqBand("second", type = PeqFilterType.HIGH_SHELF, frequency = 888.0, gain = -8.75, q = 5.67,
+                qualityDisplay = PeqQualityDisplay.BW),
+            PeqBand("third", type = PeqFilterType.NOTCH, frequency = 999.0, gain = 3.25, q = 12.34),
+            PeqModel.blankBand(), PeqModel.blankBand()),
+            gainRange = 75.0, gainStep = 1.25, qStep = 33.0, frequencyStep = 876.0,
+            showFrequencySlider = true, showQSlider = true, pinResponse = false)
+        val duplicate = repository.exportJson(valid).replace("\"frequency\":888.0", "\"frequency\":777.1234")
+            .replace("\"frequency\":999.0", "\"frequency\":777.1232")
+        for (schema in listOf(1, 2)) {
+            val json = duplicate.replace("\"schema\":2", "\"schema\":$schema")
+            preferences.edit().putString(PeqRepository.KEY_STATE, json).putBoolean("geq_enable", false).commit()
+            val before = preferences.all.toMap()
+            val loaded = repository.loadResult()
+            assertFalse(loaded.corrupt)
+            val expected = valid.copy(bands = valid.bands.mapIndexed { index, band ->
+                band.copy(frequency = if (index == 1 || index == 2) 0.0 else band.frequency,
+                    gain = if (schema == 1 && !band.type.isUnityAtZeroGain) 0.0 else band.gain)
+            })
+            assertEquals(expected, loaded.state)
+            assertEquals(expected, repository.importJson(json))
+            assertEquals(before, preferences.all)
+            assertThrows(IllegalArgumentException::class.java) { PeqRepository.decode(json, normalizeDuplicates = false) }
+            assertTrue(repository.save(loaded.state))
+            assertEquals(expected, repository.load())
+        }
+        val working = repository.load()
+        val before = preferences.all.toMap()
+        assertThrows(IllegalArgumentException::class.java) {
+            repository.save(valid.copy(bands = valid.bands.map { if (it.id == "second") it.copy(frequency = 777.1234) else it }))
+        }
+        assertEquals(before, preferences.all)
+        assertEquals(working, repository.load())
     }
 
     @Test fun newDisplayOptionsAndExtendedLimitsRoundTripWhileWrongTypesAreRejected() {

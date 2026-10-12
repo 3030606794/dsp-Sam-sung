@@ -106,7 +106,7 @@ class PeqMarkerTest {
 
     @Test fun everyFilterShowsItsActualGainAndDeletingSelectionFallsBack() {
         val curve = launch()
-        val first = PeqBand(id = "first")
+        val first = PeqBand(id = "first", frequency = 500.0)
         for (type in PeqFilterType.entries) {
             val band = PeqBand(id = "selected", type = type, gain = 20.0)
             curve.setSelectedBand(band.id)

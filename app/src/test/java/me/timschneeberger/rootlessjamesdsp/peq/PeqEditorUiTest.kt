@@ -135,6 +135,33 @@ class PeqEditorUiTest {
         assertEquals(20.0, repository.load().bands.last().frequency, 0.0)
     }
 
+    @Test fun preciseFrequencyRejectsDuplicatesAndCopyStartsWithAnUnsetFrequency() {
+        val original = PeqState(listOf(PeqBand(frequency = 1000.0, gain = 3.25, q = 2.5),
+            PeqBand(frequency = 2000.0), PeqModel.blankBand(), PeqModel.blankBand()))
+        repository.save(original)
+        launch()
+        val editor = edit(1)
+        val frequency = editor.findViewById<EditText>(R.id.peq_frequency_input)!!
+        listOf("1000", "1000.0004").forEach {
+            frequency.setText(it)
+            editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            assertTrue(editor.isShowing)
+            assertNotNull(editor.findViewById<TextInputLayout>(R.id.peq_frequency_box)!!.error)
+            assertEquals(original, repository.load())
+        }
+        frequency.setText("1000.001")
+        editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        assertEquals(1000.001, repository.load().bands[1].frequency, 0.0)
+        val beforeCopy = repository.load()
+        edit(0).findViewById<MaterialButton>(R.id.peq_band_copy)!!.performClick()
+        layout()
+        val copied = repository.load().bands[1]
+        assertNotEquals(original.bands[0].id, copied.id)
+        assertEquals(original.bands[0].copy(id = copied.id, frequency = 0.0), copied)
+        assertEquals(beforeCopy.bands, repository.load().bands.filterNot { it.id == copied.id })
+    }
+
     @Test fun curveStaysPinnedAnd170BandsAreRecycledWithValuesSurvivingRotation() {
         val base = PeqModel.defaultState(170)
         repository.save(base.copy(bands = base.bands.mapIndexed { i, band ->
@@ -159,7 +186,7 @@ class PeqEditorUiTest {
     }
 
     @Test fun narrowingRangeAndChangingStepPreservesOutOfRangeAndOffStepStoredGains() {
-        val original = PeqState(listOf(PeqBand(gain = 20.0), PeqBand(gain = 0.1)), gainRange = 24.0)
+        val original = PeqState(listOf(PeqBand(gain = 20.0), PeqBand(frequency = 2000.0, gain = 0.1)), gainRange = 24.0)
         repository.save(original)
         launch()
         val settings = settings()

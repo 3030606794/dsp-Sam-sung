@@ -26,8 +26,11 @@ class PeqResponseTest {
             val wide = state(PeqFilterType.PEAK, 12.0, 0.5)
             assertTrue(PeqResponse.responseDb(wide, 1500.0, rate) >
                 PeqResponse.responseDb(peak, 1500.0, rate))
-            val inverse = PeqState(peak.bands + peak.bands.single().copy(id = "inverse", gain = -12.0))
-            assertTrue(PeqResponse.curve(inverse, sampleRate = rate).all { abs(it.db) < 1e-7 })
+            // Compare reciprocal responses independently: an editor bank cannot repeat a frequency.
+            val inverse = PeqState(listOf(peak.bands.single().copy(id = "inverse", gain = -12.0)))
+            assertTrue(PeqResponse.curve(peak, sampleRate = rate).all {
+                abs(it.db + PeqResponse.responseDb(inverse, it.frequency, rate)) < 1e-7
+            })
         }
     }
 
@@ -79,7 +82,7 @@ class PeqResponseTest {
 
     @Test fun passFilterGainIsNotFlooredBeforeOtherBandsAreSummed() {
         val cut = PeqBand(id = "cut", type = PeqFilterType.LOW_PASS, frequency = 20.0, gain = -100.0)
-        val boost = PeqBand(id = "boost", type = PeqFilterType.HIGH_PASS, frequency = 20.0, gain = 100.0)
+        val boost = PeqBand(id = "boost", type = PeqFilterType.HIGH_PASS, frequency = 20.001, gain = 100.0)
         val neutralCut = cut.copy(gain = 0.0)
         val neutralBoost = boost.copy(gain = 0.0)
         val combined = PeqResponse.responseDb(PeqState(listOf(cut, boost)), 23000.0)
@@ -144,7 +147,8 @@ class PeqResponseTest {
         for (type in PeqFilterType.entries) {
             for (rate in listOf(44100.0, 48000.0, 96000.0)) {
                 val state = PeqState(List(170) { index -> PeqBand("band-$index", type, true,
-                    if (index % 2 == 0) 20.0 else 20000.0,
+                    // Cluster unique frequencies at both limits, retaining extreme overlapping shapes.
+                    if (index % 2 == 0) 20.0 + index * 0.001 else 20000.0 - (index - 1) * 0.001,
                     if (index % 2 == 0) 100.0 else -100.0,
                     if (index % 2 == 0) 0.1 else 100.0) })
                 assertTrue(PeqResponse.curve(state, sampleRate = rate).all { it.db.isFinite() })

@@ -21,7 +21,7 @@ object PeqProtocol {
                 // The driver only accepts real filter frequencies. Keep unset bands
                 // in the saved bank but send a disabled legal placeholder on the wire.
                 this[offset + 1] = if (band.enabled && band.frequency > 0.0) 1 else 0
-                this[offset + 2] = milli(band.frequency.coerceAtLeast(PeqModel.MIN_FREQUENCY))
+                this[offset + 2] = PeqModel.frequencyKey(band.frequency.coerceAtLeast(PeqModel.MIN_FREQUENCY)).toInt()
                 this[offset + 3] = milli(band.gain)
                 this[offset + 4] = milli(band.q)
             }
@@ -29,7 +29,7 @@ object PeqProtocol {
     }
 
     internal fun quantized(band: PeqBand): PeqBand = band.copy(
-        frequency = milli(band.frequency) / 1000.0,
+        frequency = PeqModel.frequencyKey(band.frequency) / 1000.0,
         gain = milli(band.gain) / 1000.0,
         q = milli(band.q) / 1000.0
     )

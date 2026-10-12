@@ -5,10 +5,18 @@
     android:layout_marginHorizontal="1dp" android:layout_marginBottom="10dp">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical" android:paddingHorizontal="12dp" android:paddingVertical="6dp">
-        <com.google.android.material.button.MaterialButton android:id="@+id/peq_band_locate"
-            style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content"
-            android:layout_height="48dp" android:layout_gravity="center_horizontal"
-            android:text="@string/peq_locate_band" />
+        <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+            <com.google.android.material.button.MaterialButton android:id="@+id/peq_band_locate"
+                style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content"
+                android:layout_height="48dp" android:layout_gravity="center_horizontal"
+                android:text="@string/peq_locate_band" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/peq_band_warning"
+                style="@style/Widget.Material3.Button.TextButton" android:layout_width="48dp"
+                android:layout_height="48dp" android:layout_gravity="end" android:minWidth="0dp"
+                android:padding="0dp" android:text="!" android:textSize="22sp"
+                android:textColor="?attr/colorError" android:visibility="gone"
+                android:contentDescription="@string/peq_frequency_unset_warning" />
+        </FrameLayout>
         <LinearLayout android:id="@+id/peq_band_header" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:gravity="center_vertical"
             android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true">
