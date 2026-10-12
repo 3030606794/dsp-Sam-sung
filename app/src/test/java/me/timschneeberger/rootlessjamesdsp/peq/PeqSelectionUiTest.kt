@@ -32,6 +32,7 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowChoreographer
 import org.robolectric.shadows.ShadowToast
 import java.time.Duration
 
@@ -365,10 +366,37 @@ class PeqSelectionUiTest {
     }
 
     @Test fun realHandleLongPressAndTouchMovesReorderDownAndUpWithLiveRanksAndSaveOnRelease() {
+        // PAUSED Looper alone still auto-advances Choreographer's clock. ItemTouchHelper's
+        // legitimate edge-scroll loop then makes idle() chase frames forever before ACTION_UP.
+        val previousPaused = ShadowChoreographer.isPaused()
+        val previousFrameDelay = ShadowChoreographer.getFrameDelay()
+        ShadowChoreographer.setPaused(true)
+        ShadowChoreographer.setFrameDelay(Duration.ofMillis(16))
+        try {
+            assertRealHandleDragWithBoundedFrames()
+        } finally {
+            // End the view's touch/animation lifetime before restoring automatic frame delivery.
+            controller?.pause()?.stop()?.destroy()
+            controller = null
+            ShadowChoreographer.setFrameDelay(previousFrameDelay)
+            ShadowChoreographer.setPaused(previousPaused)
+        }
+    }
+
+    private fun assertRealHandleDragWithBoundedFrames() {
         val original = initial()
         launch(original)
         controller!!.get().window.decorView.dispatchWindowFocusChanged(true)
         val list = view<RecyclerView>(R.id.peq_band_list)
+        var elapsedFrameTime = 0L
+        fun advanceFrames(count: Int) {
+            require(count in 0..200)
+            repeat(count) {
+                elapsedFrameTime += 16
+                check(elapsedFrameTime <= 10000) { "Drag test exceeded its 10 second virtual-time budget" }
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(16))
+            }
+        }
 
         fun drag(from: Int, to: Int, before: PeqState, expected: PeqState) {
             layout()
@@ -392,31 +420,39 @@ class PeqSelectionUiTest {
                 val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
                 try { assertTrue(list.dispatchTouchEvent(event)) } finally { event.recycle() }
             }
-            dispatch(MotionEvent.ACTION_DOWN, startY)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(
-                ViewConfiguration.getLongPressTimeout().toLong() + ViewConfiguration.getTapTimeout() + 1))
-            repeat(6) { step ->
-                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(16))
-                dispatch(MotionEvent.ACTION_MOVE, startY + (targetY - startY) * (step + 1) / 6f)
-                layout()
-            }
+            var fingerDown = true
+            var lastY = startY
+            try {
+                dispatch(MotionEvent.ACTION_DOWN, startY)
+                val longPressWait = ViewConfiguration.getLongPressTimeout() + ViewConfiguration.getTapTimeout() + 1
+                advanceFrames((longPressWait + 15) / 16)
+                repeat(6) { step ->
+                    advanceFrames(1)
+                    lastY = startY + (targetY - startY) * (step + 1) / 6f
+                    dispatch(MotionEvent.ACTION_MOVE, lastY)
+                    layout()
+                }
 
-            // These assertions occur while the finger is still down, before persistence/clearView.
-            assertEquals(expected, fragment().editorState)
-            assertEquals(before, repository.load())
-            assertSame(moving, list.findViewHolderForAdapterPosition(to))
-            expected.bands.forEachIndexed { index, band ->
-                val title = application.getString(R.string.peq_band_type_title,
-                    index + 1, PeqBandAdapter.typeLabel(application, band.type))
-                val expectedTitle = if (band.enabled) title else application.getString(R.string.peq_band_disabled, title)
-                val card = requireNotNull(list.findViewHolderForAdapterPosition(index)).itemView
-                assertEquals(expectedTitle, card.findViewById<TextView>(R.id.peq_band_title).text.toString())
+                // These assertions occur while the finger is still down, before persistence/clearView.
+                assertEquals(expected, fragment().editorState)
+                assertEquals(before, repository.load())
+                assertSame(moving, list.findViewHolderForAdapterPosition(to))
+                expected.bands.forEachIndexed { index, band ->
+                    val title = application.getString(R.string.peq_band_type_title,
+                        index + 1, PeqBandAdapter.typeLabel(application, band.type))
+                    val expectedTitle = if (band.enabled) title else application.getString(R.string.peq_band_disabled, title)
+                    val card = requireNotNull(list.findViewHolderForAdapterPosition(index)).itemView
+                    assertEquals(expectedTitle, card.findViewById<TextView>(R.id.peq_band_title).text.toString())
+                }
+                dispatch(MotionEvent.ACTION_UP, targetY)
+                fingerDown = false
+                // Run at most 64 display frames (1.024 s), including clearView and the real save.
+                advanceFrames(64)
+                layout()
+                assertSaved(expected)
+            } finally {
+                if (fingerDown) dispatch(MotionEvent.ACTION_CANCEL, lastY)
             }
-            dispatch(MotionEvent.ACTION_UP, targetY)
-            // Allow the real ItemTouchHelper recovery animation to call clearView and flush the save.
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1000))
-            layout()
-            assertSaved(expected)
         }
 
         val swapped = original.copy(bands = listOf(original.bands[1], original.bands[0], original.bands[2]))
