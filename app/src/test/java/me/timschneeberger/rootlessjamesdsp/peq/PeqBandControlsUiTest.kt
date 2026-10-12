@@ -6,7 +6,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
 import android.os.Looper
+import android.os.SystemClock
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.EditText
@@ -16,6 +18,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
+import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import org.junit.After
@@ -75,6 +78,21 @@ class PeqBandControlsUiTest {
         assertTrue(slider.requestFocus())
         assertTrue(slider.onKeyDown(KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT)))
+    }
+    private fun dragTo(slider: Slider, position: Float) {
+        assertTrue("A real laid-out slider track is required", slider.trackWidth > 0)
+        val start = (slider.value - slider.valueFrom) / (slider.valueTo - slider.valueFrom)
+        val startX = slider.trackSidePadding + start * slider.trackWidth
+        val targetX = slider.trackSidePadding + position * slider.trackWidth
+        val y = slider.height / 2f
+        val downTime = SystemClock.uptimeMillis()
+        fun dispatch(action: Int, time: Long, x: Float) {
+            val event = MotionEvent.obtain(downTime, time, action, x, y, 0)
+            try { slider.dispatchTouchEvent(event) } finally { event.recycle() }
+        }
+        dispatch(MotionEvent.ACTION_DOWN, downTime, startX)
+        dispatch(MotionEvent.ACTION_MOVE, downTime + 20, targetX)
+        dispatch(MotionEvent.ACTION_UP, downTime + 40, targetX)
     }
     private fun curve() = fragment().requireView().findViewById<PeqResponseView>(R.id.peq_curve)
     private fun drawMarker(): PeqResponseView.BandMarker {
@@ -139,8 +157,10 @@ class PeqBandControlsUiTest {
             showQSlider = true, showFrequencySlider = true))
         val current = row()
         val slider = current.findViewById<Slider>(R.id.peq_q_slider)
-        pressRight(slider)
+        val originalBounds = PeqBandAdapter.qualityBounds(original)
+        dragTo(slider, PeqBandAdapter.logarithmicPosition(1.25, originalBounds.start, originalBounds.endInclusive))
         val wider = fragment().editorState.bands.single()
+        assertEquals(1.25, PeqBandAdapter.displayedQuality(wider), 1e-12)
         assertTrue(PeqBandAdapter.displayedQuality(wider) > PeqBandAdapter.displayedQuality(original))
         assertTrue(wider.q < original.q)
         assertTrue(PeqResponse.responseDb(PeqState(listOf(wider)), 1500.0) >
@@ -156,7 +176,8 @@ class PeqBandControlsUiTest {
         assertEquals(PeqBandAdapter.logarithmicPosition(2000.0, 20.0, 20000.0),
             current.findViewById<Slider>(R.id.peq_frequency_slider).value, 0f)
         // A second edit uses bounds from 2000 Hz, not the captured bounds from bind time.
-        pressRight(slider)
+        dragTo(slider, PeqBandAdapter.logarithmicPosition(2.0, bounds.start, bounds.endInclusive))
+        assertEquals(2.0, PeqBandAdapter.displayedQuality(fragment().editorState.bands.single()), 1e-12)
         assertTrue(PeqBandAdapter.displayedQuality(fragment().editorState.bands.single()) > width)
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(60))
         assertEquals(fragment().editorState, repository.load())
@@ -168,14 +189,18 @@ class PeqBandControlsUiTest {
             showQSlider = true, showFrequencySlider = true))
         assertEquals(original, repository.load().bands.single())
         val current = row()
-        pressRight(current.findViewById(R.id.peq_q_slider))
+        dragTo(current.findViewById(R.id.peq_q_slider),
+            PeqBandAdapter.logarithmicPosition(4.3, PeqModel.MIN_Q, PeqModel.MAX_Q))
         val narrower = fragment().editorState.bands.single()
+        assertEquals(4.3, narrower.q, 1e-12)
         assertTrue(narrower.q > original.q)
         assertEquals(kotlin.math.round(narrower.q / 0.1), narrower.q / 0.1, 1e-10)
         assertTrue(PeqResponse.responseDb(PeqState(listOf(narrower)), 1300.0) <
             PeqResponse.responseDb(PeqState(listOf(original)), 1300.0))
-        pressRight(current.findViewById(R.id.peq_frequency_slider))
+        dragTo(current.findViewById(R.id.peq_frequency_slider),
+            PeqBandAdapter.logarithmicPosition(2120.0, PeqModel.MIN_FREQUENCY, PeqModel.MAX_FREQUENCY))
         val changed = fragment().editorState.bands.single()
+        assertEquals(2120.0, changed.frequency, 0.0)
         assertEquals(kotlin.math.round((changed.frequency - 20.0) / 100.0),
             (changed.frequency - 20.0) / 100.0, 1e-10)
         assertEquals(narrower.q, changed.q, 0.0)
@@ -280,6 +305,14 @@ class PeqBandControlsUiTest {
         assertEquals(original.bands[1].id, marker.bandId)
         assertEquals("1234.5 Hz", marker.frequencyText)
         assertEquals("+7.25 dB", marker.gainText)
+        assertEquals(original, fragment().editorState)
+        assertEquals(original, repository.load())
+        val type = PeqFilterType.LOW_PASS
+        val selector = dialog.findViewById<MaterialAutoCompleteTextView>(R.id.peq_band_type)!!
+        selector.setText(PeqBandAdapter.typeLabel(application, type), false)
+        selector.onItemClickListener!!.onItemClick(null, null, type.ordinal, type.ordinal.toLong())
+        assertEquals(type, requireNotNull(curve().requestedState).bands[1].type)
+        assertEquals(0.0, drawMarker().gain, 0.0)
         assertEquals(original, fragment().editorState)
         assertEquals(original, repository.load())
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
