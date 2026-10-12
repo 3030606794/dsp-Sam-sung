@@ -43,6 +43,46 @@
             app:layout_behavior="@string/appbar_scrolling_view_behavior"
             android:clipToPadding="false" android:paddingBottom="8dp" android:paddingHorizontal="11dp" />
     </androidx.coordinatorlayout.widget.CoordinatorLayout>
+    <LinearLayout android:id="@+id/peq_selection_controls" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone"
+        android:paddingHorizontal="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="36dp"
+            android:gravity="center_vertical">
+            <TextView android:id="@+id/peq_selection_count" android:layout_width="0dp"
+                android:layout_weight="1" android:layout_height="wrap_content" android:textSize="12sp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/peq_selection_all"
+                style="@style/Widget.Material3.Button.TextButton" android:layout_width="56dp"
+                android:layout_height="36dp" android:minHeight="0dp" android:minWidth="0dp"
+                android:padding="0dp" android:insetTop="0dp" android:insetBottom="0dp"
+                android:textSize="12sp" android:text="@string/peq_selection_all" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/peq_selection_none"
+                style="@style/Widget.Material3.Button.TextButton" android:layout_width="56dp"
+                android:layout_height="36dp" android:minHeight="0dp" android:minWidth="0dp"
+                android:padding="0dp" android:insetTop="0dp" android:insetBottom="0dp"
+                android:textSize="12sp" android:text="@string/peq_selection_none" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/peq_selection_done"
+                style="@style/Widget.Material3.Button.TextButton" android:layout_width="48dp"
+                android:layout_height="36dp" android:minHeight="0dp" android:minWidth="0dp"
+                android:padding="0dp" android:insetTop="0dp" android:insetBottom="0dp"
+                android:textSize="12sp" android:text="@string/peq_selection_done" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="44dp" android:gravity="center_vertical">
+            <com.google.android.material.button.MaterialButtonToggleGroup android:id="@+id/peq_selection_mode"
+                android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
+                app:singleSelection="true" app:selectionRequired="true" app:checkedButton="@id/peq_scope_selected">
+                <com.google.android.material.button.MaterialButton android:id="@+id/peq_scope_selected"
+                    style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="44dp" android:minWidth="0dp"
+                    android:paddingHorizontal="2dp" android:textSize="12sp" android:maxLines="1"
+                    android:text="@string/peq_scope_selected" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/peq_scope_excluded"
+                    style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="44dp" android:minWidth="0dp"
+                    android:paddingHorizontal="2dp" android:textSize="12sp" android:maxLines="1"
+                    android:text="@string/peq_scope_excluded" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </LinearLayout>
+    </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:gravity="center" android:paddingHorizontal="8dp">
         <com.google.android.material.button.MaterialButton android:id="@+id/peq_settings"
@@ -55,6 +95,10 @@
             style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp"
             android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp"
             android:paddingHorizontal="2dp" android:textSize="12sp" android:maxLines="1" android:text="@string/peq_reset" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/peq_edit_selection"
+            style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp"
+            android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp"
+            android:paddingHorizontal="2dp" android:textSize="12sp" android:maxLines="1" android:text="@string/peq_edit_selection" />
         <com.google.android.material.button.MaterialButton android:id="@+id/peq_presets"
             style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp"
             android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp"

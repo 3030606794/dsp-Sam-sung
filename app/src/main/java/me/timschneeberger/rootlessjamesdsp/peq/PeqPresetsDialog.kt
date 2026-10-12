@@ -23,7 +23,9 @@ class PeqPresetsDialog(
     private val applyState: (PeqState) -> Boolean,
     private val onImportRequested: () -> Unit,
     private val onExportRequested: (filename: String, json: String) -> Unit,
-    private val store: PeqPresetStore = PeqPresetStore(context)
+    private val store: PeqPresetStore = PeqPresetStore(context),
+    private val currentScopeLabel: () -> String? = { null },
+    private val canSaveCurrent: () -> Boolean = { true }
 ) {
     private val dialogs = mutableListOf<AlertDialog>()
     private var mainDialog: AlertDialog? = null
@@ -82,11 +84,14 @@ class PeqPresetsDialog(
             return
         }
         count.text = context.getString(R.string.peq_presets_count, presets.size, PeqPresetStore.MAX_PRESETS)
-        save.isEnabled = presets.size < PeqPresetStore.MAX_PRESETS
+        val hasSpace = presets.size < PeqPresetStore.MAX_PRESETS
+        save.isEnabled = hasSpace && canSaveCurrent()
+        save.text = currentScopeLabel()?.let { context.getString(R.string.peq_preset_scope_save, it) }
+            ?: context.getString(R.string.peq_presets_save)
         export.isEnabled = presets.isNotEmpty()
         status.text = when {
             presets.isEmpty() -> context.getString(R.string.peq_presets_empty)
-            !save.isEnabled -> context.getString(R.string.peq_presets_full, PeqPresetStore.MAX_PRESETS)
+            !hasSpace -> context.getString(R.string.peq_presets_full, PeqPresetStore.MAX_PRESETS)
             else -> ""
         }
         status.isVisible = status.text.isNotEmpty()
@@ -175,7 +180,8 @@ class PeqPresetsDialog(
 
     private fun confirmOverwrite(preset: PeqPreset) {
         confirm(R.string.peq_preset_overwrite,
-            context.getString(R.string.peq_preset_overwrite_confirm, preset.name)) {
+            context.getString(R.string.peq_preset_overwrite_confirm, preset.name) +
+                currentScopeLabel()?.let { "\n${context.getString(R.string.peq_preset_scope_save, it)}" }.orEmpty()) {
             store.overwrite(preset.id, readCurrent())
         }
     }

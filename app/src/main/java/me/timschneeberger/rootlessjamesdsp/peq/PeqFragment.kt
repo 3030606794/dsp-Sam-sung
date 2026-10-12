@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,6 +19,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.core.view.MenuHost
@@ -30,6 +32,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.color.MaterialColors
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.PeqBandDialogBinding
 import me.timschneeberger.rootlessjamesdsp.databinding.PeqAddCountDialogBinding
@@ -59,6 +62,11 @@ class PeqFragment : Fragment() {
         private set
     private var lastSavedState = editorState
     private var selectedBandId: String? = null
+    private var editingSelection = false
+    private var selectedIds: Set<String> = emptySet()
+    private var selectionScope = PeqSelectionScope.SELECTED
+    private var selectionBackCallback: OnBackPressedCallback? = null
+    private val actionTextColors = mutableMapOf<Int, ColorStateList>()
     private var appliedPinResponse: Boolean? = null
     private var trackingSlider = false
     private val handler = Handler(Looper.getMainLooper())
@@ -67,6 +75,7 @@ class PeqFragment : Fragment() {
     private val pendingSave = Runnable { flushPendingSave() }
     private val dialogs = mutableListOf<AlertDialog>()
     private var presetDialogs: PeqPresetsDialog? = null
+    private val addButtonGestures = mutableListOf<PeqAddButtonGestures>()
     private var pendingExportFileName: String? = null
     private val importPresets = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -130,6 +139,10 @@ class PeqFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         selectedBandId = savedInstanceState?.getString("peq_selected_band")
+        editingSelection = savedInstanceState?.getBoolean("peq_editing_selection") ?: false
+        selectedIds = savedInstanceState?.getStringArrayList("peq_selection_ids")?.toSet().orEmpty()
+        selectionScope = if (savedInstanceState?.getBoolean("peq_exclude_selection") == true)
+            PeqSelectionScope.EXCLUDED else PeqSelectionScope.SELECTED
         pendingExportFileName = savedInstanceState?.getString("peq_export_snapshot")
         requireContext().registerLocalReceiver(receiver, IntentFilter(Constants.ACTION_PRESET_LOADED))
     }
@@ -149,17 +162,45 @@ class PeqFragment : Fragment() {
         }, onEdit = { editBand(it) }, onInteractionFinished = ::finishInteraction,
             onBandSelected = ::selectBand, onLocate = ::locateBand,
             onInteractionStarted = ::startInteraction, onEditField = { id, field -> editBand(id, field) },
-            onEditType = ::showBandFilterType)
+            onEditType = ::showBandFilterType, onToggleSelection = ::toggleSelection)
         ui.peqBandList.layoutManager = LinearLayoutManager(requireContext())
         ui.peqBandList.adapter = bandAdapter
         ui.peqBandList.itemAnimator = null
         ui.peqSettings.setOnClickListener { showSettings() }
         ui.peqReset.setOnClickListener { showResetMenu() }
         ui.peqParameters.setOnClickListener { showParametersMenu() }
+        listOf(ui.peqReset, ui.peqPresets, ui.peqParameters, ui.peqEditSelection).forEach {
+            actionTextColors[it.id] = it.textColors
+        }
+        ui.peqEditSelection.setOnClickListener {
+            flushPendingSave()
+            if (editingSelection) deleteSelection()
+            else { editingSelection = true; renderSelection() }
+        }
+        ui.peqSelectionDone.setOnClickListener { finishSelection() }
+        ui.peqSelectionMode.addOnButtonCheckedListener { _, id, checked ->
+            if (checked) {
+                selectionScope = if (id == R.id.peq_scope_excluded) PeqSelectionScope.EXCLUDED else PeqSelectionScope.SELECTED
+                renderSelection()
+            }
+        }
+        ui.peqSelectionAll.setOnClickListener {
+            selectedIds = editorState.bands.map { it.id }.toSet()
+            renderSelection()
+            toast(getString(R.string.peq_selection_all_hint, selectedIds.size))
+        }
+        ui.peqSelectionNone.setOnClickListener { selectedIds = emptySet(); renderSelection() }
         ui.peqPresets.setOnClickListener {
             flushPendingSave()
             if (presetDialogs == null) presetDialogs = PeqPresetsDialog(requireContext(), layoutInflater,
-                readCurrent = { flushPendingSave(); editorState },
+                readCurrent = {
+                    flushPendingSave()
+                    if (editingSelection) {
+                        val ids = operationIds()
+                        require(ids.isNotEmpty()) { getString(R.string.peq_selection_empty) }
+                        PeqSelection.snapshot(editorState, ids)
+                    } else editorState
+                },
                 applyState = { state ->
                     flushPendingSave()
                     binding?.peqBandList?.stopScroll()
@@ -167,12 +208,18 @@ class PeqFragment : Fragment() {
                     save(state)
                 }, onImportRequested = {
                     importPresets.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
-                }, onExportRequested = ::exportPresetJson)
+                }, onExportRequested = ::exportPresetJson,
+                currentScopeLabel = { if (editingSelection) scopeLabel(operationIds()) else null },
+                canSaveCurrent = { !editingSelection || operationIds().isNotEmpty() })
             presetDialogs?.show()
         }
         listOf(ui.peqAddFront to PeqResizeEdge.FRONT, ui.peqAddBack to PeqResizeEdge.BACK).forEach { (button, edge) ->
-            button.setOnClickListener { addBands(edge, 1) }
-            button.setOnLongClickListener { showAddMenu(edge); true }
+            addButtonGestures += PeqAddButtonGestures(button,
+                onSingle = { addBands(edge, 1) }, onDouble = { jumpToEdge(edge) },
+                onLong = {
+                    toast(getString(R.string.peq_add_choose_amount))
+                    showAddMenu(edge)
+                })
         }
         reload()
         return ui.root
@@ -180,6 +227,9 @@ class PeqFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        selectionBackCallback = object : OnBackPressedCallback(editingSelection) {
+            override fun handleOnBackPressed() = finishSelection()
+        }.also { requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, it) }
         (requireActivity() as MenuHost).addMenuProvider(object : MenuProvider {
             override fun onCreateMenu(menu: Menu, inflater: MenuInflater) {
                 inflater.inflate(R.menu.peq_editor, menu)
@@ -213,6 +263,11 @@ class PeqFragment : Fragment() {
         clearMarker()
         repository = PeqRepository(requireContext())
         val loaded = repository.loadResult()
+        if (loaded.state != editorState) {
+            // Dialogs capture a set of stable ids. A replacement bank invalidates that draft.
+            dismissDialogs()
+            presetDialogs?.dismissAll()
+        }
         editorState = loaded.state
         lastSavedState = editorState
         render(false)
@@ -225,14 +280,15 @@ class PeqFragment : Fragment() {
         binding?.apply {
             if (editorState.bands.none { it.id == selectedBandId }) selectedBandId = editorState.bands.firstOrNull()?.id
             bandAdapter.submitState(editorState, interactingBand)
+            renderSelection()
             // Gesture updates must not trail the thumb behind a transition animation.
             peqCurve.setState(editorState, animate && interactingBand == null)
             peqCurve.setSelectedBand(selectedBandId)
             peqSummary.text = getString(R.string.peq_summary, editorState.bands.size,
                 PeqBandAdapter.number(editorState.gainStep), PeqBandAdapter.number(editorState.gainRange))
-            peqAddFront.isEnabled = editorState.bands.size < PeqModel.MAX_BANDS
-            peqAddBack.isEnabled = peqAddFront.isEnabled
-            peqParameters.isEnabled = editorState.bands.isNotEmpty()
+            // Full banks still need the double-tap navigation shortcut.
+            peqAddFront.isEnabled = true
+            peqAddBack.isEnabled = true
             if (appliedPinResponse != editorState.pinResponse) {
                 val wasApplied = appliedPinResponse != null
                 appliedPinResponse = editorState.pinResponse
@@ -278,48 +334,120 @@ class PeqFragment : Fragment() {
         selectBand(id)
     }
 
+    private fun toggleSelection(id: String) {
+        if (!editingSelection || editorState.bands.none { it.id == id }) return
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+        renderSelection()
+    }
+
+    private fun finishSelection() {
+        editingSelection = false
+        selectedIds = emptySet()
+        renderSelection()
+    }
+
+    private fun operationIds(): Set<String> = if (editingSelection)
+        PeqSelection.targets(editorState, selectedIds, selectionScope) else editorState.bands.map { it.id }.toSet()
+
+    private fun requireOperationIds(): Set<String>? = operationIds().takeIf { it.isNotEmpty() }
+        ?: run { presetMessage(getString(R.string.peq_selection_empty)); null }
+
+    private fun scopeLabel(ids: Set<String>): String = getString(
+        if (!editingSelection) R.string.peq_scope_all_count
+        else if (selectionScope == PeqSelectionScope.SELECTED) R.string.peq_scope_selected_count
+        else R.string.peq_scope_excluded_count, ids.size)
+
+    private fun scopedTitle(title: Int, ids: Set<String>): String =
+        if (editingSelection) "${getString(title)} · ${scopeLabel(ids)}" else getString(title)
+
+    private fun renderSelection() {
+        selectedIds = PeqSelection.prune(editorState, selectedIds)
+        selectionBackCallback?.isEnabled = editingSelection
+        binding?.apply {
+            val hasTargets = operationIds().isNotEmpty()
+            bandAdapter.submitSelection(editingSelection, selectedIds)
+            peqSelectionControls.isVisible = editingSelection
+            peqEditSelection.setText(if (editingSelection) R.string.peq_selection_delete else R.string.peq_edit_selection)
+            peqEditSelection.isEnabled = !editingSelection || hasTargets
+            peqSettings.isEnabled = !editingSelection
+            peqReset.isEnabled = hasTargets
+            peqParameters.isEnabled = hasTargets
+            peqPresets.isEnabled = !editingSelection || hasTargets
+            listOf(peqReset, peqPresets, peqParameters).forEach { button ->
+                button.setTextColor(if (editingSelection && hasTargets) ColorStateList.valueOf(
+                    MaterialColors.getColor(button, com.google.android.material.R.attr.colorTertiary))
+                    else requireNotNull(actionTextColors[button.id]))
+            }
+            peqEditSelection.setTextColor(if (editingSelection && hasTargets) ColorStateList.valueOf(
+                MaterialColors.getColor(peqEditSelection, com.google.android.material.R.attr.colorError))
+                else requireNotNull(actionTextColors[peqEditSelection.id]))
+            peqSelectionCount.text = getString(R.string.peq_selection_count, selectedIds.size, editorState.bands.size)
+            val checked = if (selectionScope == PeqSelectionScope.EXCLUDED) R.id.peq_scope_excluded else R.id.peq_scope_selected
+            if (peqSelectionMode.checkedButtonId != checked) peqSelectionMode.check(checked)
+        }
+    }
+
+    private fun deleteSelection() {
+        flushPendingSave()
+        val ids = requireOperationIds() ?: return
+        if (ids.size >= editorState.bands.size) {
+            toast(getString(R.string.peq_delete_last_band))
+            return
+        }
+        track(MaterialAlertDialogBuilder(requireContext())
+            .setTitle(scopedTitle(R.string.peq_selection_delete, ids))
+            .setMessage(getString(R.string.peq_selection_delete_confirm, ids.size, editorState.bands.size - ids.size))
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                if (save(PeqSelection.delete(editorState, ids))) clearMarker()
+            }.setNegativeButton(android.R.string.cancel, null).create()).show()
+    }
+
     private fun showResetMenu() {
         flushPendingSave()
+        val ids = requireOperationIds() ?: return
         val labels = arrayOf(getString(R.string.peq_reset_q), getString(R.string.peq_reset_frequency),
             getString(R.string.peq_reset_gain), getString(R.string.peq_reset_filter_type), getString(R.string.peq_reset_all),
             getString(R.string.peq_redistribute))
         val targets = listOf(PeqResetTarget.Q, PeqResetTarget.FREQUENCY, PeqResetTarget.GAIN,
             PeqResetTarget.FILTER_TYPE, PeqResetTarget.ALL)
-        track(MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.peq_reset_title)
+        track(MaterialAlertDialogBuilder(requireContext()).setTitle(scopedTitle(
+            if (editingSelection) R.string.peq_selection_reset else R.string.peq_reset_title, ids))
             .setItems(labels) { _, index ->
-                if (index == targets.size) showRedistribute()
-                else if (save(PeqModel.reset(editorState, targets[index]))) clearMarker()
+                if (index == targets.size) showRedistribute(ids)
+                else if (save(PeqSelection.reset(editorState, ids, targets[index]))) clearMarker()
             }.setNegativeButton(android.R.string.cancel, null).create()).show()
     }
 
-    private fun showRedistribute(onSaved: () -> Unit = {}) {
+    private fun showRedistribute(ids: Set<String>) {
         flushPendingSave()
         track(MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.peq_redistribute_title)
-            .setMessage(getString(R.string.peq_redistribute_confirm, editorState.bands.size))
+            .setTitle(scopedTitle(R.string.peq_redistribute_title, ids))
+            .setMessage(getString(R.string.peq_redistribute_confirm, ids.size))
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                if (save(PeqModel.redistribute(editorState))) { clearMarker(); onSaved() }
+                if (save(PeqSelection.redistribute(editorState, ids))) clearMarker()
             }.setNegativeButton(android.R.string.cancel, null).create()).show()
     }
 
     private fun showParametersMenu() {
         flushPendingSave()
+        val ids = requireOperationIds() ?: return
         val labels = arrayOf(getString(R.string.peq_bulk_q), getString(R.string.peq_bulk_bw),
             getString(R.string.peq_filter_type))
-        track(MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.peq_parameters)
+        track(MaterialAlertDialogBuilder(requireContext()).setTitle(scopedTitle(R.string.peq_parameters, ids))
             .setItems(labels) { _, index ->
                 when (index) {
-                    0 -> showBulkQuality(PeqQualityDisplay.Q)
-                    1 -> showBulkQuality(PeqQualityDisplay.BW)
-                    2 -> showFilterTypePicker(null)
+                    0 -> showBulkQuality(PeqQualityDisplay.Q, ids)
+                    1 -> showBulkQuality(PeqQualityDisplay.BW, ids)
+                    2 -> showFilterTypePicker(null, ids)
                 }
             }.setNegativeButton(android.R.string.cancel, null).create()).show()
     }
 
-    private fun showBulkQuality(mode: PeqQualityDisplay) {
+    private fun showBulkQuality(mode: PeqQualityDisplay, ids: Set<String>) {
         flushPendingSave()
+        val targetState = PeqSelection.snapshot(editorState, ids)
         val rawRange = if (mode == PeqQualityDisplay.Q) PeqModel.MIN_Q..editorState.qRange
-            else PeqBulkParameters.bandwidthRange(editorState)
+            else PeqBulkParameters.bandwidthRange(targetState)
         // Show editable bounds rounded inward, so the displayed limits are themselves valid inputs.
         val minimum = kotlin.math.ceil(rawRange.start * 1000.0 - 1e-9) / 1000.0
         val maximum = kotlin.math.floor(rawRange.endInclusive * 1000.0 + 1e-9) / 1000.0
@@ -333,19 +461,23 @@ class PeqFragment : Fragment() {
         val low = PeqQualityEditor.format(minimum)
         val high = PeqQualityEditor.format(maximum)
         ui.root.hint = name
-        ui.root.helperText = getString(R.string.peq_bulk_quality_range, low, high, editorState.bands.size)
-        val first = editorState.bands.first()
+        ui.root.helperText = getString(if (editingSelection) R.string.peq_selection_quality_range
+            else R.string.peq_bulk_quality_range, low, high, ids.size)
+        val first = targetState.bands.first()
         val current = if (mode == PeqQualityDisplay.Q) first.q else PeqResponse.bandwidthOctaves(first.q, first.frequency)
         ui.peqBulkQualityInput.setText(PeqQualityEditor.format(current.coerceIn(minimum, maximum)))
         val dialog = MaterialAlertDialogBuilder(requireContext())
-            .setTitle(getString(R.string.peq_bulk_quality_title, name)).setView(ui.root)
+            .setTitle(if (editingSelection) "$name · ${scopeLabel(ids)}"
+                else getString(R.string.peq_bulk_quality_title, name)).setView(ui.root)
             .setPositiveButton(android.R.string.ok, null).setNegativeButton(android.R.string.cancel, null).create()
         dialog.setOnShowListener {
             ui.peqBulkQualityInput.requestFocus()
             ui.peqBulkQualityInput.selectAll()
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val value = ui.peqBulkQualityInput.text?.toString()?.toDoubleOrNull()
-                val next = value?.let { runCatching { PeqBulkParameters.quality(editorState, mode, it) }.getOrNull() }
+                val next = value?.let { requested -> runCatching {
+                    PeqSelection.update(editorState, ids) { PeqBulkParameters.quality(it, mode, requested) }
+                }.getOrNull() }
                 if (next == null) ui.root.error = getString(R.string.peq_bulk_quality_error, low, high)
                 else if (save(next)) { clearMarker(); dialog.dismiss() }
             }
@@ -355,21 +487,22 @@ class PeqFragment : Fragment() {
 
     private fun showBandFilterType(id: String) = showFilterTypePicker(id)
 
-    private fun showFilterTypePicker(bandId: String?) {
+    private fun showFilterTypePicker(bandId: String?, scopeIds: Set<String>? = null) {
         flushPendingSave()
+        val ids = bandId?.let { setOf(it) } ?: scopeIds ?: requireOperationIds() ?: return
         val types = PeqFilterType.entries
         val band = bandId?.let { id -> editorState.bands.firstOrNull { it.id == id } ?: return }
-        var selected = band?.type ?: editorState.bands.map { it.type }.distinct().singleOrNull()
+        var selected = band?.type ?: editorState.bands.filter { it.id in ids }.map { it.type }.distinct().singleOrNull()
         val labels = types.map { PeqBandAdapter.typeLabel(requireContext(), it) }.toTypedArray()
         val dialog = MaterialAlertDialogBuilder(requireContext())
-            .setTitle(if (bandId == null) R.string.peq_bulk_filter_title else R.string.peq_filter_type)
+            .setTitle(if (bandId == null) scopedTitle(if (editingSelection) R.string.peq_filter_type
+                else R.string.peq_bulk_filter_title, ids) else getString(R.string.peq_filter_type))
             .setSingleChoiceItems(labels, selected?.ordinal ?: -1) { _, index -> selected = types[index] }
             .setPositiveButton(android.R.string.ok, null).setNegativeButton(android.R.string.cancel, null).create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val type = selected ?: return@setOnClickListener
-                val next = if (bandId == null) PeqBulkParameters.filterType(editorState, type)
-                    else editorState.copy(bands = editorState.bands.map { if (it.id == bandId) it.copy(type = type) else it })
+                val next = PeqSelection.update(editorState, ids) { PeqBulkParameters.filterType(it, type) }
                 if (save(next)) {
                     if (bandId == null) clearMarker() else selectBand(bandId)
                     dialog.dismiss()
@@ -389,10 +522,31 @@ class PeqFragment : Fragment() {
         val oldCount = editorState.bands.size
         if (!save(PeqModel.resize(editorState, oldCount + count, edge, redistribute = false))) return false
         binding?.peqBandList?.scrollToPosition(if (edge == PeqResizeEdge.FRONT) 0 else oldCount)
+        toast(getString(if (edge == PeqResizeEdge.FRONT) R.string.peq_added_front else R.string.peq_added_back,
+            count, editorState.bands.size))
         return true
     }
 
+    private fun toast(message: String) {
+        context?.let { Toast.makeText(it, message, Toast.LENGTH_SHORT).show() }
+    }
+
+    private fun jumpToEdge(edge: PeqResizeEdge) {
+        val ui = binding ?: return
+        if (editorState.bands.isEmpty()) { toast(getString(R.string.peq_jump_empty)); return }
+        ui.peqBandList.stopScroll()
+        if (edge == PeqResizeEdge.FRONT) ui.peqResponseAppbar.setExpanded(true, false)
+        else if (!editorState.pinResponse) ui.peqResponseAppbar.setExpanded(false, false)
+        ui.peqBandList.scrollToPosition(if (edge == PeqResizeEdge.FRONT) 0 else editorState.bands.lastIndex)
+        toast(getString(if (edge == PeqResizeEdge.FRONT) R.string.peq_jump_front else R.string.peq_jump_back,
+            editorState.bands.size))
+    }
+
     private fun showAddMenu(edge: PeqResizeEdge) {
+        if (editorState.bands.size >= PeqModel.MAX_BANDS) {
+            presetMessage(getString(R.string.peq_add_too_many, 0))
+            return
+        }
         val counts = listOf(5, 10, 15, 20)
         val labels = counts.map { getString(R.string.peq_add_amount, it) } + getString(R.string.peq_add_custom)
         track(MaterialAlertDialogBuilder(requireContext())
@@ -426,6 +580,9 @@ class PeqFragment : Fragment() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("peq_selected_band", selectedBandId)
         outState.putString("peq_export_snapshot", pendingExportFileName)
+        outState.putBoolean("peq_editing_selection", editingSelection)
+        outState.putStringArrayList("peq_selection_ids", ArrayList(selectedIds))
+        outState.putBoolean("peq_exclude_selection", selectionScope == PeqSelectionScope.EXCLUDED)
         super.onSaveInstanceState(outState)
     }
 
@@ -698,18 +855,23 @@ class PeqFragment : Fragment() {
     private fun dismissDialogs() { dialogs.toList().forEach { it.dismiss() } }
 
     override fun onPause() {
+        addButtonGestures.forEach { it.cancel() }
         flushPendingSave()
         clearMarker()
         super.onPause()
     }
 
     override fun onDestroyView() {
+        addButtonGestures.forEach { it.cancel() }
+        addButtonGestures.clear()
         cancelPendingSave()
         dismissDialogs()
         presetDialogs?.dismissAll()
         presetDialogs = null
         clearMarker()
         appliedPinResponse = null
+        selectionBackCallback = null
+        actionTextColors.clear()
         binding?.peqBandList?.adapter = null
         binding = null
         super.onDestroyView()

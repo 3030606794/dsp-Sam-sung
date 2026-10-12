@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_edit_selection">编辑</string>
+    <string name="peq_selection_done">完成</string>
+    <string name="peq_selection_all">全选</string>
+    <string name="peq_selection_none">取消全选</string>
+    <string name="peq_selection_count">已选 %1$d / %2$d 段</string>
+    <string name="peq_scope_selected">选中频段</string>
+    <string name="peq_scope_excluded">排除选中频段</string>
+    <string name="peq_scope_selected_count">选中 %1$d 段</string>
+    <string name="peq_scope_excluded_count">未选中 %1$d 段</string>
+    <string name="peq_scope_all_count">全部 %1$d 段</string>
+    <string name="peq_selection_empty">当前操作范围没有频段，请选择频段或切换操作范围。</string>
+    <string name="peq_selection_delete">删除</string>
+    <string name="peq_selection_delete_confirm">删除当前范围内的 %1$d 个频段？删除后剩余 %2$d 段。</string>
+    <string name="peq_selection_reset">重置频段参数</string>
+    <string name="peq_delete_last_band">至少保留 1 个频段</string>
+    <string name="peq_selection_all_hint">已全选 %1$d 段；删除时至少保留 1 个频段</string>
+    <string name="peq_selection_quality_range">可输入 %1$s–%2$s；应用于目标 %3$d 个频段。</string>
+    <string name="peq_preset_scope_save">保存：%1$s</string>
+    <string name="peq_added_front">已在前面添加 %1$d 段，当前共 %2$d 段</string>
+    <string name="peq_added_back">已在后面添加 %1$d 段，当前共 %2$d 段</string>
+    <string name="peq_add_choose_amount">请选择要添加的频段数量</string>
+    <string name="peq_jump_front">已跳到顶部，当前共 %1$d 段</string>
+    <string name="peq_jump_back">已跳到最后一段，当前共 %1$d 段</string>
+    <string name="peq_jump_empty">当前没有频段</string>
+</resources>

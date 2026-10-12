@@ -9,6 +9,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.Window
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
@@ -16,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
@@ -37,6 +39,7 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowToast
 import java.time.Duration
 import kotlin.math.pow
 
@@ -318,10 +321,11 @@ class PeqWorkflowUiTest {
         assertEquals(original.bands.single().q, repository.load().bands.single().q, 0.0)
     }
 
-    @Test fun footerHasFourEqualButtonsAndShortcutsAddBlankBandsAtEitherEdge() {
+    @Test fun footerHasFiveEqualButtonsAndShortcutsAddBlankBandsAtEitherEdge() {
         val original = PeqModel.defaultState(3)
         launch(original)
-        val footer = listOf(R.id.peq_settings, R.id.peq_reset, R.id.peq_presets, R.id.peq_parameters).map { view<View>(it) }
+        val footer = listOf(R.id.peq_settings, R.id.peq_reset, R.id.peq_edit_selection,
+            R.id.peq_presets, R.id.peq_parameters).map { view<View>(it) }
         assertTrue(footer.all { it.parent === footer.first().parent })
         assertTrue(footer.all { it.isShown && it.width > 0 })
         assertTrue(footer.maxOf { it.width } - footer.minOf { it.width } <= 1)
@@ -330,6 +334,7 @@ class PeqWorkflowUiTest {
         view<View>(R.id.peq_add_front).performClick()
         assertEquals(original.bands, repository.load().bands.drop(1))
         val first = repository.load().bands.first()
+        assertEquals(application.getString(R.string.peq_added_front, 1, 4), ShadowToast.getTextOfLatestToast())
         assertEquals(0.0, first.frequency, 0.0)
         assertEquals(0.0, first.gain, 0.0)
         assertEquals(0.5, first.q, 0.0)
@@ -340,6 +345,7 @@ class PeqWorkflowUiTest {
         menu.listView.performItemClick(null, 1, 1) // Ten at the back.
         idle()
         assertEquals(14, repository.load().bands.size)
+        assertEquals(application.getString(R.string.peq_added_back, 10, 14), ShadowToast.getTextOfLatestToast())
         assertEquals(original.bands, repository.load().bands.subList(1, 4))
         assertTrue(repository.load().bands.takeLast(10).all { it.frequency == 0.0 && it.q == 0.5 })
         assertEquals(14, repository.load().bands.map { it.id }.toSet().size)
@@ -524,8 +530,56 @@ class PeqWorkflowUiTest {
         idle()
         assertFalse(custom.isShowing)
         assertEquals(170, repository.load().bands.size)
-        assertFalse(view<View>(R.id.peq_add_front).isEnabled)
-        assertFalse(view<View>(R.id.peq_add_back).isEnabled)
+        assertTrue(view<View>(R.id.peq_add_front).isEnabled)
+        assertTrue(view<View>(R.id.peq_add_back).isEnabled)
+        val full = repository.load()
+        view<View>(R.id.peq_add_front).performClick()
+        view<View>(R.id.peq_add_back).performClick()
+        idle()
+        assertEquals(full, repository.load())
+    }
+
+    @Test fun realDoubleTapsJumpToBothEndsWithoutAddingBandsAndWorkAtThe170BandLimit() {
+        val original = PeqModel.defaultState(40)
+        launch(original)
+        fun doubleTap(id: Int) {
+            val button = view<View>(id)
+            repeat(2) { index ->
+                val down = SystemClock.uptimeMillis()
+                fun dispatch(action: Int) {
+                    val event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action,
+                        button.width / 2f, button.height / 2f, 0)
+                    try { button.dispatchTouchEvent(event) } finally { event.recycle() }
+                }
+                dispatch(MotionEvent.ACTION_DOWN)
+                advance(20)
+                dispatch(MotionEvent.ACTION_UP)
+                if (index == 0) advance(60)
+            }
+            advance(ViewConfiguration.getDoubleTapTimeout().toLong() + 50)
+            layout()
+        }
+        fun assertJumpsWithoutChanges(expected: PeqState) {
+            val list = view<RecyclerView>(R.id.peq_band_list)
+            val manager = list.layoutManager as LinearLayoutManager
+            doubleTap(R.id.peq_add_back)
+            assertEquals(expected.bands.lastIndex, manager.findLastVisibleItemPosition())
+            assertEquals(application.getString(R.string.peq_jump_back, expected.bands.size), ShadowToast.getTextOfLatestToast())
+            assertEquals(expected, repository.load())
+            doubleTap(R.id.peq_add_front)
+            assertEquals(0, manager.findFirstVisibleItemPosition())
+            assertEquals(0, view<AppBarLayout>(R.id.peq_response_appbar).top)
+            assertEquals(application.getString(R.string.peq_jump_front, expected.bands.size), ShadowToast.getTextOfLatestToast())
+            assertEquals(expected, repository.load())
+        }
+        assertJumpsWithoutChanges(original)
+        val full = PeqModel.defaultState(170)
+        assertTrue(repository.save(full))
+        controller!!.recreate()
+        layout()
+        assertTrue(view<View>(R.id.peq_add_front).isEnabled)
+        assertTrue(view<View>(R.id.peq_add_back).isEnabled)
+        assertJumpsWithoutChanges(full)
     }
 
     @Test fun everyFilterCanSwitchBandwidthAndPreciseInputObeysSameQRange() {

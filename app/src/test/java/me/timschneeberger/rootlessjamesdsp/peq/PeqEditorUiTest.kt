@@ -134,7 +134,7 @@ class PeqEditorUiTest {
         assertEquals(0.5, repository.load().bands.last().q, 0.0)
         row(1).findViewById<MaterialButton>(R.id.peq_frequency_plus).performClick()
         assertEquals(20.0, repository.load().bands.last().frequency, 0.0)
-        assertEquals(View.GONE, row(1).findViewById<View>(R.id.peq_band_warning).visibility)
+        assertEquals(View.INVISIBLE, row(1).findViewById<View>(R.id.peq_band_warning).visibility)
         assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
         controller!!.recreate()
         layout()
