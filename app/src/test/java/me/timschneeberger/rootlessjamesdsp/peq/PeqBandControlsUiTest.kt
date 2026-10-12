@@ -106,6 +106,72 @@ class PeqBandControlsUiTest {
     }
     private fun drawMarker(): PeqResponseView.BandMarker = requireNotNull(drawMarkerOrNull())
 
+    @Test fun allFourSliderCombinationsShowEachParameterOnceAndTypeUsesItsOwnMenuCallback() {
+        var state = PeqState(listOf(PeqBand("adaptive", type = PeqFilterType.HIGH_SHELF,
+            frequency = 1234.567, q = 2.345678, gain = 6.25, qualityDisplay = PeqQualityDisplay.BW)))
+        launch(state)
+        val fields = mutableListOf<Pair<String, PeqEditField>>()
+        val types = mutableListOf<String>()
+        var fullEdits = 0
+        var mutations = 0
+        val adapter = PeqBandAdapter(onBandChanged = { mutations++; true }, onEdit = { fullEdits++ },
+            onEditField = { id, field -> fields.add(id to field) }, onEditType = { types.add(it) })
+        fragment().requireView().findViewById<RecyclerView>(R.id.peq_band_list).adapter = adapter
+        val headerHeights = mutableMapOf<Pair<Boolean, Boolean>, Int>()
+        for ((showQ, showFrequency) in listOf(false to false, true to false, false to true, true to true)) {
+            state = state.copy(showQSlider = showQ, showFrequencySlider = showFrequency)
+            adapter.submitState(state)
+            val current = row()
+            val title = current.findViewById<TextView>(R.id.peq_band_title)
+            assertEquals("1 • ${PeqBandAdapter.typeLabel(application, PeqFilterType.HIGH_SHELF)}", title.text.toString())
+            assertEquals(if (showQ && showFrequency) View.GONE else View.VISIBLE,
+                current.findViewById<View>(R.id.peq_band_details).visibility)
+            assertEquals(if (showFrequency) View.GONE else View.VISIBLE,
+                current.findViewById<View>(R.id.peq_band_header_frequency).visibility)
+            assertEquals(if (showQ) View.GONE else View.VISIBLE,
+                current.findViewById<View>(R.id.peq_band_summary).visibility)
+            assertEquals(if (!showQ && !showFrequency) View.VISIBLE else View.GONE,
+                current.findViewById<View>(R.id.peq_band_detail_separator).visibility)
+            assertEquals(if (showQ) View.VISIBLE else View.GONE, current.findViewById<View>(R.id.peq_q_controls).visibility)
+            assertEquals(if (showFrequency) View.VISIBLE else View.GONE,
+                current.findViewById<View>(R.id.peq_frequency_controls).visibility)
+            val quality = current.findViewById<TextView>(if (showQ) R.id.peq_q_value else R.id.peq_band_summary)
+            assertTrue(quality.isShown)
+            assertTrue(quality.text.startsWith("BW"))
+            val frequency = current.findViewById<TextView>(if (showFrequency) R.id.peq_frequency_value else R.id.peq_band_header_frequency)
+            assertTrue(frequency.isShown)
+            assertTrue(frequency.text.contains("1234.567"))
+            fields.clear()
+            types.clear()
+            title.performClick()
+            assertEquals(listOf("adaptive"), types)
+            assertTrue(fields.isEmpty())
+            assertEquals(0, fullEdits)
+            frequency.performClick()
+            quality.performClick()
+            current.findViewById<View>(R.id.peq_band_gain).performClick()
+            assertEquals(listOf("adaptive" to PeqEditField.FREQUENCY, "adaptive" to PeqEditField.QUALITY,
+                "adaptive" to PeqEditField.GAIN), fields)
+            assertEquals(listOf("adaptive"), types)
+            assertEquals(0, fullEdits)
+            assertEquals(0, mutations)
+            headerHeights[showQ to showFrequency] = current.findViewById<View>(R.id.peq_band_header).height
+        }
+        assertTrue("Hiding the second header row must reclaim height",
+            headerHeights.getValue(true to true) < headerHeights.getValue(false to false))
+        // Reusing the same holder after both hidden and visible states restores the missing values.
+        state = state.copy(showQSlider = false, showFrequencySlider = false,
+            bands = listOf(state.bands.single().copy(type = PeqFilterType.LOW_PASS, qualityDisplay = PeqQualityDisplay.Q)))
+        adapter.submitState(state)
+        val reused = row()
+        assertEquals("1 • ${PeqBandAdapter.typeLabel(application, PeqFilterType.LOW_PASS)}",
+            reused.findViewById<TextView>(R.id.peq_band_title).text.toString())
+        assertEquals(application.getString(R.string.peq_q_value, "2.346"),
+            reused.findViewById<TextView>(R.id.peq_band_summary).text.toString())
+        assertEquals(View.VISIBLE, reused.findViewById<View>(R.id.peq_band_header_frequency).visibility)
+        assertEquals(0, mutations)
+    }
+
     @Test fun onlyGainSliderChangesRedBlueAndRestoresThemeAtZeroForButtonsAndDragging() {
         launch(PeqState(listOf(PeqBand()), showQSlider = true, showFrequencySlider = true))
         val current = row()
@@ -471,8 +537,7 @@ class PeqBandControlsUiTest {
         assertEquals(listOf(state.bands.single().id), located)
         assertEquals(0, edited)
         val fields = listOf(R.id.peq_band_gain to PeqEditField.GAIN,
-            R.id.peq_q_value to PeqEditField.QUALITY, R.id.peq_band_summary to PeqEditField.QUALITY,
-            R.id.peq_band_title to PeqEditField.FREQUENCY, R.id.peq_frequency_value to PeqEditField.FREQUENCY)
+            R.id.peq_q_value to PeqEditField.QUALITY, R.id.peq_frequency_value to PeqEditField.FREQUENCY)
         fields.forEach { (id, _) -> current.findViewById<View>(id).performClick() }
         assertEquals(fields.map { state.bands.single().id to it.second }, editFields)
         assertEquals(0, edited)

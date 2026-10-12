@@ -39,7 +39,6 @@ import me.timschneeberger.rootlessjamesdsp.BuildConfig
 import me.timschneeberger.rootlessjamesdsp.MainApplication
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.ActivityDspMainBinding
-import me.timschneeberger.rootlessjamesdsp.databinding.ContentMainBinding
 import me.timschneeberger.rootlessjamesdsp.flavor.CrashlyticsImpl
 import me.timschneeberger.rootlessjamesdsp.flavor.UpdateManager
 import me.timschneeberger.rootlessjamesdsp.fragment.DspFragment
@@ -88,7 +87,6 @@ import kotlin.concurrent.schedule
 class MainActivity : BaseActivity() {
     /* UI bindings */
     lateinit var binding: ActivityDspMainBinding
-    private lateinit var bindingContent: ContentMainBinding
     private lateinit var dspFragment: DspFragment
 
     /* Rootless version */
@@ -152,7 +150,6 @@ class MainActivity : BaseActivity() {
 
         mediaProjectionManager = getSystemService<MediaProjectionManager>()!!
         binding = ActivityDspMainBinding.inflate(layoutInflater)
-        bindingContent = ContentMainBinding.inflate(layoutInflater)
 
         val check = applicationContext.check()
         if(check != 0) {
@@ -164,6 +161,7 @@ class MainActivity : BaseActivity() {
 
         // Setup views
         setContentView(binding.root)
+        MainWindowInsets.install(binding.mainContent.root)
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayShowTitleEnabled(false)
         binding.toolbar.isVisible = false

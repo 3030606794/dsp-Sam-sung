@@ -28,6 +28,7 @@ class PeqBandAdapter(
     private val onLocate: (String) -> Unit = {},
     private val onInteractionStarted: (String) -> Unit = {},
     private val onEditField: (String, PeqEditField) -> Unit = { id, _ -> onEdit(id) },
+    private val onEditType: (String) -> Unit = { onEdit(it) },
 ) : RecyclerView.Adapter<PeqBandAdapter.Holder>() {
     private var state = PeqState(emptyList())
     private val itemIds = mutableMapOf<String, Long>()
@@ -92,11 +93,16 @@ class PeqBandAdapter(
             binding.peqBandGain.setOnClickListener { editField(PeqEditField.GAIN) }
             binding.peqBandSummary.setOnClickListener { editField(PeqEditField.QUALITY) }
             binding.peqQValue.setOnClickListener { editField(PeqEditField.QUALITY) }
-            binding.peqBandTitle.setOnClickListener { editField(PeqEditField.FREQUENCY) }
+            binding.peqBandTitle.setOnClickListener { onBandSelected(band.id); onEditType(band.id) }
+            binding.peqBandHeaderFrequency.setOnClickListener { editField(PeqEditField.FREQUENCY) }
             binding.peqFrequencyValue.setOnClickListener { editField(PeqEditField.FREQUENCY) }
             binding.peqGainControls.isVisible = band.type.usesGain
             binding.peqQControls.isVisible = state.showQSlider
             binding.peqFrequencyControls.isVisible = state.showFrequencySlider
+            binding.peqBandDetails.isVisible = !state.showQSlider || !state.showFrequencySlider
+            binding.peqBandHeaderFrequency.isVisible = !state.showFrequencySlider
+            binding.peqBandSummary.isVisible = !state.showQSlider
+            binding.peqBandDetailSeparator.isVisible = !state.showQSlider && !state.showFrequencySlider
             val slider = binding.peqBandSlider
             slider.clearOnChangeListeners()
             slider.clearOnSliderTouchListeners()
@@ -113,14 +119,13 @@ class PeqBandAdapter(
                 val current = currentBand() ?: return
                 renderGainColor(current.gain)
                 binding.peqBandWarning.isVisible = current.frequency == 0.0
-                binding.peqBandTitle.text = context.getString(R.string.peq_band_title, index + 1, number(current.frequency))
+                val title = context.getString(R.string.peq_band_type_title, index + 1, typeLabel(context, current.type))
+                binding.peqBandTitle.text = if (current.enabled) title else context.getString(R.string.peq_band_disabled, title)
+                binding.peqBandHeaderFrequency.text = context.getString(R.string.peq_band_header_frequency,
+                    number(current.frequency, 3))
                 val bandwidth = usesBandwidth(current)
-                val details = if (bandwidth) {
-                    context.getString(R.string.peq_band_detail_bw, typeLabel(context, current.type),
-                        fixedNumber(PeqResponse.bandwidthOctaves(current.q, current.frequency), 3))
-                } else context.getString(R.string.peq_band_detail, typeLabel(context, current.type), fixedNumber(current.q, 3))
-                binding.peqBandSummary.text = if (current.enabled) details else
-                    context.getString(R.string.peq_band_disabled, details)
+                binding.peqBandSummary.text = context.getString(if (bandwidth) R.string.peq_bw_value else R.string.peq_q_value,
+                    fixedNumber(displayedQuality(current), 3))
                 binding.peqBandGain.text = if (current.type.usesGain)
                     String.format(Locale.ROOT, "%+.2f dB", current.gain)
                 else context.getString(R.string.peq_no_gain)

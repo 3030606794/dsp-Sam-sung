@@ -2,6 +2,7 @@ package me.timschneeberger.rootlessjamesdsp.utils.extensions
 
 import android.content.Context
 import android.content.res.AssetManager
+import me.timschneeberger.rootlessjamesdsp.liveprog.BuiltinLiveprogMetadata
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
@@ -42,6 +43,12 @@ object AssetManagerExtensions {
     private fun AssetManager.copyAssetFile(assetPath: String, destPath: String, force: Boolean): File? {
         val destFile = File(destPath)
         if(destFile.exists() && !force) {
+            if (assetPath == "Liveprog/viper_dynamicbass.eel" ||
+                assetPath == "Liveprog/viper_dynamicbass_preset.eel") {
+                open(assetPath).bufferedReader().use { bundled ->
+                    BuiltinLiveprogMetadata.upgradeUntouchedBass(destFile, bundled.readText())
+                }
+            }
             return null
         }
 

@@ -79,6 +79,15 @@ class PeqWorkflowUiTest {
     private fun dialog(): AlertDialog { idle(); return ShadowDialog.getLatestDialog() as AlertDialog }
     private fun settings(): AlertDialog { view<MaterialButton>(R.id.peq_settings).performClick(); return dialog() }
     private fun edit(): AlertDialog { row().findViewById<MaterialButton>(R.id.peq_band_edit).performClick(); return dialog() }
+    private fun parameters(index: Int): AlertDialog {
+        view<MaterialButton>(R.id.peq_parameters).performClick()
+        val options = dialog()
+        assertEquals(3, options.listView.adapter.count)
+        assertEquals(listOf(R.string.peq_bulk_q, R.string.peq_bulk_bw, R.string.peq_filter_type)
+            .map { application.getString(it) }, (0..2).map { options.listView.adapter.getItem(it).toString() })
+        options.listView.performItemClick(null, index, index.toLong())
+        return dialog()
+    }
     private fun menu() = controller!!.get().let { activity ->
         val menu = PopupMenu(activity, activity.findViewById<MaterialToolbar>(R.id.toolbar)).menu
         assertTrue(activity.onCreatePanelMenu(Window.FEATURE_OPTIONS_PANEL, menu))
@@ -251,7 +260,7 @@ class PeqWorkflowUiTest {
             layout()
             view<MaterialButton>(R.id.peq_reset).performClick()
             val reset = dialog()
-            assertEquals(5, reset.listView.adapter.count)
+            assertEquals(6, reset.listView.adapter.count)
             reset.listView.performItemClick(null, target.ordinal, target.ordinal.toLong())
             idle()
             val saved = repository.load()
@@ -309,12 +318,15 @@ class PeqWorkflowUiTest {
         assertEquals(original.bands.single().q, repository.load().bands.single().q, 0.0)
     }
 
-    @Test fun footerHasThreeEqualButtonsAndShortcutsAddBlankBandsAtEitherEdge() {
+    @Test fun footerHasFourEqualButtonsAndShortcutsAddBlankBandsAtEitherEdge() {
         val original = PeqModel.defaultState(3)
         launch(original)
-        val footer = listOf(R.id.peq_settings, R.id.peq_reset, R.id.peq_presets).map { view<View>(it) }
+        val footer = listOf(R.id.peq_settings, R.id.peq_reset, R.id.peq_presets, R.id.peq_parameters).map { view<View>(it) }
         assertTrue(footer.all { it.parent === footer.first().parent })
+        assertTrue(footer.all { it.isShown && it.width > 0 })
         assertTrue(footer.maxOf { it.width } - footer.minOf { it.width } <= 1)
+        footer.zipWithNext().forEach { (left, right) -> assertEquals(left.right, right.left) }
+        assertTrue(footer.last().right <= (footer.last().parent as View).width)
         view<View>(R.id.peq_add_front).performClick()
         assertEquals(original.bands, repository.load().bands.drop(1))
         val first = repository.load().bands.first()
@@ -331,6 +343,170 @@ class PeqWorkflowUiTest {
         assertEquals(original.bands, repository.load().bands.subList(1, 4))
         assertTrue(repository.load().bands.takeLast(10).all { it.frequency == 0.0 && it.q == 0.5 })
         assertEquals(14, repository.load().bands.map { it.id }.toSet().size)
+    }
+
+    @Test fun sixthResetItemRequiresConfirmationAndRedistributesOnlyFrequencies() {
+        val original = PeqState(listOf(
+            PeqBand("a", frequency = 123.45, gain = 8.75, q = 22.123456, qualityDisplay = PeqQualityDisplay.BW),
+            PeqBand("b", type = PeqFilterType.LOW_PASS, enabled = false, frequency = 0.0, gain = -3.25, q = 0.5),
+            PeqBand("c", type = PeqFilterType.HIGH_SHELF, frequency = 123.45, gain = 5.75, q = 7.89)),
+            gainRange = 50.0, qRange = 2.5, qStep = 0.25, frequencyStep = 37.0,
+            showQSlider = true, showFrequencySlider = false, pinResponse = false)
+        launch(original)
+        fun redistribution(): AlertDialog {
+            view<MaterialButton>(R.id.peq_reset).performClick()
+            val options = dialog()
+            assertEquals(6, options.listView.adapter.count)
+            assertEquals(application.getString(R.string.peq_redistribute), options.listView.adapter.getItem(5).toString())
+            options.listView.performItemClick(null, 5, 5)
+            return dialog()
+        }
+        val cancelled = redistribution()
+        assertEquals(original, repository.load())
+        assertTrue(cancelled.getButton(AlertDialog.BUTTON_POSITIVE).isShown)
+        cancelled.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        idle()
+        assertEquals(original, fragment().editorState)
+        assertEquals(original, repository.load())
+        redistribution().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        val expected = original.copy(bands = original.bands.mapIndexed { index, band ->
+            band.copy(frequency = 20.0 * 1000.0.pow(index / 2.0))
+        })
+        assertEquals(expected, repository.load())
+        assertEquals(expected, fragment().editorState)
+        assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
+    }
+
+    @Test fun bulkQValidatesTheWholeBankAndCancelKeepsAllParametersUntouched() {
+        val original = PeqState(listOf(
+            PeqBand("one", frequency = 1000.0, gain = 1.25, q = 12.345678, qualityDisplay = PeqQualityDisplay.BW),
+            PeqBand("two", type = PeqFilterType.HIGH_PASS, enabled = false, frequency = 1000.0, gain = -2.5, q = 7.89),
+            PeqBand("blank", frequency = 0.0, q = 0.5)),
+            qRange = 2.5, qStep = 0.37, frequencyStep = 125.0, pinResponse = false)
+        launch(original)
+        view<MaterialButton>(R.id.peq_parameters).performClick()
+        dialog().getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        assertEquals(original, repository.load())
+        val editor = parameters(0)
+        val input = editor.findViewById<EditText>(R.id.peq_bulk_quality_input)!!
+        listOf("", "0.099", "2.501", "NaN", "Infinity").forEach { invalid ->
+            input.setText(invalid)
+            editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            assertTrue(editor.isShowing)
+            assertNotNull(editor.findViewById<TextInputLayout>(R.id.peq_bulk_quality_box)!!.error)
+            assertEquals(original, repository.load())
+            assertEquals(original, fragment().editorState)
+        }
+        input.setText("1.25")
+        editor.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        idle()
+        assertEquals(original, repository.load())
+        val confirmed = parameters(0)
+        confirmed.findViewById<EditText>(R.id.peq_bulk_quality_input)!!.setText("1.25")
+        confirmed.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertFalse(confirmed.isShowing)
+        val expected = original.copy(bands = original.bands.map { it.copy(q = 1.25, qualityDisplay = PeqQualityDisplay.Q) })
+        assertEquals(expected, repository.load())
+        assertEquals(expected, fragment().editorState)
+        assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
+    }
+
+    @Test fun bulkBandwidthRejectsValuesThatOnlyFitSomeBandsAndAppliesOneWidthAtomically() {
+        val original = PeqState(listOf(
+            PeqBand("low", type = PeqFilterType.LOW_SHELF, frequency = 20.0, gain = 8.75, q = 2.5),
+            PeqBand("middle", type = PeqFilterType.NOTCH, frequency = 1000.0, gain = -3.25, q = 1.25),
+            PeqBand("high", type = PeqFilterType.HIGH_PASS, enabled = false, frequency = 20000.0, gain = 7.25, q = 0.5)),
+            qRange = 3.0, gainRange = 50.0, showQSlider = true, showFrequencySlider = true)
+        launch(original)
+        val editor = parameters(1)
+        val input = editor.findViewById<EditText>(R.id.peq_bulk_quality_input)!!
+        val partiallyValidWidth = 2.0
+        assertTrue(PeqResponse.qFromBandwidth(partiallyValidWidth, original.bands.first().frequency) in 0.1..original.qRange)
+        assertTrue(PeqResponse.qFromBandwidth(partiallyValidWidth, original.bands.last().frequency) < 0.1)
+        input.setText(partiallyValidWidth.toString())
+        editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        assertTrue(editor.isShowing)
+        assertNotNull(editor.findViewById<TextInputLayout>(R.id.peq_bulk_quality_box)!!.error)
+        assertEquals(original, repository.load())
+        assertEquals(original, fragment().editorState)
+        input.setText("0.5")
+        editor.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        idle()
+        assertEquals(original, repository.load())
+        val confirmed = parameters(1)
+        confirmed.findViewById<EditText>(R.id.peq_bulk_quality_input)!!.setText("0.5")
+        confirmed.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertFalse(confirmed.isShowing)
+        val saved = repository.load()
+        original.bands.zip(saved.bands).forEach { (before, after) ->
+            assertEquals(before.copy(q = PeqResponse.qFromBandwidth(0.5, before.frequency), qualityDisplay = PeqQualityDisplay.BW), after)
+            assertEquals(0.5, PeqResponse.bandwidthOctaves(after.q, after.frequency), 1e-12)
+        }
+        assertEquals(original.copy(bands = saved.bands), saved)
+        assertEquals(saved, fragment().editorState)
+        assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
+        val tooSmall = saved.copy(qRange = 0.1)
+        assertTrue(repository.save(tooSmall))
+        controller!!.recreate()
+        layout()
+        val noCommonRange = parameters(1)
+        assertNull(noCommonRange.findViewById<EditText>(R.id.peq_bulk_quality_input))
+        assertTrue(noCommonRange.isShowing)
+        noCommonRange.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertEquals(tooSmall, repository.load())
+    }
+
+    @Test fun bulkAndSingleBandTypePickersWaitForConfirmationAndPreserveEveryOtherParameter() {
+        val original = PeqState(listOf(
+            PeqBand("first", type = PeqFilterType.LOW_SHELF, frequency = 777.125, gain = 9.75, q = 22.345678),
+            PeqBand("second", type = PeqFilterType.NOTCH, enabled = false, frequency = 777.125, gain = -5.25, q = 8.75,
+                qualityDisplay = PeqQualityDisplay.BW)), qRange = 0.5, gainRange = 3.0, showQSlider = true)
+        launch(original)
+        val cancelled = parameters(2)
+        assertEquals(PeqFilterType.entries.size, cancelled.listView.adapter.count)
+        cancelled.listView.performItemClick(null, PeqFilterType.HIGH_PASS.ordinal, PeqFilterType.HIGH_PASS.ordinal.toLong())
+        assertEquals(original, repository.load())
+        cancelled.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        assertEquals(original, fragment().editorState)
+        PeqFilterType.entries.forEach { type ->
+            val before = repository.load()
+            val picker = parameters(2)
+            picker.listView.performItemClick(null, type.ordinal, type.ordinal.toLong())
+            assertEquals(before, repository.load())
+            picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            idle()
+            assertFalse(picker.isShowing)
+            assertEquals(original.copy(bands = original.bands.map { it.copy(type = type) }), repository.load())
+        }
+        val beforeSingle = repository.load()
+        fun singlePicker(): AlertDialog {
+            row(1).findViewById<View>(R.id.peq_band_title).performClick()
+            return dialog().also {
+                assertEquals(PeqFilterType.entries.size, it.listView.adapter.count)
+                assertNull(it.findViewById<EditText>(R.id.peq_quality_input))
+            }
+        }
+        val singleCancelled = singlePicker()
+        singleCancelled.listView.performItemClick(null, PeqFilterType.HIGH_SHELF.ordinal, PeqFilterType.HIGH_SHELF.ordinal.toLong())
+        singleCancelled.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        idle()
+        assertEquals(beforeSingle, repository.load())
+        val single = singlePicker()
+        single.listView.performItemClick(null, PeqFilterType.HIGH_SHELF.ordinal, PeqFilterType.HIGH_SHELF.ordinal.toLong())
+        assertEquals(beforeSingle, fragment().editorState)
+        single.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertFalse(single.isShowing)
+        val expected = beforeSingle.copy(bands = beforeSingle.bands.mapIndexed { index, band ->
+            if (index == 1) band.copy(type = PeqFilterType.HIGH_SHELF) else band
+        })
+        assertEquals(expected, repository.load())
+        assertEquals(expected, fragment().editorState)
+        assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
     }
 
     @Test fun customBatchRejectsOverflowAndStopsExactlyAt170() {

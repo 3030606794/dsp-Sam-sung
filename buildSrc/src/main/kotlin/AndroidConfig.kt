@@ -4,8 +4,8 @@ object AndroidConfig {
     const val compileSdk = 35
     const val targetSdk = 34
 
-    const val versionName = "0.1.0-alpha10"
-    const val versionCode = 1010
+    const val versionName = "0.1.0-alpha11"
+    const val versionCode = 1011
 
     const val kotlinVersion = "2.1.0"
     const val kspVersion = "2.1.0-1.0.29"

@@ -7,6 +7,7 @@ import androidx.preference.ListPreference
 import androidx.preference.Preference.SummaryProvider
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.model.preset.Preset
+import me.timschneeberger.rootlessjamesdsp.liveprog.EelParser
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.toast
 import timber.log.Timber
 import java.io.File
@@ -78,19 +79,23 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
     }
 
     private fun initFileList() {
-        val result = hashMapOf<String, String>()
+        val result = mutableListOf<Pair<String, String>>()
         directory?.list()?.forEach {
             if(hasCorrectExtension(it))
             {
-                val name = it.substringBeforeLast('.')
+                val name = if (isLiveprog()) {
+                    val parser = EelParser(context.resources.configuration.locales[0])
+                    parser.load(File(directory!!, it).absolutePath, skipProperties = true)
+                    parser.localizedBuiltinTitle ?: it.substringBeforeLast('.')
+                } else it.substringBeforeLast('.')
                 val path = File(directory!!, it).toRelativeString(context.getExternalFilesDir(null)!!)
-                result[name] = path
+                result.add(name to path)
             }
         }
 
-        val sorted = result.toSortedMap()
-        entries = sorted.keys.toTypedArray()
-        entryValues = sorted.values.toTypedArray()
+        val sorted = result.sortedWith(compareBy<Pair<String, String>> { it.first }.thenBy { it.second })
+        entries = sorted.map { it.first }.toTypedArray()
+        entryValues = sorted.map { it.second }.toTypedArray()
     }
 
     fun hasCorrectExtension(it: String): Boolean {

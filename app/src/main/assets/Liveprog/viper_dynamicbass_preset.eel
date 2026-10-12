@@ -2,11 +2,11 @@ desc: Dynamic Bass (based on ViperFX)
 author: VipersAudio, thepbone
 tags: bass filter viper
 
-dBassGain:60<0,100,1>Bass strength (%)
+dBassGain:5<0,100,1>Bass strength (%)
 dPreset:0<0,18,1{Extreme Headphone (v2),High-end Headphone (v2),Common Headphone (v2),Low-end Headphone (v2),Common Earphone (v2),Extreme Headphone (v1),High-end Headphone (v1),Common Headphone (v1),Common Earphone (v1),Apple Earphone,Monster Earphone,Moto Earphone,Philips Earphone,SHP2000,SHP9000,Unknown Type I,Unknown Type II,Unknown Type III,Unknown Type IV}>Preset
 
 @init
-dBassGain = 100;
+dBassGain = 5;
 dPreset = 18;
 
 (dPreset == 0) ? (

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_parameters">参数设置</string>
+    <string name="peq_bulk_q">Q 值</string>
+    <string name="peq_bulk_bw">BW 值</string>
+    <string name="peq_bulk_quality_title">设置所有频段的 %1$s</string>
+    <string name="peq_bulk_quality_range">可输入 %1$s–%2$s；应用于全部 %3$d 个频段。</string>
+    <string name="peq_bulk_quality_error">请输入 %1$s–%2$s 范围内的数值</string>
+    <string name="peq_bulk_bw_no_range">当前频率和 Q 范围无法使用同一个 BW 值。请先调整 Q 范围，或统一设置 Q 值。</string>
+    <string name="peq_bulk_filter_title">设置所有频段的滤波器类型</string>
+</resources>

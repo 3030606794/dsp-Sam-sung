@@ -133,7 +133,7 @@
     <string name="ddc_enable">ViPER-DDC 音效</string>
     <string name="ddc_file">DDC 文件</string>
     <string name="liveprog_enable">实时可编程 DSP</string>
-    <string name="liveprog_file">Liveprog 脚本</string>
+    <string name="liveprog_file">DSP 脚本</string>
     <string name="liveprog_additional_params">附加脚本参数</string>
     <string name="liveprog_additional_params_not_supported">所选脚本没有可自定义的参数</string>
     <string name="liveprog_not_found">未找到脚本</string>
@@ -428,7 +428,7 @@
     <string name="message_vdc_corrupt">选择的 VDC 文件已损坏，请重新选择其它文件。</string>
     <string name="message_irs_corrupt">所选脉冲响应已损坏，请另外重选。</string>
     <string name="message_convolver_advimp_invalid">脉冲反馈：高级波形编辑包含无效值。</string>
-    <string name="message_liveprog_compile_fail">Liveprog 执行失败，选定的脚本已损坏，请使用脚本编辑器进行调试。</string>
+    <string name="message_liveprog_compile_fail">实时 DSP 执行失败，选定的脚本已损坏，请使用脚本编辑器进行调试。</string>
     <!-- GraphicEQ editor -->
     <string name="title_activity_geq">幅度响应</string>
     <string name="geq_edit_as_string">作为字符串编辑</string>
@@ -472,7 +472,7 @@
     <string name="editor_open_fail">脚本文件不存在或无法打开。</string>
     <string name="editor_run">保存并运行</string>
     <string name="editor_save">保存</string>
-    <string name="editor_liveprog_enabled">Liveprog 已自动开启。</string>
+    <string name="editor_liveprog_enabled">实时 DSP 已自动开启。</string>
     <string name="editor_replace_all">全部替换</string>
     <string name="editor_replacement">替换项</string>
     <string name="editor_find_next_match">匹配下一个</string>
@@ -534,7 +534,7 @@
     <string name="intent_import_preset">导入预设</string>
     <string name="intent_import_irs">导入脉冲响应</string>
     <string name="intent_import_vdc">导入 VDC 文件</string>
-    <string name="intent_import_liveprog">导入 Liveprog 脚本</string>
+    <string name="intent_import_liveprog">导入 DSP 脚本</string>
     <string name="intent_import_mode_add">仅导入</string>
     <string name="intent_import_mode_select">导入并激活</string>
     <string name="intent_import_fail">导入文件“%1$s”失败</string>

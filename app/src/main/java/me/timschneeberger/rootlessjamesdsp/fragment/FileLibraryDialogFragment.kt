@@ -393,7 +393,7 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
             }
 
             if(untaggedScripts.isNotEmpty())
-                foundTags["Untagged"] = ((foundTags["Untagged"] ?: listOf()) + untaggedScripts).toMutableList()
+                foundTags[getString(R.string.liveprog_untagged)] = untaggedScripts
 
             withContext(Dispatchers.Main) {
                 val sorted = foundTags.entries
@@ -528,7 +528,7 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
                         values = if (query.isNullOrEmpty())
                             allItems
                         else
-                            allItems.filter { query.contains(it.name) }.toTypedArray()
+                            allItems.filter { query.contains(File(it.value.toString()).nameWithoutExtension) }.toTypedArray()
                     }
                 }
             }

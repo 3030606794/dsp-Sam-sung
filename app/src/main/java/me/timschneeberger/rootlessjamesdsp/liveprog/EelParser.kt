@@ -4,8 +4,9 @@ import me.timschneeberger.rootlessjamesdsp.utils.extensions.md5
 import timber.log.Timber
 import java.io.File
 import java.io.FileNotFoundException
+import java.util.Locale
 
-class EelParser {
+class EelParser(private val locale: Locale = Locale.getDefault()) {
     var isFileLoaded: Boolean
         get() = path != null
         private set (_) {}
@@ -15,6 +16,8 @@ class EelParser {
         private set
     var contents: String? = null
     var description: String? = null
+        private set
+    var localizedBuiltinTitle: String? = null
         private set
     var tags = listOf<String>()
         private set
@@ -29,6 +32,7 @@ class EelParser {
         tags = listOf()
         hasDescription = false
         description = null
+        localizedBuiltinTitle = null
         path = null
         fileName = null
         contents = null
@@ -90,14 +94,30 @@ class EelParser {
         parseDescription()
         parseTags()
 
+        val name = path?.let { File(it).name }.orEmpty()
+        val source = contents.orEmpty()
+        val builtinTitle = BuiltinLiveprogMetadata.identifiedTitle(name, source)
+        val builtin = builtinTitle != null
+        localizedBuiltinTitle = builtinTitle.takeIf { locale.language == "zh" }
+        localizedBuiltinTitle?.let {
+            description = it
+            tags = tags.map(BuiltinLiveprogMetadata::text)
+        }
+
         properties = arrayListOf()
 
         if(skipProperties)
             return
 
         // Parse number range parameters
-        contents?.lines()?.forEach next@ {
-            EelPropertyFactory.create(it, contents!!)?.let(properties::add)
+        contents?.lines()?.forEach { line ->
+            if (!BuiltinLiveprogMetadata.isParameterLine(line)) return@forEach
+            // Defaults and translated annotations affect the controls, never the script body.
+            val defaults = if (builtin && name.startsWith("viper_dynamicbass"))
+                BuiltinLiveprogMetadata.bassDefault(line) else line
+            val metadata = if (localizedBuiltinTitle != null)
+                BuiltinLiveprogMetadata.parameterLine(defaults) else defaults
+            EelPropertyFactory.create(metadata, contents!!)?.let(properties::add)
         }
     }
 

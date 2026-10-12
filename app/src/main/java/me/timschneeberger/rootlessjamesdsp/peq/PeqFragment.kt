@@ -33,6 +33,7 @@ import com.google.android.material.snackbar.Snackbar
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.PeqBandDialogBinding
 import me.timschneeberger.rootlessjamesdsp.databinding.PeqAddCountDialogBinding
+import me.timschneeberger.rootlessjamesdsp.databinding.PeqBulkQualityDialogBinding
 import me.timschneeberger.rootlessjamesdsp.databinding.PeqFragmentBinding
 import me.timschneeberger.rootlessjamesdsp.databinding.PeqSettingsDialogBinding
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
@@ -147,12 +148,14 @@ class PeqFragment : Fragment() {
             true
         }, onEdit = { editBand(it) }, onInteractionFinished = ::finishInteraction,
             onBandSelected = ::selectBand, onLocate = ::locateBand,
-            onInteractionStarted = ::startInteraction, onEditField = { id, field -> editBand(id, field) })
+            onInteractionStarted = ::startInteraction, onEditField = { id, field -> editBand(id, field) },
+            onEditType = ::showBandFilterType)
         ui.peqBandList.layoutManager = LinearLayoutManager(requireContext())
         ui.peqBandList.adapter = bandAdapter
         ui.peqBandList.itemAnimator = null
         ui.peqSettings.setOnClickListener { showSettings() }
         ui.peqReset.setOnClickListener { showResetMenu() }
+        ui.peqParameters.setOnClickListener { showParametersMenu() }
         ui.peqPresets.setOnClickListener {
             flushPendingSave()
             if (presetDialogs == null) presetDialogs = PeqPresetsDialog(requireContext(), layoutInflater,
@@ -229,6 +232,7 @@ class PeqFragment : Fragment() {
                 PeqBandAdapter.number(editorState.gainStep), PeqBandAdapter.number(editorState.gainRange))
             peqAddFront.isEnabled = editorState.bands.size < PeqModel.MAX_BANDS
             peqAddBack.isEnabled = peqAddFront.isEnabled
+            peqParameters.isEnabled = editorState.bands.isNotEmpty()
             if (appliedPinResponse != editorState.pinResponse) {
                 val wasApplied = appliedPinResponse != null
                 appliedPinResponse = editorState.pinResponse
@@ -277,13 +281,102 @@ class PeqFragment : Fragment() {
     private fun showResetMenu() {
         flushPendingSave()
         val labels = arrayOf(getString(R.string.peq_reset_q), getString(R.string.peq_reset_frequency),
-            getString(R.string.peq_reset_gain), getString(R.string.peq_reset_filter_type), getString(R.string.peq_reset_all))
+            getString(R.string.peq_reset_gain), getString(R.string.peq_reset_filter_type), getString(R.string.peq_reset_all),
+            getString(R.string.peq_redistribute))
         val targets = listOf(PeqResetTarget.Q, PeqResetTarget.FREQUENCY, PeqResetTarget.GAIN,
             PeqResetTarget.FILTER_TYPE, PeqResetTarget.ALL)
         track(MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.peq_reset_title)
             .setItems(labels) { _, index ->
-                if (save(PeqModel.reset(editorState, targets[index]))) clearMarker()
+                if (index == targets.size) showRedistribute()
+                else if (save(PeqModel.reset(editorState, targets[index]))) clearMarker()
             }.setNegativeButton(android.R.string.cancel, null).create()).show()
+    }
+
+    private fun showRedistribute(onSaved: () -> Unit = {}) {
+        flushPendingSave()
+        track(MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.peq_redistribute_title)
+            .setMessage(getString(R.string.peq_redistribute_confirm, editorState.bands.size))
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                if (save(PeqModel.redistribute(editorState))) { clearMarker(); onSaved() }
+            }.setNegativeButton(android.R.string.cancel, null).create()).show()
+    }
+
+    private fun showParametersMenu() {
+        flushPendingSave()
+        val labels = arrayOf(getString(R.string.peq_bulk_q), getString(R.string.peq_bulk_bw),
+            getString(R.string.peq_filter_type))
+        track(MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.peq_parameters)
+            .setItems(labels) { _, index ->
+                when (index) {
+                    0 -> showBulkQuality(PeqQualityDisplay.Q)
+                    1 -> showBulkQuality(PeqQualityDisplay.BW)
+                    2 -> showFilterTypePicker(null)
+                }
+            }.setNegativeButton(android.R.string.cancel, null).create()).show()
+    }
+
+    private fun showBulkQuality(mode: PeqQualityDisplay) {
+        flushPendingSave()
+        val rawRange = if (mode == PeqQualityDisplay.Q) PeqModel.MIN_Q..editorState.qRange
+            else PeqBulkParameters.bandwidthRange(editorState)
+        // Show editable bounds rounded inward, so the displayed limits are themselves valid inputs.
+        val minimum = kotlin.math.ceil(rawRange.start * 1000.0 - 1e-9) / 1000.0
+        val maximum = kotlin.math.floor(rawRange.endInclusive * 1000.0 + 1e-9) / 1000.0
+        if (minimum > maximum) {
+            track(MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.peq_bulk_bw)
+                .setMessage(R.string.peq_bulk_bw_no_range).setPositiveButton(android.R.string.ok, null).create()).show()
+            return
+        }
+        val ui = PeqBulkQualityDialogBinding.inflate(layoutInflater)
+        val name = getString(if (mode == PeqQualityDisplay.Q) R.string.peq_bulk_q else R.string.peq_bulk_bw)
+        val low = PeqQualityEditor.format(minimum)
+        val high = PeqQualityEditor.format(maximum)
+        ui.root.hint = name
+        ui.root.helperText = getString(R.string.peq_bulk_quality_range, low, high, editorState.bands.size)
+        val first = editorState.bands.first()
+        val current = if (mode == PeqQualityDisplay.Q) first.q else PeqResponse.bandwidthOctaves(first.q, first.frequency)
+        ui.peqBulkQualityInput.setText(PeqQualityEditor.format(current.coerceIn(minimum, maximum)))
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(getString(R.string.peq_bulk_quality_title, name)).setView(ui.root)
+            .setPositiveButton(android.R.string.ok, null).setNegativeButton(android.R.string.cancel, null).create()
+        dialog.setOnShowListener {
+            ui.peqBulkQualityInput.requestFocus()
+            ui.peqBulkQualityInput.selectAll()
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val value = ui.peqBulkQualityInput.text?.toString()?.toDoubleOrNull()
+                val next = value?.let { runCatching { PeqBulkParameters.quality(editorState, mode, it) }.getOrNull() }
+                if (next == null) ui.root.error = getString(R.string.peq_bulk_quality_error, low, high)
+                else if (save(next)) { clearMarker(); dialog.dismiss() }
+            }
+        }
+        track(dialog).show()
+    }
+
+    private fun showBandFilterType(id: String) = showFilterTypePicker(id)
+
+    private fun showFilterTypePicker(bandId: String?) {
+        flushPendingSave()
+        val types = PeqFilterType.entries
+        val band = bandId?.let { id -> editorState.bands.firstOrNull { it.id == id } ?: return }
+        var selected = band?.type ?: editorState.bands.map { it.type }.distinct().singleOrNull()
+        val labels = types.map { PeqBandAdapter.typeLabel(requireContext(), it) }.toTypedArray()
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(if (bandId == null) R.string.peq_bulk_filter_title else R.string.peq_filter_type)
+            .setSingleChoiceItems(labels, selected?.ordinal ?: -1) { _, index -> selected = types[index] }
+            .setPositiveButton(android.R.string.ok, null).setNegativeButton(android.R.string.cancel, null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val type = selected ?: return@setOnClickListener
+                val next = if (bandId == null) PeqBulkParameters.filterType(editorState, type)
+                    else editorState.copy(bands = editorState.bands.map { if (it.id == bandId) it.copy(type = type) else it })
+                if (save(next)) {
+                    if (bandId == null) clearMarker() else selectBand(bandId)
+                    dialog.dismiss()
+                }
+            }
+        }
+        track(dialog).show()
     }
 
     private fun addBands(edge: PeqResizeEdge, count: Int): Boolean {
@@ -436,14 +529,6 @@ class PeqFragment : Fragment() {
                 } else applySettings()
             }
         }
-        ui.peqRedistribute.setOnClickListener {
-            track(MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.peq_redistribute_title)
-                .setMessage(getString(R.string.peq_redistribute_confirm, editorState.bands.size))
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    if (save(PeqModel.redistribute(editorState))) dialog.dismiss()
-                }.setNegativeButton(android.R.string.cancel, null).create()).show()
-        }
         track(dialog).show()
     }
 
@@ -469,15 +554,15 @@ class PeqFragment : Fragment() {
         fun frequency() = ui.peqFrequencyInput.text?.toString()?.toDoubleOrNull()
         fun inputQ(): Double? {
             val freq = frequency() ?: return null
-            return qualityEditor.readQ(ui.peqQualityInput.text?.toString().orEmpty(), freq)
+            return qualityEditor.readQ(ui.peqQualityInput.text?.toString().orEmpty(), freq, editorState.qRange)
         }
         fun qualityError() = getString(R.string.peq_invalid_quality_range, qLimit)
         fun updateQualityRange() {
             ui.peqQualityBox.helperText = if (qualityEditor.mode == PeqQualityDisplay.BW) {
                 val freq = frequency()?.takeIf { PeqModel.validFrequency(it) } ?: band.frequency
                 getString(R.string.peq_bw_range,
-                    PeqBandAdapter.number(PeqResponse.bandwidthOctaves(editorState.qRange, freq), 6),
-                    PeqBandAdapter.number(PeqResponse.bandwidthOctaves(PeqModel.MIN_Q, freq), 6))
+                    PeqQualityEditor.format(PeqResponse.bandwidthOctaves(editorState.qRange, freq)),
+                    PeqQualityEditor.format(PeqResponse.bandwidthOctaves(PeqModel.MIN_Q, freq)))
             } else getString(R.string.peq_quality_range, qLimit)
         }
         fun renderQualityMode() {
@@ -504,7 +589,7 @@ class PeqFragment : Fragment() {
             if (!checked || changingMode) return@addOnButtonCheckedListener
             val nextMode = if (checkedId == R.id.peq_quality_bw) PeqQualityDisplay.BW else PeqQualityDisplay.Q
             val converted = qualityEditor.switchMode(nextMode, ui.peqQualityInput.text?.toString().orEmpty(),
-                frequency() ?: Double.NaN)
+                frequency() ?: Double.NaN, editorState.qRange)
             if (converted == null) {
                 changingMode = true
                 ui.peqQualityMode.check(if (qualityEditor.mode == PeqQualityDisplay.BW) R.id.peq_quality_bw else R.id.peq_quality_q)

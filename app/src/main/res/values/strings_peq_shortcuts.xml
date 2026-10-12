@@ -9,7 +9,6 @@
     <string name="peq_add_available">可添加 1–%1$d 个频段</string>
     <string name="peq_add_too_many">最多还能添加 %1$d 个频段</string>
     <string name="peq_q_range">Q 值范围（上限 0.1–100）</string>
-    <string name="peq_q_range_hint">Q 上限同时限制滑杆、加减按钮及手动输入。BW 按同一 Q 范围换算；切换参数类型不会改变实际 Q。缩小范围不会自动改写已有频段。</string>
     <string name="peq_quality_range">Q 范围 0.1–%1$s</string>
     <string name="peq_bw_range">BW 范围 %1$s–%2$s</string>
     <string name="peq_invalid_quality_range">换算后的 Q 须在 0.1–%1$s 之间</string>

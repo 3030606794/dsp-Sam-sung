@@ -2,7 +2,7 @@ desc: Dynamic Bass (based on ViperFX)
 author: VipersAudio, thepbone
 tags: bass filter viper
 
-dBassGain:100<0,100,1>Bass strength (%)
+dBassGain:5<0,100,1>Bass strength (%)
 
 dX1:800<0,8000,1>Filter 1 Minimum frequency (Hz)
 dX2:6200<0,8000,1>Filter 1 Maximum frequency (Hz)
@@ -34,7 +34,7 @@ dSideGainY:0<0,100,1>Filter 2 Side gain
 //("Unknown Type IV",           ({800 ,6200,80,140,0 ,0 }))
 
 @init
-dBassGain = 100.00;
+dBassGain = 5;
 dX1 = 800.00;
 dX2 = 6200.00;
 dSideGainX = 20.00;

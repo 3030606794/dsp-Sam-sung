@@ -121,8 +121,8 @@ class LiveprogParamsFragment : PreferenceFragmentCompat(), NonPersistentDatastor
                     key = prop.key
                     title = prop.description
                     mPrecision = if(prop.handleAsInt()) 0 else 2
-                    setMin(prop.minimum.toFloat())
                     setMax(prop.maximum.toFloat())
+                    setMin(prop.minimum.toFloat())
                     setUpdatesContinuously(false)
                     setShowSeekBarValue(true)
                     setDefaultValue(prop.value)
