@@ -135,8 +135,8 @@ class PeqEditorUiTest {
         repository.save(original)
         launch()
         val settings = settings()
-        settings.findViewById<MaterialAutoCompleteTextView>(R.id.peq_gain_range)!!.setText("±6 dB", false)
-        settings.findViewById<MaterialAutoCompleteTextView>(R.id.peq_gain_step)!!.setText("0.25 dB", false)
+        settings.findViewById<EditText>(R.id.peq_gain_range)!!.setText("6")
+        settings.findViewById<EditText>(R.id.peq_gain_step)!!.setText("0.25")
         settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         layout()
         val saved = repository.load()
@@ -173,6 +173,121 @@ class PeqEditorUiTest {
         layout()
         assertEquals(PeqModel.resize(original, 1).bands, repository.load().bands)
         assertEquals(1, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
+    }
+
+    @Test fun settingSlidersAndNumberBoxesStayInSyncAtBothEndpointsAndCancelDiscardsDraft() {
+        val original = PeqModel.defaultState(3)
+        repository.save(original)
+        launch()
+        val settings = settings()
+        data class Setting(val input: Int, val slider: Int, val minimum: Double, val maximum: Double)
+        val controls = listOf(
+            Setting(R.id.peq_band_count, R.id.peq_band_count_slider, 1.0, 170.0),
+            Setting(R.id.peq_gain_step, R.id.peq_gain_step_slider, 0.01, 2.0),
+            Setting(R.id.peq_gain_range, R.id.peq_gain_range_slider, 1.0, 100.0),
+            Setting(R.id.peq_q_step, R.id.peq_q_step_slider, 0.01, 100.0),
+            Setting(R.id.peq_frequency_step, R.id.peq_frequency_step_slider, 1.0, 1000.0)
+        )
+        controls.forEach { spec ->
+            val input = settings.findViewById<EditText>(spec.input)!!
+            val slider = settings.findViewById<Slider>(spec.slider)!!
+            // Typing changes the thumb, then real key events change the number box.
+            input.setText(spec.minimum.toString())
+            assertEquals(slider.valueFrom, slider.value, 0f)
+            assertTrue(slider.requestFocus())
+            repeat(200) { slider.onKeyDown(KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT)) }
+            assertEquals(slider.valueTo, slider.value, 0f)
+            assertEquals(spec.maximum, input.text.toString().toDouble(), 0.0)
+            repeat(200) { slider.onKeyDown(KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT)) }
+            assertEquals(slider.valueFrom, slider.value, 0f)
+            assertEquals(spec.minimum, input.text.toString().toDouble(), 0.0)
+            input.setText(spec.maximum.toString())
+            assertEquals(slider.valueTo, slider.value, 0f)
+            assertEquals(original, repository.load())
+        }
+        settings.findViewById<MaterialSwitch>(R.id.peq_show_q_slider)!!.performClick()
+        settings.findViewById<MaterialSwitch>(R.id.peq_show_frequency_slider)!!.performClick()
+        settings.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        assertEquals(original, repository.load())
+        assertEquals(original, fragment().editorState)
+        val reopened = settings()
+        assertEquals(original.bands.size.toDouble(), reopened.findViewById<EditText>(R.id.peq_band_count)!!.text.toString().toDouble(), 0.0)
+        assertEquals(original.qStep, reopened.findViewById<EditText>(R.id.peq_q_step)!!.text.toString().toDouble(), 0.0)
+        assertEquals(original.frequencyStep, reopened.findViewById<EditText>(R.id.peq_frequency_step)!!.text.toString().toDouble(), 0.0)
+        assertFalse(reopened.findViewById<MaterialSwitch>(R.id.peq_show_q_slider)!!.isChecked)
+        assertFalse(reopened.findViewById<MaterialSwitch>(R.id.peq_show_frequency_slider)!!.isChecked)
+    }
+
+    @Test fun invalidSettingInputNeverClampsOrSavesAndCanBeCorrected() {
+        val original = PeqModel.defaultState(3)
+        repository.save(original)
+        launch()
+        val settings = settings()
+        val cases = listOf(
+            Triple(R.id.peq_band_count, R.id.peq_count_box, listOf("0", "171", "1.5", "")),
+            Triple(R.id.peq_gain_step, R.id.peq_gain_step_box, listOf("0.009", "2.01", "")),
+            Triple(R.id.peq_gain_range, R.id.peq_gain_range_box, listOf("0.99", "100.01", "")),
+            Triple(R.id.peq_q_step, R.id.peq_q_step_box, listOf("0.009", "100.01", "")),
+            Triple(R.id.peq_frequency_step, R.id.peq_frequency_step_box, listOf("0.99", "1000.01", ""))
+        )
+        cases.forEach { (inputId, boxId, invalidValues) ->
+            val input = settings.findViewById<EditText>(inputId)!!
+            val previous = input.text.toString()
+            invalidValues.forEach { invalid ->
+                input.setText(invalid)
+                settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+                assertTrue(settings.isShowing)
+                assertNotNull(settings.findViewById<TextInputLayout>(boxId)!!.error)
+                assertEquals(invalid, input.text.toString())
+                assertEquals(original, repository.load())
+                assertEquals(original, fragment().editorState)
+            }
+            input.setText(previous)
+            assertNull(settings.findViewById<TextInputLayout>(boxId)!!.error)
+        }
+        settings.findViewById<EditText>(R.id.peq_q_step)!!.setText("0.37")
+        settings.findViewById<EditText>(R.id.peq_frequency_step)!!.setText("37.5")
+        settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        assertFalse(settings.isShowing)
+        assertEquals(original.copy(qStep = 0.37, frequencyStep = 37.5), repository.load())
+    }
+
+    @Test fun manualSettingsPreserveBandsAndStepsSurviveRecreationAtBothRangeEndpoints() {
+        val original = PeqState(listOf(PeqBand(frequency = 777.25, q = 3.25, gain = 37.125)))
+        repository.save(original)
+        launch()
+        listOf(true, false).forEach { maximum ->
+            val settings = settings()
+            val expected = original.copy(gainStep = if (maximum) 2.0 else 0.01,
+                gainRange = if (maximum) 100.0 else 1.0,
+                qStep = if (maximum) 100.0 else 0.01,
+                frequencyStep = if (maximum) 1000.0 else 1.0)
+            settings.findViewById<EditText>(R.id.peq_gain_step)!!.setText(expected.gainStep.toString())
+            settings.findViewById<EditText>(R.id.peq_gain_range)!!.setText(expected.gainRange.toString())
+            settings.findViewById<EditText>(R.id.peq_q_step)!!.setText(expected.qStep.toString())
+            settings.findViewById<EditText>(R.id.peq_frequency_step)!!.setText(expected.frequencyStep.toString())
+            settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            assertFalse(settings.isShowing)
+            assertEquals(expected, repository.load())
+            controller!!.recreate()
+            layout()
+            assertEquals(expected, fragment().editorState)
+            assertEquals(original.bands, repository.load().bands)
+        }
+        val settings = settings()
+        settings.findViewById<EditText>(R.id.peq_gain_step)!!.setText("0.37")
+        settings.findViewById<EditText>(R.id.peq_gain_range)!!.setText("17.25")
+        settings.findViewById<EditText>(R.id.peq_q_step)!!.setText("0.125")
+        settings.findViewById<EditText>(R.id.peq_frequency_step)!!.setText("12.5")
+        settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        val expected = original.copy(gainStep = 0.37, gainRange = 17.25, qStep = 0.125, frequencyStep = 12.5)
+        assertEquals(expected, repository.load())
+        controller!!.recreate()
+        layout()
+        assertEquals(expected, fragment().editorState)
+        assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
     }
 
     @Test fun allFilterTypesCanBeEditedAndNonGainTypesHideInactiveControls() {
@@ -295,8 +410,8 @@ class PeqEditorUiTest {
         val settings = settings()
         settings.findViewById<MaterialSwitch>(R.id.peq_show_q_slider)!!.performClick()
         settings.findViewById<MaterialSwitch>(R.id.peq_show_frequency_slider)!!.performClick()
-        settings.findViewById<MaterialAutoCompleteTextView>(R.id.peq_gain_range)!!.setText("±100 dB", false)
-        settings.findViewById<MaterialAutoCompleteTextView>(R.id.peq_gain_step)!!.setText("1.5 dB", false)
+        settings.findViewById<EditText>(R.id.peq_gain_range)!!.setText("100")
+        settings.findViewById<EditText>(R.id.peq_gain_step)!!.setText("1.5")
         settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         layout()
         assertEquals(original.bands, repository.load().bands)

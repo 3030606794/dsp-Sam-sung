@@ -3,6 +3,7 @@ package me.timschneeberger.rootlessjamesdsp.peq
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -26,9 +27,10 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private val density = resources.displayMetrics.density
     private val primary = MaterialColors.getColor(this, com.google.android.material.R.attr.colorPrimary)
     private val foreground = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface)
+    private val surface = MaterialColors.getColor(this, com.google.android.material.R.attr.colorSurface)
     private val curvePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = primary
-        strokeWidth = 2.5f * density
+        strokeWidth = 1.25f * density
         style = Paint.Style.STROKE
         strokeJoin = Paint.Join.ROUND
     }
@@ -41,6 +43,14 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         color = ColorUtils.setAlphaComponent(foreground, 180)
         textSize = 10f * resources.displayMetrics.scaledDensity
     }
+    private val markerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(220, 40, 40) }
+    private val markerBackgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ColorUtils.setAlphaComponent(surface, 235)
+    }
+    private val markerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = foreground
+        textSize = 11f * resources.displayMetrics.scaledDensity
+    }
     private val graphBounds = RectF()
     private val line = Path()
     private val fill = Path()
@@ -51,12 +61,28 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private var animator: ValueAnimator? = null
     private var worker: ExecutorService? = null
     private val generation = AtomicInteger()
+    private var selectedBandId: String? = null
     var requestedState: PeqState? = null
         private set
     data class AxisLabel(val text: String, val position: Float, val bounds: RectF)
     internal var renderedFrequencyLabels: List<AxisLabel> = emptyList()
         private set
     internal var renderedGainLabels: List<AxisLabel> = emptyList()
+        private set
+    /** Actual parameters remain available even when the marker is clamped to the visible plot. */
+    internal data class BandMarker(
+        val bandId: String,
+        val frequency: Double,
+        val gain: Double,
+        val x: Float,
+        val y: Float,
+        val radius: Float,
+        val frequencyText: String,
+        val gainText: String,
+        val labelBounds: RectF,
+        val plotBounds: RectF
+    )
+    internal var renderedMarker: BandMarker? = null
         private set
 
     init {
@@ -67,6 +93,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     fun setState(state: PeqState, animate: Boolean = true) {
         if (state == requestedState && requestedWidth == width && worker?.isShutdown == false) return
         requestedState = state
+        updateMarkerDescription()
         requestedWidth = width
         gainRange = state.gainRange
         invalidate()
@@ -82,6 +109,32 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
                 if (revision == generation.get()) updateCurve(next, animate)
             }
         }
+    }
+
+    /** Selection only redraws the overlay; it never rebuilds or changes the audio filters. */
+    fun setSelectedBand(id: String?) {
+        if (selectedBandId == id) return
+        selectedBandId = id
+        updateMarkerDescription()
+        invalidate()
+    }
+
+    private fun selectedBand(): PeqBand? = requestedState?.bands?.let { bands ->
+        bands.firstOrNull { it.id == selectedBandId } ?: bands.firstOrNull()
+    }
+
+    private fun markerFrequencyText(band: PeqBand) = "${PeqBandAdapter.number(band.frequency, 3)} Hz"
+
+    private fun markerGain(band: PeqBand) = if (band.type.usesGain) band.gain else 0.0
+
+    private fun markerGainText(band: PeqBand): String {
+        val gain = markerGain(band)
+        return "${if (gain > 0) "+" else ""}${PeqBandAdapter.number(gain, 2)} dB"
+    }
+
+    private fun updateMarkerDescription() {
+        val title = context.getString(R.string.peq_response_title)
+        contentDescription = selectedBand()?.let { "$title, ${markerFrequencyText(it)}, ${markerGainText(it)}" } ?: title
     }
 
     private fun updateCurve(points: List<PeqResponse.Point>, animate: Boolean) {
@@ -139,6 +192,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        renderedMarker = null
         val metrics = textPaint.fontMetrics
         val textHeight = metrics.descent - metrics.ascent
         val labelWidth = maxOf(textPaint.measureText("+${PeqBandAdapter.number(gainRange)}"),
@@ -204,6 +258,45 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         canvas.drawPath(fill, fillPaint)
         canvas.drawPath(line, curvePaint)
         canvas.restore()
+        drawSelectedBand(canvas)
+    }
+
+    private fun drawSelectedBand(canvas: Canvas) {
+        val band = selectedBand() ?: return
+        val radius = minOf(4f * density, graphBounds.width() / 4, graphBounds.height() / 4)
+        val markerX = x(band.frequency).coerceIn(graphBounds.left + radius, graphBounds.right - radius)
+        val gain = markerGain(band)
+        val markerY = y(gain).coerceIn(graphBounds.top + radius, graphBounds.bottom - radius)
+        val frequencyText = markerFrequencyText(band)
+        val gainText = markerGainText(band)
+        val padding = 4f * density
+        val gap = radius + 5f * density
+        markerTextPaint.textSize = 11f * resources.displayMetrics.scaledDensity
+        // Keep both values readable on compact displays without clipping the graph's axes.
+        val naturalWidth = maxOf(markerTextPaint.measureText(frequencyText), markerTextPaint.measureText(gainText))
+        val availableWidth = (graphBounds.width() - padding * 2).coerceAtLeast(1f)
+        val naturalMetrics = markerTextPaint.fontMetrics
+        val naturalHeight = 2 * (naturalMetrics.descent - naturalMetrics.ascent)
+        val availableHeight = (graphBounds.height() - padding * 2).coerceAtLeast(1f)
+        markerTextPaint.textSize *= minOf(1f, availableWidth / naturalWidth, availableHeight / naturalHeight)
+        val metrics = markerTextPaint.fontMetrics
+        val lineHeight = metrics.descent - metrics.ascent
+        val labelWidth = maxOf(markerTextPaint.measureText(frequencyText), markerTextPaint.measureText(gainText)) + padding * 2
+        val labelHeight = lineHeight * 2 + padding * 2
+        val preferredLeft = if (markerX + gap + labelWidth <= graphBounds.right) markerX + gap
+            else markerX - gap - labelWidth
+        val labelLeft = preferredLeft.coerceIn(graphBounds.left, maxOf(graphBounds.left, graphBounds.right - labelWidth))
+        val labelTop = (markerY - labelHeight / 2).coerceIn(graphBounds.top, maxOf(graphBounds.top, graphBounds.bottom - labelHeight))
+        val label = RectF(labelLeft, labelTop, labelLeft + labelWidth, labelTop + labelHeight)
+        renderedMarker = BandMarker(band.id, band.frequency, gain, markerX, markerY, radius,
+            frequencyText, gainText, RectF(label), RectF(graphBounds))
+        canvas.drawRoundRect(label, 3f * density, 3f * density, markerBackgroundPaint)
+        val baseline = label.top + padding - metrics.ascent
+        canvas.drawText(frequencyText, label.left + padding, baseline, markerTextPaint)
+        canvas.drawText(gainText, label.left + padding, baseline + lineHeight, markerTextPaint)
+        // Draw last so a tiny viewport or an edge-clamped label cannot hide the red point.
+        canvas.drawCircle(markerX, markerY, radius + density, markerBackgroundPaint)
+        canvas.drawCircle(markerX, markerY, radius, markerPaint)
     }
 
     private fun y(db: Double): Float = graphBounds.centerY() -

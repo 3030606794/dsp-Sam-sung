@@ -1,6 +1,6 @@
 id=dsp_fusion
 name=DSP音效
-version=0.1.0-alpha7
-versionCode=1007
+version=0.1.0-alpha8
+versionCode=1008
 author=DSP-mobile-version contributors
-description=Unified 170-band parametric EQ + JamesDSP + MSEB + ViPER RE. Requires dsp音效 alpha7 (protocol 4). Disable old JamesDSP, ViPER and AML modules before use.
+description=Unified 170-band parametric EQ + JamesDSP + MSEB + ViPER RE. Compatible with dsp音效 alpha7/alpha8 (protocol 4); alpha8 APK also supports the alpha7 driver. Disable old JamesDSP, ViPER and AML modules before use.

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_bw_value">BW：%1$s</string>
+    <string name="peq_quality_decrease">减小 Q</string>
+    <string name="peq_quality_increase">增大 Q</string>
+    <string name="peq_bw_decrease">减小 BW</string>
+    <string name="peq_bw_increase">增大 BW</string>
+    <string name="peq_frequency_decrease">减小频率</string>
+    <string name="peq_frequency_increase">增大频率</string>
+</resources>

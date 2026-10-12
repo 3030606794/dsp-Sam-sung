@@ -50,6 +50,8 @@ class PeqRepository(private val preferences: SharedPreferences) {
                 put("schema", SCHEMA)
                 put("gainRange", state.gainRange)
                 put("gainStep", state.gainStep)
+                put("qStep", state.qStep)
+                put("frequencyStep", state.frequencyStep)
                 put("showQSlider", state.showQSlider)
                 put("showFrequencySlider", state.showFrequencySlider)
                 put("bands", buildJsonArray {
@@ -96,6 +98,8 @@ class PeqRepository(private val preferences: SharedPreferences) {
                 },
                 gainRange = root.number("gainRange"),
                 gainStep = root.number("gainStep"),
+                qStep = if (root.containsKey("qStep")) root.number("qStep") else 0.01,
+                frequencyStep = if (root.containsKey("frequencyStep")) root.number("frequencyStep") else 1.0,
                 showQSlider = root.optionalBoolean("showQSlider", false),
                 showFrequencySlider = root.optionalBoolean("showFrequencySlider", false)
             ))

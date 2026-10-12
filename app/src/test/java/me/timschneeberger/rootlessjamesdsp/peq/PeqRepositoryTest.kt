@@ -95,6 +95,8 @@ class PeqRepositoryTest {
         assertFalse(loaded.corrupt)
         assertFalse(loaded.state.showQSlider)
         assertFalse(loaded.state.showFrequencySlider)
+        assertEquals(0.01, loaded.state.qStep, 0.0)
+        assertEquals(1.0, loaded.state.frequencyStep, 0.0)
         assertEquals(PeqQualityDisplay.Q, loaded.state.bands.single().qualityDisplay)
         assertEquals(31.5, loaded.state.bands.single().frequency, 0.0)
         assertEquals(old, preferences.getString(PeqRepository.KEY_STATE, null))
@@ -110,5 +112,59 @@ class PeqRepositoryTest {
             json.replace("\"qualityDisplay\":\"BW\"", "\"qualityDisplay\":\"UNKNOWN\""))
             .forEach { malformed -> assertThrows(IllegalArgumentException::class.java) { repository.importJson(malformed) } }
         assertEquals(state, repository.load())
+    }
+
+    @Test fun alpha7JsonDefaultsMissingStepsWithoutRewritingSavedBandwidthOrParameters() {
+        val old = """{"schema":1,"gainRange":100.0,"gainStep":1.5,
+            "showQSlider":true,"showFrequencySlider":true,"bands":[
+            {"id":"custom","type":"PEAK","enabled":true,"frequency":777.125,
+            "gain":-27.375,"q":23.125,"qualityDisplay":"BW"}]}"""
+        preferences.edit().putString(PeqRepository.KEY_STATE, old).commit()
+        val before = preferences.all.toMap()
+        val result = repository.loadResult()
+        assertFalse(result.corrupt)
+        assertTrue(result.hasSavedState)
+        assertEquals(PeqState(listOf(PeqBand("custom", frequency = 777.125, gain = -27.375,
+            q = 23.125, qualityDisplay = PeqQualityDisplay.BW)), gainRange = 100.0,
+            gainStep = 1.5, showQSlider = true, showFrequencySlider = true,
+            qStep = 0.01, frequencyStep = 1.0), result.state)
+        assertEquals(before, preferences.all)
+    }
+
+    @Test fun continuousSettingsAndStepEndpointsRoundTripWithoutQuantizingStoredValues() {
+        val base = PeqState(listOf(PeqBand("precise", frequency = 777.125, gain = 17.375, q = 2.123456)))
+        listOf(
+            base.copy(gainRange = 1.0, gainStep = 0.01, qStep = 0.01, frequencyStep = 1.0),
+            base.copy(gainRange = 100.0, gainStep = 2.0, qStep = 100.0, frequencyStep = 1000.0),
+            base.copy(gainRange = 17.25, gainStep = 0.37, qStep = 0.125, frequencyStep = 12.5)
+        ).forEach { state ->
+            assertTrue(repository.save(state))
+            assertEquals(state, repository.load())
+            assertEquals(state, repository.importJson(repository.exportJson(state)))
+            assertEquals(base.bands, repository.load().bands)
+        }
+    }
+
+    @Test fun invalidNewStepValuesRejectImportsWithoutReplacingWorkingState() {
+        val working = PeqState(listOf(PeqBand("working")), qStep = 0.25, frequencyStep = 25.0)
+        repository.save(working)
+        val valid = repository.exportJson(working)
+        val invalid = listOf(
+            valid.replace("\"qStep\":0.25", "\"qStep\":0.009"),
+            valid.replace("\"qStep\":0.25", "\"qStep\":100.01"),
+            valid.replace("\"qStep\":0.25", "\"qStep\":\"0.25\""),
+            valid.replace("\"qStep\":0.25", "\"qStep\":null"),
+            valid.replace("\"qStep\":0.25", "\"qStep\":1e999"),
+            valid.replace("\"frequencyStep\":25.0", "\"frequencyStep\":0.99"),
+            valid.replace("\"frequencyStep\":25.0", "\"frequencyStep\":1000.01"),
+            valid.replace("\"frequencyStep\":25.0", "\"frequencyStep\":\"25\""),
+            valid.replace("\"frequencyStep\":25.0", "\"frequencyStep\":false"),
+            valid.replace("\"frequencyStep\":25.0", "\"frequencyStep\":1e999")
+        )
+        invalid.forEach { json ->
+            assertNotEquals(valid, json)
+            assertThrows(IllegalArgumentException::class.java) { repository.importJson(json) }
+            assertEquals(working, repository.load())
+        }
     }
 }

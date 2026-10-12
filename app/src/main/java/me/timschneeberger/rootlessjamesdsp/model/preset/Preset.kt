@@ -67,9 +67,9 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                     META_APP_VERSION to BuildConfig.VERSION_NAME,
                     META_APP_FLAVOR to BuildConfig.FLAVOR,
                     META_LIVEPROG_INCLUDED to false.toString(),
-                    // Older apps cannot preserve Q100/gain100 or the retired
-                    // curve selection semantics, even for an untouched bank.
-                    META_MIN_VERSION_CODE to "1007"
+                    // Earlier apps reject continuous gain ranges/steps and cannot
+                    // preserve the Q/BW and frequency adjustment steps.
+                    META_MIN_VERSION_CODE to "1008"
                 )
 
                 currentPath(ctx)

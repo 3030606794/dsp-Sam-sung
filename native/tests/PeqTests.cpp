@@ -72,6 +72,47 @@ void testTransferFunctions() {
     assert(difference(source,processed)<1e-7);
     std::puts("PEQ: seven filter transfer functions, sample rates, boost/cut cancellation passed.");
 }
+void testQualityBandwidthDirection() {
+    // Measure real audio on both sides of the center. Larger Q must move a
+    // peak/notch's off-center response toward 0 dB and attenuate a band-pass
+    // more: the affected frequency region becomes narrower in all three cases.
+    for(uint32_t rate:{44100u,48000u,96000u}) for(int center:{1000,10000,20000})
+        for(double probe:{center/1.25,center*1.1}) for(int type:{0,5,6})
+            for(int gain:{-12000,12000}) {
+                double previous=type==6?0:std::numeric_limits<double>::infinity();
+                for(int q:{100,250,500,1000,5000,20000,100000}) {
+                    const double db=measuredDb(packet({{type,1,center*1000,gain,q}}),rate,probe);
+                    const double depth=std::abs(db);
+                    assert(std::isfinite(db));
+                    assert(type==6?depth>previous:depth<previous);
+                    previous=depth;
+                }
+            }
+    // BW is an octave value, not Q or 1/Q. Exercise independently converted,
+    // quantized wire values across the full valid Q range at low/high centers.
+    // Increasing BW reverses the Q direction and therefore widens the response.
+    for(int center:{1000,10000,20000}) for(int type:{0,5,6}) {
+        constexpr uint32_t rate=48000;
+        const double omega=2*pi*center/rate;
+        const double scale=2/std::log(2.)*std::sin(omega)/omega;
+        const double minimum=scale*std::asinh(1./200.);
+        const double maximum=scale*std::asinh(5.);
+        double previous=type==6?std::numeric_limits<double>::infinity():0;
+        int previousQ=100001;
+        for(int step=0;step<=8;++step) {
+            const double bw=minimum*std::pow(maximum/minimum,step/8.);
+            const double q=1/(2*std::sinh(bw/scale));
+            const int wireQ=int(std::lround(q*1000));
+            assert(wireQ>=100&&wireQ<=100000&&wireQ<previousQ);
+            const double db=measuredDb(packet({{type,1,center*1000,12000,wireQ}}),rate,center*1.1);
+            const double depth=std::abs(db);
+            assert(std::isfinite(db));
+            assert(type==6?depth<previous:depth>previous);
+            previous=depth;previousQ=wireQ;
+        }
+    }
+    std::puts("PEQ: measured audio confirms increasing Q narrows and increasing octave BW widens peak/notch/band-pass responses.");
+}
 // A separate direct-form implementation is deliberately retained in tests: it
 // catches transfer-function mistakes in the state-variable production engine.
 std::vector<float> rbjReference(const Band& b,uint32_t rate,const std::vector<float>& source) {
@@ -287,6 +328,6 @@ void benchmark() {
 }
 int main() {
     std::setvbuf(stdout,nullptr,_IONBF,0);
-    testTransferFunctions();testExtendedRangeTransfer();testNeutralValidationAndFullCount();testContinuityAndSmoothing();testExtremeTransitions();testFiniteAndConcurrentUpdates();testFullCountExtremes();benchmark();
+    testTransferFunctions();testQualityBandwidthDirection();testExtendedRangeTransfer();testNeutralValidationAndFullCount();testContinuityAndSmoothing();testExtremeTransitions();testFiniteAndConcurrentUpdates();testFullCountExtremes();benchmark();
     std::puts("PEQ audio tests passed.");
 }

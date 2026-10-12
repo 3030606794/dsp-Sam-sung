@@ -13,6 +13,7 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -35,6 +36,7 @@ class PeqFragment : Fragment() {
     var editorState: PeqState = PeqModel.defaultState()
         private set
     private var lastSavedState = editorState
+    private var selectedBandId: String? = null
     private val handler = Handler(Looper.getMainLooper())
     private var saveQueued = false
     private val pendingSave = Runnable { flushPendingSave() }
@@ -50,6 +52,7 @@ class PeqFragment : Fragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        selectedBandId = savedInstanceState?.getString("peq_selected_band")
         requireContext().registerLocalReceiver(receiver, IntentFilter(Constants.ACTION_PRESET_LOADED))
     }
 
@@ -65,7 +68,8 @@ class PeqFragment : Fragment() {
                 handler.postDelayed(pendingSave, 50)
             }
             true
-        }, onEdit = ::editBand, onInteractionFinished = ::flushPendingSave)
+        }, onEdit = ::editBand, onInteractionFinished = ::flushPendingSave,
+            onBandSelected = ::selectBand)
         ui.peqBandList.layoutManager = LinearLayoutManager(requireContext())
         ui.peqBandList.adapter = bandAdapter
         ui.peqBandList.itemAnimator = null
@@ -100,12 +104,24 @@ class PeqFragment : Fragment() {
 
     private fun render(animate: Boolean = true, interactingBand: String? = null) {
         binding?.apply {
+            if (editorState.bands.none { it.id == selectedBandId }) selectedBandId = editorState.bands.firstOrNull()?.id
             bandAdapter.submitState(editorState, interactingBand)
             peqCurve.setState(editorState, animate)
+            peqCurve.setSelectedBand(selectedBandId)
             peqSummary.text = getString(R.string.peq_summary, editorState.bands.size,
                 PeqBandAdapter.number(editorState.gainStep), PeqBandAdapter.number(editorState.gainRange))
             peqAdd.isEnabled = editorState.bands.size < PeqModel.MAX_BANDS
         }
+    }
+
+    private fun selectBand(id: String) {
+        selectedBandId = id
+        binding?.peqCurve?.setSelectedBand(id)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("peq_selected_band", selectedBandId)
+        super.onSaveInstanceState(outState)
     }
 
     private fun save(next: PeqState, interactingBand: String? = null): Boolean {
@@ -147,13 +163,16 @@ class PeqFragment : Fragment() {
     private fun showSettings() {
         flushPendingSave()
         val ui = PeqSettingsDialogBinding.inflate(layoutInflater)
-        ui.peqBandCount.setText(editorState.bands.size.toString())
-        val steps = PeqModel.GAIN_STEPS.map { "${PeqBandAdapter.number(it)} dB" }
-        val ranges = PeqModel.GAIN_RANGES.map { "±${PeqBandAdapter.number(it)} dB" }
-        ui.peqGainStep.setAdapter(ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, steps))
-        ui.peqGainRange.setAdapter(ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, ranges))
-        ui.peqGainStep.setText(steps[PeqModel.GAIN_STEPS.indexOf(editorState.gainStep)], false)
-        ui.peqGainRange.setText(ranges[PeqModel.GAIN_RANGES.indexOf(editorState.gainRange)], false)
+        val countControl = PeqSettingControl(ui.peqBandCountSlider, ui.peqBandCount, ui.peqCountBox,
+            1.0, 170.0, 1.0, editorState.bands.size.coerceAtLeast(1).toDouble(), integer = true)
+        val gainStepControl = PeqSettingControl(ui.peqGainStepSlider, ui.peqGainStep, ui.peqGainStepBox,
+            0.01, 2.0, 0.01, editorState.gainStep)
+        val gainRangeControl = PeqSettingControl(ui.peqGainRangeSlider, ui.peqGainRange, ui.peqGainRangeBox,
+            1.0, 100.0, 1.0, editorState.gainRange)
+        val qStepControl = PeqSettingControl(ui.peqQStepSlider, ui.peqQStep, ui.peqQStepBox,
+            0.01, 100.0, 0.01, editorState.qStep, logarithmic = true)
+        val frequencyStepControl = PeqSettingControl(ui.peqFrequencyStepSlider, ui.peqFrequencyStep,
+            ui.peqFrequencyStepBox, 1.0, 1000.0, 1.0, editorState.frequencyStep, logarithmic = true)
         ui.peqShowQSlider.isChecked = editorState.showQSlider
         ui.peqShowFrequencySlider.isChecked = editorState.showFrequencySlider
         val dialog = MaterialAlertDialogBuilder(requireContext())
@@ -162,15 +181,14 @@ class PeqFragment : Fragment() {
             .setNegativeButton(android.R.string.cancel, null).create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val count = ui.peqBandCount.text?.toString()?.toIntOrNull()
-                if (count == null || count !in 1..PeqModel.MAX_BANDS) {
-                    ui.peqCountBox.error = getString(R.string.peq_invalid_count)
-                    return@setOnClickListener
-                }
-                val step = PeqModel.GAIN_STEPS.getOrNull(steps.indexOf(ui.peqGainStep.text.toString())) ?: return@setOnClickListener
-                val range = PeqModel.GAIN_RANGES.getOrNull(ranges.indexOf(ui.peqGainRange.text.toString())) ?: return@setOnClickListener
+                val count = countControl.validatedValue()?.toInt() ?: return@setOnClickListener
+                val step = gainStepControl.validatedValue() ?: return@setOnClickListener
+                val range = gainRangeControl.validatedValue() ?: return@setOnClickListener
+                val qStep = qStepControl.validatedValue() ?: return@setOnClickListener
+                val frequencyStep = frequencyStepControl.validatedValue() ?: return@setOnClickListener
                 fun applySettings() {
                     if (save(PeqModel.resize(editorState, count).copy(gainStep = step, gainRange = range,
+                        qStep = qStep, frequencyStep = frequencyStep,
                         showQSlider = ui.peqShowQSlider.isChecked,
                         showFrequencySlider = ui.peqShowFrequencySlider.isChecked))) dialog.dismiss()
                 }
@@ -198,12 +216,14 @@ class PeqFragment : Fragment() {
 
     private fun editBand(id: String) {
         flushPendingSave()
+        selectBand(id)
         val band = editorState.bands.firstOrNull { it.id == id } ?: return
         val ui = PeqBandDialogBinding.inflate(layoutInflater)
         val types = PeqFilterType.entries.toList()
         val labels = types.map { PeqBandAdapter.typeLabel(requireContext(), it) }
         var selectedType = band.type
         var changingMode = false
+        var previewDraft: () -> Unit = {}
         fun supportsBandwidth(type: PeqFilterType) = type in listOf(PeqFilterType.PEAK, PeqFilterType.NOTCH, PeqFilterType.BAND_PASS)
         val frequencyText = PeqBandAdapter.number(band.frequency, 4)
         val qualityEditor = PeqQualityEditor(band.q, frequencyText.toDouble(),
@@ -226,6 +246,7 @@ class PeqFragment : Fragment() {
             ui.peqQualityBox.helperText = getString(if (bandwidthMode) R.string.peq_bandwidth_hint else R.string.peq_quality_hint)
             ui.peqQualityBox.error = null
             changingMode = false
+            previewDraft()
         }
         fun updateTypeFields() {
             ui.peqGainBox.isVisible = selectedType.usesGain
@@ -245,6 +266,7 @@ class PeqFragment : Fragment() {
             }
             selectedType = nextType
             updateTypeFields()
+            previewDraft()
         }
         ui.peqQualityMode.addOnButtonCheckedListener { _, checkedId, checked ->
             if (!checked || changingMode) return@addOnButtonCheckedListener
@@ -260,20 +282,35 @@ class PeqFragment : Fragment() {
         }
         renderQualityMode()
         updateTypeFields()
-        fun editedBand(): PeqBand? {
+        fun editedBand(showErrors: Boolean = true): PeqBand? {
             val freq = frequency()
             val gain = if (selectedType.usesGain) ui.peqGainInput.text?.toString()?.toDoubleOrNull() else band.gain
             val q = inputQ()
-            ui.peqFrequencyBox.error = if (freq == null || !freq.isFinite() || freq !in PeqModel.MIN_FREQUENCY..PeqModel.MAX_FREQUENCY)
+            val frequencyError = if (freq == null || !freq.isFinite() || freq !in PeqModel.MIN_FREQUENCY..PeqModel.MAX_FREQUENCY)
                 getString(R.string.peq_invalid_frequency) else null
-            ui.peqGainBox.error = if (gain == null || !gain.isFinite() || gain !in -PeqModel.MAX_GAIN..PeqModel.MAX_GAIN)
+            val gainError = if (gain == null || !gain.isFinite() || gain !in -PeqModel.MAX_GAIN..PeqModel.MAX_GAIN)
                 getString(R.string.peq_invalid_gain) else null
-            ui.peqQualityBox.error = if (q == null || !q.isFinite() || q !in PeqModel.MIN_Q..PeqModel.MAX_Q)
+            val qualityError = if (q == null || !q.isFinite() || q !in PeqModel.MIN_Q..PeqModel.MAX_Q)
                 getString(R.string.peq_invalid_quality) else null
-            if (ui.peqFrequencyBox.error != null || ui.peqGainBox.error != null || ui.peqQualityBox.error != null) return null
+            if (showErrors) {
+                ui.peqFrequencyBox.error = frequencyError
+                ui.peqGainBox.error = gainError
+                ui.peqQualityBox.error = qualityError
+            }
+            if (frequencyError != null || gainError != null || qualityError != null) return null
             return band.copy(type = selectedType, frequency = requireNotNull(freq), gain = requireNotNull(gain),
                 q = requireNotNull(q), qualityDisplay = qualityEditor.mode)
         }
+        previewDraft = preview@{
+            if (changingMode) return@preview
+            val edited = editedBand(showErrors = false) ?: return@preview
+            binding?.peqCurve?.setState(editorState.copy(bands = editorState.bands.map {
+                if (it.id == id) edited else it
+            }), animate = false)
+        }
+        ui.peqFrequencyInput.doAfterTextChanged { previewDraft() }
+        ui.peqGainInput.doAfterTextChanged { previewDraft() }
+        ui.peqQualityInput.doAfterTextChanged { previewDraft() }
         val dialog = MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.peq_edit_band)
             .setView(ui.root).setPositiveButton(android.R.string.ok, null)
             .setNegativeButton(android.R.string.cancel, null)
@@ -303,7 +340,12 @@ class PeqFragment : Fragment() {
             val copied = editorState.bands.toMutableList().apply { add(index + 1, edited.copy(id = UUID.randomUUID().toString())) }
             if (save(editorState.copy(bands = copied))) dialog.dismiss()
         }
-        track(dialog).show()
+        track(dialog).also {
+            it.setOnDismissListener {
+                dialogs.remove(it)
+                binding?.peqCurve?.setState(editorState, animate = false)
+            }
+        }.show()
     }
 
     private fun track(dialog: AlertDialog): AlertDialog {

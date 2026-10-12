@@ -27,7 +27,9 @@ data class PeqState(
     val gainRange: Double = 18.0,
     val gainStep: Double = 0.1,
     val showQSlider: Boolean = false,
-    val showFrequencySlider: Boolean = false
+    val showFrequencySlider: Boolean = false,
+    val qStep: Double = 0.01,
+    val frequencyStep: Double = 1.0
 )
 
 object PeqModel {
@@ -37,8 +39,6 @@ object PeqModel {
     const val MAX_GAIN = 100.0
     const val MIN_Q = 0.1
     const val MAX_Q = 100.0
-    val GAIN_RANGES = listOf(6.0, 12.0, 18.0, 24.0, 36.0, 48.0, 60.0, 80.0, 100.0)
-    val GAIN_STEPS = listOf(0.1, 0.25, 0.5, 1.0, 1.5, 2.0)
 
     fun validateBand(band: PeqBand): PeqBand {
         require(band.id.isNotBlank() && band.id.length <= 128 && band.id.none { it.isISOControl() }) {
@@ -56,8 +56,10 @@ object PeqModel {
 
     fun validate(state: PeqState): PeqState {
         require(state.bands.size <= MAX_BANDS) { "At most 170 bands are supported" }
-        require(state.gainRange in GAIN_RANGES) { "Unsupported gain display range" }
-        require(state.gainStep in GAIN_STEPS) { "Unsupported gain adjustment step" }
+        require(state.gainRange.isFinite() && state.gainRange in 1.0..100.0) { "Gain range must be between 1 and 100 dB" }
+        require(state.gainStep.isFinite() && state.gainStep in 0.01..2.0) { "Gain step must be between 0.01 and 2 dB" }
+        require(state.qStep.isFinite() && state.qStep in 0.01..100.0) { "Q/BW step must be between 0.01 and 100" }
+        require(state.frequencyStep.isFinite() && state.frequencyStep in 1.0..1000.0) { "Frequency step must be between 1 and 1000 Hz" }
         state.bands.forEach(::validateBand)
         require(state.bands.map { it.id }.toSet().size == state.bands.size) { "Band ids must be unique" }
         return state
