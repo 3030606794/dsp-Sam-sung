@@ -12,7 +12,7 @@
     <string name="peq_resize_remove_front_summary">删除列表最前面的 %1$d 段，保留其余频段。</string>
     <string name="peq_resize_remove_back_summary">删除列表最后面的 %1$d 段，保留其余频段。</string>
     <string name="peq_resize_redistribute">重新分布频率（20 Hz–20 kHz）</string>
-    <string name="peq_resize_preserve_add_summary">保留所有原有频率。新增频段默认为峰值、0 Hz、0 dB、Q 0.5；0 Hz 表示尚未设置，暂不参与滤波。</string>
+    <string name="peq_resize_preserve_add_summary">保留所有原有频率。新增频段默认为峰值、0 Hz、0 dB、Q 0.5。</string>
     <string name="peq_resize_preserve_remove_summary">保留剩余频段的频率、增益、Q、类型和启用状态，不重新计算频率。</string>
     <string name="peq_resize_redistribute_summary">调整数量后，将全部 %1$d 段的频率按对数重新分布到 20 Hz–20 kHz（仅 1 段时使用中心频率）。保留已有频段的其他参数；新增频段使用峰值、0 dB、Q 0.5。</string>
 </resources>

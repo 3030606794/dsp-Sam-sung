@@ -7,6 +7,8 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
+import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -23,6 +25,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
+import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class, qualifiers = "zh-rCN-w411dp-h820dp-port")
@@ -37,6 +40,7 @@ class PeqBandSelectionUiTest {
     private val locations = mutableListOf<String>()
     private val fields = mutableListOf<PeqEditField>()
     private val changes = mutableListOf<PeqBand>()
+    private val draggedHolders = mutableListOf<RecyclerView.ViewHolder>()
     private val list get() = controller!!.get().list
 
     @After fun close() {
@@ -54,7 +58,7 @@ class PeqBandSelectionUiTest {
             true
         }, onEdit = { edits += it }, onLocate = { locations += it },
             onEditField = { _, field -> fields += field }, onEditType = { types += it },
-            onToggleSelection = { selectedClicks += it })
+            onToggleSelection = { selectedClicks += it }, onStartDrag = { draggedHolders += it })
         list.adapter = adapter
         adapter.submitState(state)
         layout()
@@ -114,6 +118,14 @@ class PeqBandSelectionUiTest {
                     card.width / 2f, locator.exactCenterX(), 1f)
                 val warning = bounds(card, R.id.peq_band_warning)
                 val gainBounds = bounds(card, R.id.peq_band_gain)
+                val header = bounds(card, R.id.peq_band_header)
+                listOf(R.id.peq_band_title, R.id.peq_band_drag_handle, R.id.peq_band_locate,
+                    R.id.peq_band_gain, R.id.peq_band_edit).forEachIndexed { column, id ->
+                    assertEquals("Column ${column + 1} center at width $width",
+                        header.left + header.width() * (column + 0.5f) / 5f,
+                        bounds(card, id).exactCenterX(), 1.5f)
+                }
+                assertTrue("Warning must not overlap gain", warning.right <= gainBounds.left)
                 assertEquals(if (frequency == 0.0) View.VISIBLE else View.INVISIBLE,
                     card.findViewById<View>(R.id.peq_band_warning).visibility)
                 assertEquals(locator.right, warning.left)
@@ -209,7 +221,100 @@ class PeqBandSelectionUiTest {
         card.performClick()
         assertTrue(selectedClicks.isEmpty())
         card.findViewById<View>(R.id.peq_band_header).performClick()
-        assertEquals(listOf("clicks", "clicks"), edits)
+        assertEquals(listOf("clicks"), edits)
+    }
+
+    @Test fun onlyHandleLongPressStartsDragAndTitleClickAreaStaysAroundText() {
+        launch(PeqModel.defaultState(2).copy(showQSlider = true, showFrequencySlider = true))
+        val card = row()
+        val title = card.findViewById<TextView>(R.id.peq_band_title)
+        val header = bounds(card, R.id.peq_band_header)
+        val titleBounds = bounds(card, R.id.peq_band_title)
+        assertTrue("Title is limited to the first column", titleBounds.width() <= header.width() / 5 + 1)
+        assertTrue("Ripple only surrounds text", title.width <= title.paint.measureText(title.text.toString()) + 2f)
+        card.findViewById<View>(R.id.peq_band_header).performClick()
+        assertTrue(edits.isEmpty())
+        assertTrue(types.isEmpty())
+        tap(card, R.id.peq_band_title)
+        assertEquals(listOf(state.bands.first().id), types)
+        val handle = card.findViewById<View>(R.id.peq_band_drag_handle)
+        assertTrue(handle.isEnabled)
+        assertTrue(handle.performLongClick())
+        assertSame(list.findViewHolderForAdapterPosition(0), draggedHolders.single())
+        draggedHolders.clear()
+        adapter.submitSelection(true, emptySet())
+        layout()
+        assertFalse(handle.isEnabled)
+        handle.performLongClick()
+        tap(card, R.id.peq_band_drag_handle)
+        assertTrue(draggedHolders.isEmpty())
+        assertTrue(selectedClicks.isEmpty())
+        adapter.submitSelection(false, emptySet())
+        state = state.copy(bands = state.bands.take(1))
+        adapter.submitState(state)
+        assertFalse(row().findViewById<View>(R.id.peq_band_drag_handle).isEnabled)
+    }
+
+    @Test fun reorderPayloadUpdatesEveryRankWithoutReplacingHoldersOrSliderCallbacks() {
+        launch(PeqModel.defaultState(3).copy(showQSlider = false, showFrequencySlider = false))
+        val firstId = state.bands.first().id
+        val moving = list.findViewHolderForAdapterPosition(0)!!
+        val movingSlider = moving.itemView.findViewById<Slider>(R.id.peq_band_slider)
+        val ids = state.bands.map { it.id }
+        var fullChanges = 0
+        val moves = mutableListOf<Pair<Int, Int>>()
+        val ranges = mutableListOf<Pair<Int, Int>>()
+        adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+            override fun onChanged() { fullChanges++ }
+            override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) {
+                moves += fromPosition to toPosition
+            }
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int, payload: Any?) {
+                assertNotNull(payload)
+                ranges += positionStart to itemCount
+            }
+        })
+        state = state.copy(bands = listOf(state.bands[1], state.bands[2], state.bands[0]))
+        adapter.submitReorderedState(state, 0, 2)
+        layout()
+        assertEquals(listOf(0 to 2), moves)
+        assertEquals(listOf(0 to 3), ranges)
+        assertEquals(0, fullChanges)
+        assertSame(moving, list.findViewHolderForAdapterPosition(2))
+        assertSame(movingSlider, moving.itemView.findViewById<Slider>(R.id.peq_band_slider))
+        for (index in 0..2) {
+            assertTrue(row(index).findViewById<TextView>(R.id.peq_band_title).text.startsWith("${index + 1} • "))
+        }
+        row(2).findViewById<View>(R.id.peq_band_plus).performClick()
+        assertEquals(firstId, changes.single().id)
+        assertTrue(row(2).findViewById<TextView>(R.id.peq_band_title).text.startsWith("3 • "))
+        assertEquals(listOf(ids[1], ids[2], ids[0]), state.bands.map { it.id })
+    }
+
+    @Test fun repeatedGainStepsSurviveSelectionRefreshAndStopWhenEditingModeChanges() {
+        launch(PeqState(listOf(PeqBand("repeat")), gainStep = 0.25))
+        val plus = row().findViewById<View>(R.id.peq_band_plus)
+        val down = SystemClock.uptimeMillis()
+        val event = MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, plus.width / 2f, plus.height / 2f, 0)
+        try { plus.dispatchTouchEvent(event) } finally { event.recycle() }
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ViewConfiguration.getLongPressTimeout().toLong() + 1))
+        assertEquals(0.25, state.bands.single().gain, 0.0)
+        for (index in 2..4) {
+            adapter.submitSelection(false, emptySet())
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+            assertEquals(index * 0.25, state.bands.single().gain, 0.0)
+        }
+        adapter.submitSelection(true, emptySet())
+        layout()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1000))
+        assertEquals(1.0, state.bands.single().gain, 0.0)
+        val up = MotionEvent.obtain(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP,
+            plus.width / 2f, plus.height / 2f, 0)
+        try { plus.dispatchTouchEvent(up) } finally { up.recycle() }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(1.0, state.bands.single().gain, 0.0)
+        assertTrue(selectedClicks.isEmpty())
+        adapter.cancelPendingRepeats()
     }
 
     class HostActivity : FragmentActivity() {

@@ -518,7 +518,7 @@ class PeqBandControlsUiTest {
         assertEquals("定位频段", button.contentDescription.toString())
         assertTrue(button.text.isEmpty())
         assertNotNull(button.icon)
-        assertSame(current.findViewById<View>(R.id.peq_band_header), (button.parent as View).parent)
+        assertSame(current.findViewById<View>(R.id.peq_band_header), button.parent)
         button.performClick()
         assertEquals(listOf(state.bands.single().id), located)
         assertTrue(selected.isEmpty())

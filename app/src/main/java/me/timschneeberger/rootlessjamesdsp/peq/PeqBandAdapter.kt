@@ -17,6 +17,7 @@ import com.google.android.material.color.MaterialColors
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.PeqBandRowBinding
 import me.timschneeberger.rootlessjamesdsp.utils.SliderDoubleTapReset
+import me.timschneeberger.rootlessjamesdsp.utils.ButtonPressRepeat
 import java.util.Locale
 import kotlin.math.ln
 import kotlin.math.exp
@@ -33,14 +34,18 @@ class PeqBandAdapter(
     private val onEditField: (String, PeqEditField) -> Unit = { id, _ -> onEdit(id) },
     private val onEditType: (String) -> Unit = { onEdit(it) },
     private val onToggleSelection: (String) -> Unit = {},
+    private val onStartDrag: (RecyclerView.ViewHolder) -> Unit = {},
 ) : RecyclerView.Adapter<PeqBandAdapter.Holder>() {
     private var state = PeqState(emptyList())
     private var editing = false
     private var selectedIds = emptySet<String>()
     private val itemIds = mutableMapOf<String, Long>()
     private var nextItemId = 0L
+    private val attachedHolders = mutableSetOf<Holder>()
 
     init { setHasStableIds(true) }
+
+    fun cancelPendingRepeats() = attachedHolders.forEach { it.cancelRepeats() }
 
     /** Selection updates do not rebind sliders or interrupt an in-progress drag. */
     fun submitSelection(editing: Boolean, selectedIds: Set<String>) {
@@ -72,15 +77,41 @@ class PeqBandAdapter(
         }
     }
 
+    /** ItemTouchHelper must retain its holder and touch listeners throughout a reorder. */
+    fun submitReorderedState(next: PeqState, from: Int, to: Int) {
+        require(from in state.bands.indices && to in state.bands.indices)
+        val reordered = state.bands.toMutableList().apply { add(to, removeAt(from)) }
+        require(next == state.copy(bands = reordered)) { "Reorder must preserve every band and editor setting" }
+        if (from == to) return
+        state = next
+        notifyItemMoved(from, to)
+        notifyItemRangeChanged(minOf(from, to), kotlin.math.abs(to - from) + 1, RANK_PAYLOAD)
+    }
+
     override fun getItemCount() = state.bands.size
     override fun getItemId(position: Int) = requireNotNull(itemIds[state.bands[position].id])
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
         Holder(PeqBandRowBinding.inflate(LayoutInflater.from(parent.context), parent, false))
     override fun onBindViewHolder(holder: Holder, position: Int) = holder.bind(state.bands[position], position)
     override fun onBindViewHolder(holder: Holder, position: Int, payloads: MutableList<Any>) {
-        if (payloads.isNotEmpty() && payloads.all { it === SELECTION_PAYLOAD }) {
-            holder.bindSelection(state.bands[position].id)
+        if (payloads.isNotEmpty() && payloads.all { it === SELECTION_PAYLOAD || it === RANK_PAYLOAD }) {
+            if (payloads.any { it === SELECTION_PAYLOAD }) holder.bindSelection(state.bands[position].id)
+            if (payloads.any { it === RANK_PAYLOAD }) holder.bindRank(state.bands[position], position)
         } else onBindViewHolder(holder, position)
+    }
+    override fun onViewAttachedToWindow(holder: Holder) {
+        super.onViewAttachedToWindow(holder)
+        attachedHolders += holder
+    }
+    override fun onViewDetachedFromWindow(holder: Holder) {
+        holder.cancelRepeats()
+        attachedHolders -= holder
+        super.onViewDetachedFromWindow(holder)
+    }
+    override fun onViewRecycled(holder: Holder) {
+        holder.cancelRepeats()
+        attachedHolders -= holder
+        super.onViewRecycled(holder)
     }
 
     inner class Holder(private val binding: PeqBandRowBinding) : RecyclerView.ViewHolder(binding.root) {
@@ -88,6 +119,11 @@ class PeqBandAdapter(
         private val defaultGainTrackTint = binding.peqBandSlider.trackActiveTintList
         private val defaultGainHaloTint = binding.peqBandSlider.haloTintList
         private var lastGainSign: Int? = null
+        private var rank = 0
+        private val repeaters = listOf(binding.peqBandMinus, binding.peqBandPlus,
+            binding.peqQMinus, binding.peqQPlus, binding.peqFrequencyMinus, binding.peqFrequencyPlus)
+            .map { ButtonPressRepeat(it) }
+        private var previousEditing: Boolean? = null
         private val normalBackground = binding.root.cardBackgroundColor
         private val normalStroke = binding.root.strokeColorStateList
         private val normalStrokeWidth = binding.root.strokeWidth
@@ -98,11 +134,16 @@ class PeqBandAdapter(
         private val controlBounds = Rect()
         private val controls = listOf(binding.peqBandSlider, binding.peqQSlider, binding.peqFrequencySlider,
             binding.peqBandMinus, binding.peqBandPlus, binding.peqQMinus, binding.peqQPlus,
-            binding.peqFrequencyMinus, binding.peqFrequencyPlus)
+            binding.peqFrequencyMinus, binding.peqFrequencyPlus, binding.peqBandDragHandle)
         private var blockedControlTouch = false
+        private var blockedHeaderTouch = false
+
+        fun cancelRepeats() = repeaters.forEach { it.cancel() }
 
         @SuppressLint("ClickableViewAccessibility")
         fun bindSelection(id: String) {
+            if (previousEditing != editing) cancelRepeats()
+            previousEditing = editing
             val selected = editing && id in selectedIds
             binding.root.isSelected = selected
             binding.root.setCardBackgroundColor(if (selected) ColorStateList.valueOf(selectedBackground) else normalBackground)
@@ -111,6 +152,21 @@ class PeqBandAdapter(
                 .coerceAtLeast(1) else normalStrokeWidth
             binding.root.setOnClickListener(if (editing) View.OnClickListener { onToggleSelection(id) } else null)
             binding.root.isClickable = editing
+            binding.peqBandHeader.setOnClickListener(if (editing) View.OnClickListener { onToggleSelection(id) } else null)
+            binding.peqBandHeader.isClickable = editing
+            binding.peqBandHeader.isFocusable = editing
+            binding.peqBandDragHandle.isEnabled = !editing && state.bands.size > 1
+            binding.peqBandHeader.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    binding.peqBandDragHandle.getDrawingRect(controlBounds)
+                    binding.peqBandHeader.offsetDescendantRectToMyCoords(binding.peqBandDragHandle, controlBounds)
+                    blockedHeaderTouch = editing && controlBounds.contains(event.x.toInt(), event.y.toInt())
+                }
+                val consumed = blockedHeaderTouch
+                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL)
+                    blockedHeaderTouch = false
+                consumed
+            }
             // Disabled controls may decline ACTION_DOWN. Their space is still a control,
             // so that event must not become a selection click on the card underneath.
             binding.root.setOnTouchListener { _, event ->
@@ -130,6 +186,15 @@ class PeqBandAdapter(
             }
         }
 
+        fun bindRank(band: PeqBand, index: Int) {
+            rank = index
+            val context = binding.root.context
+            val title = context.getString(R.string.peq_band_type_title, index + 1, typeLabel(context, band.type))
+            binding.peqBandTitle.text = if (band.enabled) title else context.getString(R.string.peq_band_disabled, title)
+            binding.peqBandSlider.contentDescription = context.getString(R.string.peq_band_title,
+                index + 1, number(band.frequency))
+        }
+
         private fun renderGainColor(gain: Double) {
             val sign = when { gain > 0.0 -> 1; gain < 0.0 -> -1; else -> 0 }
             if (lastGainSign == sign) return
@@ -146,16 +211,18 @@ class PeqBandAdapter(
 
         @SuppressLint("ClickableViewAccessibility")
         fun bind(band: PeqBand, index: Int) {
+            cancelRepeats()
             val context = binding.root.context
             binding.root.isSaveFromParentEnabled = false
             bindSelection(band.id)
+            bindRank(band, index)
             binding.peqBandLocate.setOnClickListener { onLocate(band.id) }
             binding.peqBandWarning.setOnClickListener {
                 Toast.makeText(context, R.string.peq_frequency_unset_warning, Toast.LENGTH_LONG).show()
             }
-            binding.peqBandHeader.setOnClickListener {
-                if (editing) onToggleSelection(band.id)
-                else { onBandSelected(band.id); onEdit(band.id) }
+            binding.peqBandDragHandle.setOnLongClickListener {
+                if (editing || state.bands.size <= 1) false
+                else { onStartDrag(this); true }
             }
             binding.peqBandEdit.setOnClickListener { onBandSelected(band.id); onEdit(band.id) }
             fun editField(field: PeqEditField) { onBandSelected(band.id); onEditField(band.id, field) }
@@ -180,7 +247,6 @@ class PeqBandAdapter(
             slider.valueFrom = -state.gainRange.toFloat()
             slider.valueTo = state.gainRange.toFloat()
             slider.value = band.gain.coerceIn(-state.gainRange, state.gainRange).toFloat()
-            slider.contentDescription = context.getString(R.string.peq_band_title, index + 1, number(band.frequency))
             slider.setLabelFormatter { "${fixedNumber(it.toDouble(), 2)} dB" }
 
             fun currentBand() = state.bands.firstOrNull { it.id == band.id }
@@ -188,8 +254,7 @@ class PeqBandAdapter(
                 val current = currentBand() ?: return
                 renderGainColor(current.gain)
                 binding.peqBandWarning.visibility = if (current.frequency == 0.0) View.VISIBLE else View.INVISIBLE
-                val title = context.getString(R.string.peq_band_type_title, index + 1, typeLabel(context, current.type))
-                binding.peqBandTitle.text = if (current.enabled) title else context.getString(R.string.peq_band_disabled, title)
+                bindRank(current, rank)
                 binding.peqBandHeaderFrequency.text = context.getString(R.string.peq_band_header_frequency,
                     number(current.frequency, 3))
                 val bandwidth = usesBandwidth(current)
@@ -322,6 +387,7 @@ class PeqBandAdapter(
 
     companion object {
         private val SELECTION_PAYLOAD = Any()
+        private val RANK_PAYLOAD = Any()
         fun usesBandwidth(band: PeqBand): Boolean = band.qualityDisplay == PeqQualityDisplay.BW
 
         fun displayedQuality(band: PeqBand): Double = if (usesBandwidth(band))

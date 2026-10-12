@@ -7,8 +7,10 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
 import android.os.Looper
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
@@ -32,6 +34,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
+import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class)
@@ -57,6 +60,16 @@ class ToneSliderInteractionTest {
     }
 
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+    private fun advance(milliseconds: Long) = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(milliseconds))
+    private fun touch(button: View, action: Int, downTime: Long) {
+        val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action,
+            button.width / 2f, button.height / 2f, 0)
+        try { button.dispatchTouchEvent(event) } finally { event.recycle() }
+    }
+    private fun startHold(button: View): Long = SystemClock.uptimeMillis().also {
+        touch(button, MotionEvent.ACTION_DOWN, it)
+        advance(ViewConfiguration.getLongPressTimeout().toLong() + 1)
+    }
     private fun layout() {
         idle()
         val view = controller!!.get().findViewById<View>(android.R.id.content)
@@ -173,6 +186,81 @@ class ToneSliderInteractionTest {
         assertEquals(0f, slider.value, 0f)
         assertEquals("总温度：0", bound.findViewById<TextView>(R.id.fusion_tone_slider_title).text.toString())
         assertTrue(broadcasts > 0)
+        assertFalse(prefs.getBoolean(ToneController.ENABLED, false))
+    }
+
+    @Test fun holdingPlusAndMinusRepeatsOneUnitAtFixedIntervalsAndStopsOnReleaseOrCancel() {
+        val fragment = launch()
+        fragment.findPreference<SwitchPreferenceGroup>(ToneController.ENABLED)!!.setExpanded(true)
+        val key = ToneController.KEYS[0]
+        val bound = row(fragment, key)
+        val plus = bound.findViewById<MaterialButton>(R.id.fusion_tone_increase)
+        val minus = bound.findViewById<MaterialButton>(R.id.fusion_tone_decrease)
+        val plusDown = startHold(plus)
+        assertEquals(1, prefs.getInt(key, 0))
+        repeat(4) { index ->
+            advance(100)
+            assertEquals(index + 2, prefs.getInt(key, 0))
+        }
+        touch(plus, MotionEvent.ACTION_UP, plusDown)
+        val afterRelease = prefs.getInt(key, 0)
+        advance(700)
+        assertEquals(5, afterRelease)
+        assertEquals(afterRelease, prefs.getInt(key, 0))
+        val minusDown = startHold(minus)
+        assertEquals(4, prefs.getInt(key, 0))
+        repeat(3) { index ->
+            advance(100)
+            assertEquals(3 - index, prefs.getInt(key, 0))
+        }
+        touch(minus, MotionEvent.ACTION_CANCEL, minusDown)
+        advance(700)
+        assertEquals(1, prefs.getInt(key, 0))
+        assertEquals(1f, bound.findViewById<Slider>(R.id.fusion_tone_slider).value, 0f)
+        assertEquals("总温度：1", bound.findViewById<TextView>(R.id.fusion_tone_slider_title).text.toString())
+        assertTrue(broadcasts > 0)
+        assertFalse("Repeating an edit must not enable MSEB", prefs.getBoolean(ToneController.ENABLED, false))
+    }
+
+    @Test fun holdingStopsAtTheRangeLimitAndIsCancelledByRebindingPausingAndCollapsingMseb() {
+        val fragment = launch()
+        val group = fragment.findPreference<SwitchPreferenceGroup>(ToneController.ENABLED)!!
+        group.setExpanded(true)
+        val key = ToneController.KEYS[0]
+        val preference = fragment.findPreference<ToneSliderPreference>(key)!!
+        assertTrue(fragment.findPreference<ToneRangePreference>(ToneController.RANGE)!!.selectRange(20))
+        preference.value = 19
+        var plus = row(fragment, key).findViewById<MaterialButton>(R.id.fusion_tone_increase)
+        val limitDown = startHold(plus)
+        assertEquals(20, prefs.getInt(key, 0))
+        assertFalse(plus.isEnabled)
+        advance(1000)
+        assertEquals(20, prefs.getInt(key, 0))
+        touch(plus, MotionEvent.ACTION_UP, limitDown)
+
+        preference.value = 0
+        plus = row(fragment, key).findViewById(R.id.fusion_tone_increase)
+        startHold(plus)
+        assertEquals(1, prefs.getInt(key, 0))
+        preference.value = 7 // A preference rebind must invalidate the old held button callback.
+        row(fragment, key)
+        advance(700)
+        assertEquals(7, prefs.getInt(key, 0))
+
+        plus = row(fragment, key).findViewById(R.id.fusion_tone_increase)
+        startHold(plus)
+        assertEquals(8, prefs.getInt(key, 0))
+        controller!!.pause()
+        advance(700)
+        assertEquals(8, prefs.getInt(key, 0))
+        controller!!.resume()
+        val minus = row(fragment, key).findViewById<MaterialButton>(R.id.fusion_tone_decrease)
+        startHold(minus)
+        assertEquals(7, prefs.getInt(key, 0))
+        group.setExpanded(false)
+        layout()
+        advance(700)
+        assertEquals(7, prefs.getInt(key, 0))
         assertFalse(prefs.getBoolean(ToneController.ENABLED, false))
     }
 

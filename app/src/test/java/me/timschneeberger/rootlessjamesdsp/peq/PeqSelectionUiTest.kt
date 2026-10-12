@@ -2,9 +2,13 @@ package me.timschneeberger.rootlessjamesdsp.peq
 
 import android.app.Application
 import android.content.Context
+import android.graphics.Rect
 import android.os.Bundle
 import android.os.Looper
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -29,6 +33,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowToast
+import java.time.Duration
 
 /** Exercises selection through real rows, dialogs and persisted editor state. */
 @RunWith(RobolectricTestRunner::class)
@@ -329,6 +334,94 @@ class PeqSelectionUiTest {
         assertFalse(oldConfirmation.isShowing)
         assertSaved(replacement)
         assertEquals(2, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
+    }
+
+    @Test fun draggingReordersWholeBandsPersistentlyAndSelectionStillTargetsTheirStableIds() {
+        val original = initial()
+        launch(original)
+        assertTrue(row(0).findViewById<View>(R.id.peq_band_drag_handle).isEnabled)
+        assertFalse(fragment().moveBand(-1, 0))
+        assertFalse(fragment().moveBand(0, 3))
+        assertTrue(fragment().moveBand(0, 2))
+        val reordered = original.copy(bands = listOf(original.bands[1], original.bands[2], original.bands[0]))
+        assertEquals(reordered, fragment().editorState)
+        // Recreating pauses the editor and flushes the drag before the new view reads the bank.
+        controller!!.recreate()
+        layout()
+        assertSaved(reordered)
+        assertEquals("3 • ${PeqBandAdapter.typeLabel(application, original.bands[0].type)}",
+            row(2).findViewById<TextView>(R.id.peq_band_title).text.toString())
+        edit(2)
+        assertTrue(row(2).isSelected)
+        repeat(3) { assertFalse(row(it).findViewById<View>(R.id.peq_band_drag_handle).isEnabled) }
+        assertFalse(fragment().moveBand(2, 0))
+        assertSaved(reordered)
+        quality(0, "1.25")
+        assertSaved(reordered.copy(bands = reordered.bands.map { band ->
+            if (band.id == "a") band.copy(q = 1.25, qualityDisplay = PeqQualityDisplay.Q) else band
+        }))
+        click(R.id.peq_selection_done)
+        assertTrue(row(0).findViewById<View>(R.id.peq_band_drag_handle).isEnabled)
+    }
+
+    @Test fun realHandleLongPressAndTouchMovesReorderDownAndUpWithLiveRanksAndSaveOnRelease() {
+        val original = initial()
+        launch(original)
+        controller!!.get().window.decorView.dispatchWindowFocusChanged(true)
+        val list = view<RecyclerView>(R.id.peq_band_list)
+
+        fun drag(from: Int, to: Int, before: PeqState, expected: PeqState) {
+            layout()
+            val moving = requireNotNull(list.findViewHolderForAdapterPosition(from))
+            val target = requireNotNull(list.findViewHolderForAdapterPosition(to))
+            val handle = moving.itemView.findViewById<View>(R.id.peq_band_drag_handle)
+            val rectangle = Rect().also {
+                handle.getDrawingRect(it)
+                list.offsetDescendantRectToMyCoords(handle, it)
+            }
+            assertTrue(handle.isEnabled && handle.isShown)
+            val x = rectangle.exactCenterX()
+            val startY = rectangle.exactCenterY()
+            // Cross the target's far edge so ItemTouchHelper accepts the adjacent swap.
+            val direction = if (to > from) 1 else -1
+            val targetY = startY + target.itemView.top - moving.itemView.top + direction * 4f
+            assertTrue("Both touch endpoints must be inside the list", startY in 0f..list.height.toFloat() &&
+                targetY in 0f..list.height.toFloat())
+            val downTime = SystemClock.uptimeMillis()
+            fun dispatch(action: Int, y: Float) {
+                val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
+                try { assertTrue(list.dispatchTouchEvent(event)) } finally { event.recycle() }
+            }
+            dispatch(MotionEvent.ACTION_DOWN, startY)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(
+                ViewConfiguration.getLongPressTimeout().toLong() + ViewConfiguration.getTapTimeout() + 1))
+            repeat(6) { step ->
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(16))
+                dispatch(MotionEvent.ACTION_MOVE, startY + (targetY - startY) * (step + 1) / 6f)
+                layout()
+            }
+
+            // These assertions occur while the finger is still down, before persistence/clearView.
+            assertEquals(expected, fragment().editorState)
+            assertEquals(before, repository.load())
+            assertSame(moving, list.findViewHolderForAdapterPosition(to))
+            expected.bands.forEachIndexed { index, band ->
+                val title = application.getString(R.string.peq_band_type_title,
+                    index + 1, PeqBandAdapter.typeLabel(application, band.type))
+                val expectedTitle = if (band.enabled) title else application.getString(R.string.peq_band_disabled, title)
+                val card = requireNotNull(list.findViewHolderForAdapterPosition(index)).itemView
+                assertEquals(expectedTitle, card.findViewById<TextView>(R.id.peq_band_title).text.toString())
+            }
+            dispatch(MotionEvent.ACTION_UP, targetY)
+            // Allow the real ItemTouchHelper recovery animation to call clearView and flush the save.
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1000))
+            layout()
+            assertSaved(expected)
+        }
+
+        val swapped = original.copy(bands = listOf(original.bands[1], original.bands[0], original.bands[2]))
+        drag(0, 1, original, swapped)
+        drag(1, 0, swapped, original)
     }
 
     class HostActivity : AppCompatActivity() {

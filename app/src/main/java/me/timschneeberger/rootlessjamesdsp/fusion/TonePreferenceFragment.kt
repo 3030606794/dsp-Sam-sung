@@ -123,6 +123,16 @@ class TonePreferenceFragment : PreferenceFragmentCompat() {
     override fun onCreateAdapter(preferenceScreen: PreferenceScreen): RecyclerView.Adapter<*> =
         RoundedRipplePreferenceGroupAdapter(preferenceScreen)
 
+    override fun onPause() {
+        sliders.forEach { it.cancelButtonRepeats() }
+        super.onPause()
+    }
+
+    override fun onDestroyView() {
+        sliders.forEach { it.disposeButtonRepeats() }
+        super.onDestroyView()
+    }
+
     override fun onDestroy() {
         preferenceManager.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(listener)
         context?.unregisterLocalReceiver(receiver)

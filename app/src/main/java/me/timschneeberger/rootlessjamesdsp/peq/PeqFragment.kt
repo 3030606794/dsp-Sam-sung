@@ -29,6 +29,8 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -58,6 +60,7 @@ class PeqFragment : Fragment() {
     private var binding: PeqFragmentBinding? = null
     private lateinit var repository: PeqRepository
     private lateinit var bandAdapter: PeqBandAdapter
+    private var bandTouchHelper: ItemTouchHelper? = null
     var editorState: PeqState = PeqModel.defaultState()
         private set
     private var lastSavedState = editorState
@@ -162,10 +165,31 @@ class PeqFragment : Fragment() {
         }, onEdit = { editBand(it) }, onInteractionFinished = ::finishInteraction,
             onBandSelected = ::selectBand, onLocate = ::locateBand,
             onInteractionStarted = ::startInteraction, onEditField = { id, field -> editBand(id, field) },
-            onEditType = ::showBandFilterType, onToggleSelection = ::toggleSelection)
+            onEditType = ::showBandFilterType, onToggleSelection = ::toggleSelection,
+            onStartDrag = { holder ->
+                if (!editingSelection) {
+                    flushPendingSave()
+                    bandTouchHelper?.startDrag(holder)
+                }
+            })
         ui.peqBandList.layoutManager = LinearLayoutManager(requireContext())
         ui.peqBandList.adapter = bandAdapter
         ui.peqBandList.itemAnimator = null
+        bandTouchHelper = ItemTouchHelper(object : ItemTouchHelper.Callback() {
+            override fun isLongPressDragEnabled() = false
+            override fun isItemViewSwipeEnabled() = false
+            override fun getMovementFlags(list: RecyclerView, holder: RecyclerView.ViewHolder): Int =
+                if (editingSelection || editorState.bands.size < 2) 0
+                else makeMovementFlags(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0)
+            override fun onMove(list: RecyclerView, from: RecyclerView.ViewHolder, to: RecyclerView.ViewHolder) =
+                moveBand(from.bindingAdapterPosition, to.bindingAdapterPosition)
+            override fun onSwiped(holder: RecyclerView.ViewHolder, direction: Int) = Unit
+            override fun clearView(list: RecyclerView, holder: RecyclerView.ViewHolder) {
+                super.clearView(list, holder)
+                flushPendingSave()
+                render(false)
+            }
+        }).also { it.attachToRecyclerView(ui.peqBandList) }
         ui.peqSettings.setOnClickListener { showSettings() }
         ui.peqReset.setOnClickListener { showResetMenu() }
         ui.peqParameters.setOnClickListener { showParametersMenu() }
@@ -338,6 +362,17 @@ class PeqFragment : Fragment() {
         if (!editingSelection || editorState.bands.none { it.id == id }) return
         selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
         renderSelection()
+    }
+
+    /** Move intact bands by stable identity; persistence is flushed when the drag ends. */
+    internal fun moveBand(from: Int, to: Int): Boolean {
+        if (editingSelection || from !in editorState.bands.indices || to !in editorState.bands.indices || from == to)
+            return false
+        cancelPendingSave()
+        editorState = PeqBandOrder.move(editorState, from, to)
+        saveQueued = true
+        bandAdapter.submitReorderedState(editorState, from, to)
+        return true
     }
 
     private fun finishSelection() {
@@ -856,6 +891,7 @@ class PeqFragment : Fragment() {
 
     override fun onPause() {
         addButtonGestures.forEach { it.cancel() }
+        bandAdapter.cancelPendingRepeats()
         flushPendingSave()
         clearMarker()
         super.onPause()
@@ -864,6 +900,9 @@ class PeqFragment : Fragment() {
     override fun onDestroyView() {
         addButtonGestures.forEach { it.cancel() }
         addButtonGestures.clear()
+        bandAdapter.cancelPendingRepeats()
+        bandTouchHelper?.attachToRecyclerView(null)
+        bandTouchHelper = null
         cancelPendingSave()
         dismissDialogs()
         presetDialogs?.dismissAll()

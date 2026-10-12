@@ -8,6 +8,7 @@ import androidx.preference.PreferenceViewHolder
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import me.timschneeberger.rootlessjamesdsp.R
+import me.timschneeberger.rootlessjamesdsp.utils.ButtonPressRepeat
 import me.timschneeberger.rootlessjamesdsp.utils.SliderDoubleTapReset
 import kotlin.math.roundToInt
 
@@ -15,11 +16,13 @@ import kotlin.math.roundToInt
 class ToneSliderPreference @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null,
 ) : Preference(context, attrs) {
+    private val buttonRepeats = mutableListOf<ButtonPressRepeat>()
     var leftKeyword: String = ""
     var rightKeyword: String = ""
     var limit: Int = 100
         set(value) {
             require(value in ToneController.RANGES)
+            cancelButtonRepeats()
             field = value
             setValueInternal(storedValue, false)
             notifyChanged()
@@ -51,6 +54,7 @@ class ToneSliderPreference @JvmOverloads constructor(
     }
 
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
+        disposeButtonRepeats()
         super.onBindViewHolder(holder)
         val label = holder.findViewById(R.id.fusion_tone_slider_title) as TextView
         (holder.findViewById(R.id.fusion_tone_keyword_left) as TextView).text = leftKeyword
@@ -83,10 +87,24 @@ class ToneSliderPreference @JvmOverloads constructor(
         plus.contentDescription = context.getString(R.string.fusion_tone_increase_description, title)
         minus.setOnClickListener { userValue(storedValue - 1) }
         plus.setOnClickListener { userValue(storedValue + 1) }
+        buttonRepeats.add(ButtonPressRepeat(minus))
+        buttonRepeats.add(ButtonPressRepeat(plus))
         slider.addOnChangeListener { _, changed, fromUser ->
             if (fromUser) userValue(changed.roundToInt())
         }
         SliderDoubleTapReset.install(slider, 0f) { userValue(0) }
         updateLabels()
+    }
+
+    fun cancelButtonRepeats() = buttonRepeats.forEach { it.cancel() }
+
+    fun disposeButtonRepeats() {
+        buttonRepeats.forEach { it.dispose() }
+        buttonRepeats.clear()
+    }
+
+    override fun onDetached() {
+        disposeButtonRepeats()
+        super.onDetached()
     }
 }
