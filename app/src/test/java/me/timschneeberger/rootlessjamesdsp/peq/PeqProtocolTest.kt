@@ -21,34 +21,18 @@ class PeqProtocolTest {
     @Test fun packetPreservesEveryFilterAndFixedPointUnit() {
         val types = PeqFilterType.entries
         val bands = List(170) { index -> PeqBand("band-$index", types[index % types.size],
-            index % 2 == 0, 1234.567 + index, -12.345, 1.234) }
+            index % 2 == 0, 1234.567, -12.345, 1.234) }
         val payload = PeqProtocol.payload(PeqState(bands), true)
         assertEquals(1250, PeqProtocol.PARAMETER)
         assertEquals(853, payload.size)
         assertArrayEquals(intArrayOf(1, 1, 170), payload.take(3).toIntArray())
         repeat(170) { index ->
             assertArrayEquals(intArrayOf(index % 7, if (index % 2 == 0) 1 else 0,
-                1234567 + index * 1000, -12345, 1234), payload.copyOfRange(3 + 5 * index, 8 + 5 * index))
+                1234567, -12345, 1234), payload.copyOfRange(3 + 5 * index, 8 + 5 * index))
         }
         val disabled = PeqProtocol.payload(PeqState(bands), false)
         assertEquals(0, disabled[1])
         assertArrayEquals(payload.copyOfRange(2, payload.size), disabled.copyOfRange(2, disabled.size))
-    }
-
-    @Test fun duplicateWireFrequenciesAreRejectedAndNormalizedUnsetBandsStayDisabled() {
-        val state = PeqState(listOf(PeqBand("first", frequency = 1000.0005),
-            PeqBand("duplicate", frequency = 1000.0014), PeqModel.blankBand(), PeqModel.blankBand()))
-        listOf(false, true).forEach { enabled ->
-            assertThrows(IllegalArgumentException::class.java) { PeqProtocol.payload(state, enabled) }
-        }
-        val normalized = PeqModel.normalizeDuplicateFrequencies(state)
-        val packet = PeqProtocol.payload(normalized, true)
-        assertEquals(1000001, packet[5])
-        assertEquals(1000.001, PeqProtocol.quantized(normalized.bands.first()).frequency, 0.0)
-        (1..3).forEach { index ->
-            assertEquals(0, packet[3 + index * 5 + 1])
-            assertEquals(20000, packet[3 + index * 5 + 2])
-        }
     }
 
     @Test fun limitsRoundWithoutOverflowAndInvalidInputDoesNotBecomeAPacket() {

@@ -119,6 +119,11 @@ class PeqEditorUiTest {
         assertEquals(PeqFilterType.PEAK, added.type)
         assertEquals(0.5, added.q, 0.0)
         assertEquals(original.bands.single(), repository.load().bands.first())
+        val warning = row(1).findViewById<MaterialButton>(R.id.peq_band_warning)
+        assertEquals(View.VISIBLE, warning.visibility)
+        warning.performClick()
+        assertEquals(application.getString(R.string.peq_frequency_unset_warning),
+            org.robolectric.shadows.ShadowToast.getTextOfLatestToast())
         row(1).findViewById<MaterialButton>(R.id.peq_band_locate).performClick()
         val edit = edit(1)
         edit.findViewById<MaterialButton>(R.id.peq_quality_bw)!!.performClick()
@@ -129,37 +134,29 @@ class PeqEditorUiTest {
         assertEquals(0.5, repository.load().bands.last().q, 0.0)
         row(1).findViewById<MaterialButton>(R.id.peq_frequency_plus).performClick()
         assertEquals(20.0, repository.load().bands.last().frequency, 0.0)
+        assertEquals(View.GONE, row(1).findViewById<View>(R.id.peq_band_warning).visibility)
         assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
         controller!!.recreate()
         layout()
         assertEquals(20.0, repository.load().bands.last().frequency, 0.0)
     }
 
-    @Test fun preciseFrequencyRejectsDuplicatesAndCopyStartsWithAnUnsetFrequency() {
-        val original = PeqState(listOf(PeqBand(frequency = 1000.0, gain = 3.25, q = 2.5),
-            PeqBand(frequency = 2000.0), PeqModel.blankBand(), PeqModel.blankBand()))
+    @Test fun repeatedFrequenciesCanBeEditedCopiedAndSavedWithoutChangingExistingBands() {
+        val original = PeqState(listOf(PeqBand(frequency = 1000.0), PeqBand(frequency = 2000.0)))
         repository.save(original)
         launch()
         val editor = edit(1)
-        val frequency = editor.findViewById<EditText>(R.id.peq_frequency_input)!!
-        listOf("1000", "1000.0004").forEach {
-            frequency.setText(it)
-            editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-            assertTrue(editor.isShowing)
-            assertNotNull(editor.findViewById<TextInputLayout>(R.id.peq_frequency_box)!!.error)
-            assertEquals(original, repository.load())
-        }
-        frequency.setText("1000.001")
+        editor.findViewById<EditText>(R.id.peq_frequency_input)!!.setText("1000")
         editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        assertFalse(editor.isShowing)
         layout()
-        assertEquals(1000.001, repository.load().bands[1].frequency, 0.0)
-        val beforeCopy = repository.load()
+        assertEquals(listOf(1000.0, 1000.0), repository.load().bands.map { it.frequency })
         edit(0).findViewById<MaterialButton>(R.id.peq_band_copy)!!.performClick()
         layout()
-        val copied = repository.load().bands[1]
-        assertNotEquals(original.bands[0].id, copied.id)
-        assertEquals(original.bands[0].copy(id = copied.id, frequency = 0.0), copied)
-        assertEquals(beforeCopy.bands, repository.load().bands.filterNot { it.id == copied.id })
+        assertEquals(listOf(1000.0, 1000.0, 1000.0), repository.load().bands.map { it.frequency })
+        controller!!.recreate()
+        layout()
+        assertEquals(listOf(1000.0, 1000.0, 1000.0), repository.load().bands.map { it.frequency })
     }
 
     @Test fun curveStaysPinnedAnd170BandsAreRecycledWithValuesSurvivingRotation() {
@@ -186,7 +183,7 @@ class PeqEditorUiTest {
     }
 
     @Test fun narrowingRangeAndChangingStepPreservesOutOfRangeAndOffStepStoredGains() {
-        val original = PeqState(listOf(PeqBand(gain = 20.0), PeqBand(frequency = 2000.0, gain = 0.1)), gainRange = 24.0)
+        val original = PeqState(listOf(PeqBand(gain = 20.0), PeqBand(gain = 0.1)), gainRange = 24.0)
         repository.save(original)
         launch()
         val settings = settings()

@@ -183,27 +183,8 @@ class PeqBandAdapter(
                 val q = if (usesBandwidth(current)) PeqResponse.qFromBandwidth(value, current.frequency) else value
                 changeBand(current.copy(q = q.coerceIn(PeqModel.MIN_Q, PeqModel.MAX_Q)))
             }
-            var lastFrequencyDragTarget: Double? = null
-            var frequencyDragDirection = 1
-            fun userFrequency(requested: Double, dragging: Boolean = false) {
-                val current = currentBand() ?: return
-                val target = requested.coerceIn(PeqModel.MIN_FREQUENCY, PeqModel.MAX_FREQUENCY)
-                val frequency = if (dragging) {
-                    val previousTarget = lastFrequencyDragTarget ?: current.frequency
-                    if (target != previousTarget) frequencyDragDirection = target.compareTo(previousTarget)
-                    lastFrequencyDragTarget = target
-                    nearestAvailableFrequency(state, current.id, target, frequencyDragDirection)
-                } else {
-                    lastFrequencyDragTarget = null
-                    if (PeqModel.frequencyConflict(state, target, current.id) != null) {
-                        onBandSelected(current.id)
-                        Toast.makeText(context, context.getString(R.string.peq_frequency_occupied,
-                            number(target, 3)), Toast.LENGTH_SHORT).show()
-                        return
-                    }
-                    target
-                }
-                changeBand(withFrequency(current, frequency))
+            fun userFrequency(requested: Double) {
+                currentBand()?.let { changeBand(withFrequency(it, requested)) }
             }
             fun bindLogSlider(control: Slider, bounds: (PeqBand) -> ClosedFloatingPointRange<Double>,
                               draggedValue: (Float, Double, Double) -> Double, label: (PeqBand, Double) -> String,
@@ -231,21 +212,14 @@ class PeqBandAdapter(
                     }
                 }
                 control.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-                    override fun onStartTrackingTouch(slider: Slider) {
-                        if (control === binding.peqFrequencySlider) {
-                            lastFrequencyDragTarget = currentBand()?.frequency
-                            frequencyDragDirection = 1
-                        }
-                        onInteractionStarted(band.id)
-                    }
+                    override fun onStartTrackingTouch(slider: Slider) = onInteractionStarted(band.id)
                     override fun onStopTrackingTouch(slider: Slider) = onInteractionFinished()
                 })
             }
             bindLogSlider(binding.peqQSlider, ::qualityBounds, ::dragQuality,
                 { current, value -> "${if (usesBandwidth(current)) "BW" else "Q"} ${fixedNumber(value, 3)}" }, ::userQuality)
             bindLogSlider(binding.peqFrequencySlider, { PeqModel.MIN_FREQUENCY..PeqModel.MAX_FREQUENCY },
-                { position, _, _ -> dragFrequency(position) }, { _, value -> "${number(value, 0)} Hz" },
-                { userFrequency(it, dragging = true) })
+                { position, _, _ -> dragFrequency(position) }, { _, value -> "${number(value, 0)} Hz" }, ::userFrequency)
             binding.peqQMinus.setOnClickListener { currentBand()?.let {
                 userQuality(displayedQuality(it) - state.qStep)
                 onInteractionFinished()
@@ -301,25 +275,6 @@ class PeqBandAdapter(
 
         fun dragFrequency(position: Float): Double = roundedLogarithmicValue(position,
             PeqModel.MIN_FREQUENCY, PeqModel.MAX_FREQUENCY, 1.0)
-
-        /** A drag can pick a neighbouring free integer Hz; +/- buttons keep their requested step. */
-        internal fun nearestAvailableFrequency(state: PeqState, bandId: String, requested: Double,
-                                               direction: Int): Double {
-            val minimum = PeqModel.MIN_FREQUENCY.toInt()
-            val maximum = PeqModel.MAX_FREQUENCY.toInt()
-            val target = round(requested).toInt().coerceIn(minimum, maximum)
-            val preferred = if (direction < 0) -1 else 1
-            for (distance in 0..(maximum - minimum)) {
-                for (sign in intArrayOf(preferred, -preferred)) {
-                    val candidate = target + sign * distance
-                    if (candidate in minimum..maximum &&
-                        PeqModel.frequencyConflict(state, candidate.toDouble(), bandId) == null)
-                        return candidate.toDouble()
-                }
-            }
-            // There are at most 170 bands across 19,981 integer positions.
-            error("No free frequency remains")
-        }
 
         /** Keep endpoints exact, including frequency-dependent BW endpoints. */
         private fun roundedLogarithmicValue(position: Float, minimum: Double, maximum: Double,

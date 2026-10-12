@@ -119,8 +119,7 @@ class PeqResizeDialogUiTest {
 
     @Test fun redistributionIsExplicitAndSwitchingItOffRestoresThePreservationChoice() {
         val original = PeqModel.defaultState(2).let { state -> state.copy(
-            bands = state.bands.mapIndexed { index, band -> band.copy(frequency = 777.0 + index * 111.0,
-                q = 2.125, gain = -3.25) }) }
+            bands = state.bands.map { it.copy(frequency = 777.0, q = 2.125, gain = -3.25) }) }
         var current = original
         val dialog = show(2, 4) { edge, redistribute -> current = PeqModel.resize(current, 4, edge, redistribute) }
         dialog.redistribute().performClick()

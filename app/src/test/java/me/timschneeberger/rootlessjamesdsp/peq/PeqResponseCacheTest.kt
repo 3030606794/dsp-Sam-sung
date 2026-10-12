@@ -87,8 +87,7 @@ class PeqResponseCacheTest {
 
     @Test fun removingAnExtremeCutRecoversTheUnclippedSumAboveTheDisplayFloor() {
         val cache = PeqResponse.PreviewCache()
-        // Closely spaced unique cuts still overlap below the floor; 1000 Hz remains after removing cut-0.
-        val state = PeqState(List(3) { PeqBand(id = "cut-$it", frequency = 999.999 + it * 0.001, gain = -100.0, q = 2.0) } +
+        val state = PeqState(List(3) { PeqBand(id = "cut-$it", frequency = 1000.0, gain = -100.0, q = 2.0) } +
             listOf(PeqBand(id = "anchor-1", frequency = 7000.0, gain = 6.0),
                 PeqBand(id = "anchor-2", frequency = 500.0, gain = 1.0)))
         val before = requireNotNull(cache.curve(state, 128))

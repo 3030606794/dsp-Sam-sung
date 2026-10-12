@@ -39,35 +39,6 @@ class PeqPresetCodecTest {
         malformed.forEach { assertThrows(IllegalArgumentException::class.java) { PeqPresetCodec.decode(it) } }
     }
 
-    @Test fun portableImportsRejectDuplicateAssignedFrequenciesButLocalFilesMigrateWithoutLosingParameters() {
-        val state = PeqState(listOf(PeqBand("first", frequency = 1000.0001, gain = 4.5, q = 2.345),
-            PeqBand("second", frequency = 1200.0, gain = -7.89, q = 12.345, qualityDisplay = PeqQualityDisplay.BW),
-            PeqModel.blankBand(), PeqModel.blankBand()), gainStep = 0.75, pinResponse = false)
-        val preset = PeqPreset(UUID.randomUUID().toString(), "旧收藏", state)
-        val portable = PeqPresetCodec.encode(listOf(preset))
-        assertEquals(state, PeqPresetCodec.decode(portable).single().state)
-        val duplicate = portable.replace("\"frequency\":1200.0", "\"frequency\":1000.0004")
-        for (schema in listOf(1, 2)) {
-            val json = duplicate.replace("\"schema\":2", "\"schema\":$schema")
-            assertThrows(IllegalArgumentException::class.java) { PeqPresetCodec.decode(json) }
-            val expected = state.copy(bands = state.bands.map { if (it.id == "second") it.copy(frequency = 0.0) else it })
-            assertEquals(expected, PeqRepository.decode(json.let {
-                Json.parseToJsonElement(it).jsonObject["presets"]!!.jsonArray.single().jsonObject["state"].toString()
-            }))
-        }
-        val local = PeqPresetCodec.encodeDocument(listOf(preset), local = true)
-            .replace("\"frequency\":1200.0", "\"frequency\":1000.0004")
-        val loaded = PeqPresetCodec.decodeDocument(local, local = true).single()
-        assertEquals(preset.copy(state = state.copy(bands = state.bands.map {
-            if (it.id == "second") it.copy(frequency = 0.0) else it
-        })), loaded)
-        assertThrows(IllegalArgumentException::class.java) {
-            PeqPresetCodec.encode(listOf(preset.copy(state = state.copy(bands = state.bands.map {
-                if (it.id == "second") it.copy(frequency = 1000.0004) else it
-            }))))
-        }
-    }
-
     @Test fun namesAreTrimmedAndRejectControlsBlankInvalidUnicodeAndOverlongValues() {
         assertEquals("我的耳机", PeqPresetCodec.normalizeName("  我的耳机  "))
         assertEquals("名".repeat(40), PeqPresetCodec.normalizeName("名".repeat(40)))

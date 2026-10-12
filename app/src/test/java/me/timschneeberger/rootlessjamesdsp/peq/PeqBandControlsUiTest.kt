@@ -35,7 +35,6 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowDialog
-import org.robolectric.shadows.ShadowToast
 import java.time.Duration
 
 /** Regression coverage for the BW row bug, real +/- events, and dynamic BW limits. */
@@ -191,76 +190,6 @@ class PeqBandControlsUiTest {
         assertFalse(current.findViewById<MaterialButton>(R.id.peq_frequency_minus).isEnabled)
     }
 
-    @Test fun frequencyDraggingSkipsOccupiedCentersAndDoesNotBounceBackOnRelease() {
-        val moving = PeqBand(id = "moving", frequency = 900.0, q = 2.0, qualityDisplay = PeqQualityDisplay.BW)
-        val others = listOf(999.0, 1000.0004, 1001.0).mapIndexed { index, frequency ->
-            PeqBand(id = "occupied-$index", frequency = frequency)
-        }
-        launch(PeqState(listOf(moving) + others, showFrequencySlider = true, frequencyStep = 123.0))
-        val width = PeqBandAdapter.displayedQuality(moving)
-        val current = row()
-        dragTo(current.findViewById(R.id.peq_frequency_slider),
-            PeqBandAdapter.logarithmicPosition(1000.0, PeqModel.MIN_FREQUENCY, PeqModel.MAX_FREQUENCY)) {
-            assertEquals(1002.0, fragment().editorState.bands.first().frequency, 0.0)
-        }
-        val edited = repository.load().bands.first()
-        assertEquals(1002.0, edited.frequency, 0.0)
-        assertEquals(width, PeqBandAdapter.displayedQuality(edited), 1e-12)
-        assertEquals(others, repository.load().bands.drop(1))
-        assertEquals(PeqBandAdapter.logarithmicPosition(1002.0, 20.0, 20000.0),
-            current.findViewById<Slider>(R.id.peq_frequency_slider).value, 0f)
-    }
-
-    @Test fun occupiedButtonTargetsKeepTheConfiguredStepAndReportConflict() {
-        val original = PeqState(listOf(PeqBand(id = "moving", frequency = 1000.0),
-            PeqBand(id = "occupied", frequency = 1123.0004)), frequencyStep = 123.0, showFrequencySlider = true)
-        launch(original)
-        val current = row()
-        press(current, R.id.peq_frequency_plus)
-        assertEquals(original, repository.load())
-        assertEquals(application.getString(R.string.peq_frequency_occupied, "1123"),
-            ShadowToast.getTextOfLatestToast())
-        press(current, R.id.peq_frequency_minus)
-        assertEquals(877.0, repository.load().bands.first().frequency, 0.0)
-        assertEquals(original.bands[1], repository.load().bands[1])
-    }
-
-    @Test fun zeroFrequencyWarningsExplainInactiveBandsAndDisappearOnceFrequencyIsSet() {
-        val blanks = listOf(PeqBand(id = "blank-1", frequency = 0.0, q = 0.5),
-            PeqBand(id = "blank-2", frequency = 0.0, q = 0.5))
-        launch(PeqState(blanks, showFrequencySlider = true))
-        val first = row()
-        val warning = first.findViewById<MaterialButton>(R.id.peq_band_warning)
-        assertEquals(View.VISIBLE, warning.visibility)
-        assertEquals("!", warning.text.toString())
-        val description = application.getString(R.string.peq_frequency_unset_warning)
-        assertEquals(description, warning.contentDescription)
-        warning.performClick()
-        assertEquals(description, ShadowToast.getTextOfLatestToast())
-        assertEquals(blanks, repository.load().bands)
-        press(first, R.id.peq_frequency_plus)
-        assertEquals(20.0, repository.load().bands.first().frequency, 0.0)
-        assertEquals(View.GONE, warning.visibility)
-        val second = row(1)
-        assertEquals(View.VISIBLE, second.findViewById<View>(R.id.peq_band_warning).visibility)
-        // Its first + target is occupied, so the blank stays inactive and still warns.
-        press(second, R.id.peq_frequency_plus)
-        assertEquals(0.0, repository.load().bands.last().frequency, 0.0)
-        assertEquals(View.VISIBLE, second.findViewById<View>(R.id.peq_band_warning).visibility)
-    }
-
-    @Test fun nearestFreeFrequencyRespectsDirectionEdgesAndMilliHzPrecision() {
-        val state = PeqState(listOf(PeqBand(id = "moving", frequency = 500.0),
-            PeqBand(id = "low", frequency = 20.0004), PeqBand(id = "high", frequency = 20000.0),
-            PeqBand(id = "center", frequency = 1000.0004), PeqBand(id = "blank", frequency = 0.0)))
-        assertEquals(1001.0, PeqBandAdapter.nearestAvailableFrequency(state, "moving", 1000.0, 1), 0.0)
-        assertEquals(999.0, PeqBandAdapter.nearestAvailableFrequency(state, "moving", 1000.0, -1), 0.0)
-        assertEquals(21.0, PeqBandAdapter.nearestAvailableFrequency(state, "moving", 20.0, -1), 0.0)
-        assertEquals(19999.0, PeqBandAdapter.nearestAvailableFrequency(state, "moving", 20000.0, 1), 0.0)
-        assertEquals(500.0, PeqBandAdapter.nearestAvailableFrequency(state, "moving", 500.0, 1), 0.0)
-        assertEquals(777.0, PeqBandAdapter.nearestAvailableFrequency(state, "moving", 777.2, 1), 0.0)
-    }
-
     @Test fun bandwidthSliderWidensCurveAndFrequencyMovementKeepsBandwidthOnTheActiveRow() {
         val original = PeqBand(q = 2.0, frequency = 1000.0, gain = 12.0, qualityDisplay = PeqQualityDisplay.BW)
         launch(PeqState(listOf(original), qStep = 100.0, frequencyStep = 1000.0,
@@ -388,8 +317,7 @@ class PeqBandControlsUiTest {
     }
 
     @Test fun firstGainButtonEditBringsPreservedOutOfRangeValuesInsideTheCurrentRange() {
-        val original = PeqState(listOf(PeqBand(frequency = 1000.0, gain = 25.123456),
-            PeqBand(frequency = 2000.0, gain = -25.123456)),
+        val original = PeqState(listOf(PeqBand(gain = 25.123456), PeqBand(gain = -25.123456)),
             gainRange = 6.0, gainStep = 0.25)
         launch(original)
         assertEquals(original, repository.load())
@@ -428,9 +356,7 @@ class PeqBandControlsUiTest {
     }
 
     @Test fun everyFilterTypeHasWorkingGainButtonsAndFineDragging() {
-        val original = PeqState(PeqFilterType.entries.mapIndexed { index, type ->
-            PeqBand(type = type, frequency = 1000.0 + index * 100.0, gain = 2.0)
-        }, gainStep = 0.25)
+        val original = PeqState(PeqFilterType.entries.map { PeqBand(type = it, gain = 2.0) }, gainStep = 0.25)
         launch(original)
         PeqFilterType.entries.forEachIndexed { index, type ->
             val current = row(index)

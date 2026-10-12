@@ -470,11 +470,8 @@ class PeqFragment : Fragment() {
             val freq = frequency()
             val gain = if (selectedType.usesGain) ui.peqGainInput.text?.toString()?.toDoubleOrNull() else band.gain
             val q = inputQ()
-            val frequencyError = when {
-                freq == null || !PeqModel.validFrequency(freq) -> getString(R.string.peq_invalid_frequency)
-                PeqModel.frequencyConflict(editorState, freq, id) != null -> getString(R.string.peq_duplicate_frequency)
-                else -> null
-            }
+            val frequencyError = if (freq == null || !PeqModel.validFrequency(freq))
+                getString(R.string.peq_invalid_frequency) else null
             val gainError = if (selectedType.usesGain &&
                 (gain == null || !gain.isFinite() || gain !in -editorState.gainRange..editorState.gainRange))
                 getString(R.string.peq_invalid_gain, gainLimit) else null
@@ -530,13 +527,8 @@ class PeqFragment : Fragment() {
             val edited = editedBand() ?: return@setOnClickListener
             if (editorState.bands.size >= PeqModel.MAX_BANDS) return@setOnClickListener
             val index = editorState.bands.indexOfFirst { it.id == id }
-            val copied = editorState.bands.toMutableList().apply {
-                add(index + 1, edited.copy(id = UUID.randomUUID().toString(), frequency = 0.0))
-            }
-            if (save(editorState.copy(bands = copied))) {
-                dialog.dismiss()
-                presetMessage(getString(R.string.peq_copied_unset_frequency))
-            }
+            val copied = editorState.bands.toMutableList().apply { add(index + 1, edited.copy(id = UUID.randomUUID().toString())) }
+            if (save(editorState.copy(bands = copied))) dialog.dismiss()
         }
         track(dialog).also {
             it.setOnDismissListener {

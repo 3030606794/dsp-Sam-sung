@@ -53,7 +53,7 @@ object PeqPresetCodec {
                 require(canonical.equals(stored, ignoreCase = true)) { "本地预设标识无效" }
                 canonical
             } else UUID.randomUUID().toString()
-            PeqPreset(id, name, PeqRepository.decode(state.toString(), normalizeDuplicates = local))
+            PeqPreset(id, name, PeqRepository.decode(state.toString()))
         }
         if (local) {
             require(result.map { it.id }.toSet().size == result.size) { "本地预设标识重复" }

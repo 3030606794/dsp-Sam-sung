@@ -161,8 +161,8 @@ class PeqPresetStoreTest {
     }
 
     @Test fun legacyStateImportMigratesOnlyOldInactiveGainsAndExportsLatestSchema() {
-        val legacyState = state.copy(bands = PeqFilterType.entries.mapIndexed { index, type ->
-            PeqBand(type.name, type = type, frequency = 1000.0 + index, gain = 37.125, q = 3.5)
+        val legacyState = state.copy(bands = PeqFilterType.entries.map {
+            PeqBand(it.name, type = it, gain = 37.125, q = 3.5)
         })
         val old = PeqPresetCodec.encode(listOf(PeqPreset(UUID.randomUUID().toString(), "旧版", legacyState)))
             .replace("\"schema\":2", "\"schema\":1")
@@ -172,25 +172,6 @@ class PeqPresetStoreTest {
         }), imported.state)
         assertTrue(store.exportJson(imported.id).contains("\"schema\":2"))
         assertEquals(imported.state, PeqPresetCodec.decode(store.exportJson(imported.id)).single().state)
-    }
-
-    @Test fun duplicateFrequencyImportsNeverPartiallyWriteAndOldLocalFavoritesRemainUntouchedUntilSaved() {
-        val bank = state.copy(bands = state.bands + PeqBand("other", frequency = 1234.0, gain = -2.34, q = 5.678))
-        val first = store.save("原始", bank)
-        val bytes = file.readBytes()
-        val duplicatePortable = store.exportJson().replace("\"frequency\":1234.0", "\"frequency\":777.1234")
-        assertThrows(IllegalArgumentException::class.java) { store.importJson(duplicatePortable) }
-        assertArrayEquals(bytes, file.readBytes())
-        assertEquals(listOf(first), store.load())
-        val oldLocal = file.readText(Charsets.UTF_8).replace("\"frequency\":1234.0", "\"frequency\":777.1234")
-        file.writeText(oldLocal, Charsets.UTF_8)
-        val expected = first.copy(state = bank.copy(bands = bank.bands.map {
-            if (it.id == "other") it.copy(frequency = 0.0) else it
-        }))
-        assertEquals(listOf(expected), store.load())
-        assertEquals(oldLocal, file.readText(Charsets.UTF_8))
-        assertEquals(expected.state, PeqPresetCodec.decode(store.exportJson(first.id)).single().state)
-        assertEquals(oldLocal, file.readText(Charsets.UTF_8))
     }
 
     @Test fun personalFavoritesSurviveDevicePreferenceReplacementAndNeverChangeEffectSwitches() {

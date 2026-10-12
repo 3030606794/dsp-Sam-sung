@@ -3,7 +3,6 @@ package me.timschneeberger.rootlessjamesdsp.peq
 import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.pow
-import kotlin.math.roundToLong
 
 enum class PeqFilterType(val wireId: Int, val usesGain: Boolean) {
     PEAK(0, true), LOW_SHELF(1, true), HIGH_SHELF(2, true),
@@ -52,31 +51,6 @@ object PeqModel {
     fun validFrequency(frequency: Double): Boolean = frequency.isFinite() &&
         (frequency == 0.0 || frequency in MIN_FREQUENCY..MAX_FREQUENCY)
 
-    /** Match the driver's millihertz precision, including its positive half-step rounding. */
-    internal fun frequencyKey(frequency: Double): Long = (frequency * 1000.0).roundToLong()
-
-    fun frequencyConflict(state: PeqState, frequency: Double, excludingBandId: String? = null): PeqBand? {
-        require(validFrequency(frequency)) { "Frequency must be 0 (unset), or between 20 and 20000 Hz" }
-        if (frequency == 0.0) return null
-        val key = frequencyKey(frequency)
-        return state.bands.firstOrNull { it.id != excludingBandId && it.frequency > 0.0 &&
-            frequencyKey(it.frequency) == key }
-    }
-
-    /** Preserve the first assigned frequency and clear later duplicates without changing other parameters. */
-    fun normalizeDuplicateFrequencies(state: PeqState): PeqState {
-        state.bands.forEach(::validateBand)
-        val seen = HashSet<Long>()
-        var changed = false
-        val bands = state.bands.map { band ->
-            if (band.frequency > 0.0 && !seen.add(frequencyKey(band.frequency))) {
-                changed = true
-                band.copy(frequency = 0.0)
-            } else band
-        }
-        return validate(if (changed) state.copy(bands = bands) else state)
-    }
-
     /** Reset only requested parameters, preserving the bank and editor preferences. */
     fun reset(state: PeqState, target: PeqResetTarget): PeqState {
         validate(state)
@@ -109,10 +83,6 @@ object PeqModel {
         require(state.frequencyStep.isFinite() && state.frequencyStep in 1.0..1000.0) { "Frequency step must be between 1 and 1000 Hz" }
         state.bands.forEach(::validateBand)
         require(state.bands.map { it.id }.toSet().size == state.bands.size) { "Band ids must be unique" }
-        val frequencies = HashSet<Long>()
-        require(state.bands.all { it.frequency == 0.0 || frequencies.add(frequencyKey(it.frequency)) }) {
-            "非零频率不能重复（精度为 0.001 Hz）"
-        }
         return state
     }
 
@@ -129,7 +99,7 @@ object PeqModel {
         require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
         if (count == state.bands.size) return state
         val retained = state.bands.take(count)
-        val bands = retained + List((count - retained.size).coerceAtLeast(0)) { PeqBand(frequency = 0.0) }
+        val bands = retained + List((count - retained.size).coerceAtLeast(0)) { PeqBand() }
         return redistribute(state.copy(bands = bands))
     }
 

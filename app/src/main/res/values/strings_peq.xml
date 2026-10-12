@@ -47,8 +47,6 @@
     <string name="peq_redistribute_confirm">将当前 %1$d 段的频率重新分布到 20 Hz–20 kHz。增益、Q、类型及其他设置保持不变。</string>
     <string name="peq_invalid_count">请输入 1 到 170 之间的整数</string>
     <string name="peq_invalid_frequency">频率须为 0（未设置）或 20–20000 Hz</string>
-    <string name="peq_duplicate_frequency">此频率已被其他频段使用，请选择不同频率</string>
-    <string name="peq_copied_unset_frequency">已复制其他参数，请为新频段设置不重复的频率</string>
     <string name="peq_invalid_gain">增益须在 −%1$s 至 +%1$s dB 之间</string>
     <string name="peq_pin_response">固定频响图</string>
     <string name="peq_unpin_response">取消固定频响图</string>
