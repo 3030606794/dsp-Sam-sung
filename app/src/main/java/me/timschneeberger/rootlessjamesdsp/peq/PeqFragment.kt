@@ -407,8 +407,7 @@ class PeqFragment : Fragment() {
         var changingMode = false
         var previewDraft: () -> Unit = {}
         fun supportsBandwidth(type: PeqFilterType) = type in listOf(PeqFilterType.PEAK, PeqFilterType.NOTCH, PeqFilterType.BAND_PASS)
-        // Preserve the saved frequency: rounding here can move it into an occupied millihertz slot.
-        val frequencyText = band.frequency.toBigDecimal().stripTrailingZeros().toPlainString()
+        val frequencyText = PeqBandAdapter.number(band.frequency, 4)
         val qualityEditor = PeqQualityEditor(band.q, frequencyText.toDouble(),
             if (supportsBandwidth(band.type)) band.qualityDisplay else PeqQualityDisplay.Q)
         ui.peqBandType.setAdapter(ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, labels))

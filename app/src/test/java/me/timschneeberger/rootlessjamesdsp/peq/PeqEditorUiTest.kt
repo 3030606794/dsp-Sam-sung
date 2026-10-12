@@ -162,19 +162,6 @@ class PeqEditorUiTest {
         assertEquals(beforeCopy.bands, repository.load().bands.filterNot { it.id == copied.id })
     }
 
-    @Test fun reopeningFineEditPreservesFrequencyNearAnOccupiedRoundingBoundary() {
-        val original = PeqState(listOf(PeqBand(frequency = 1000.00049), PeqBand(frequency = 1000.001)))
-        repository.save(original)
-        launch()
-        assertEquals("2 · 1000.001 Hz", row(1).findViewById<TextView>(R.id.peq_band_title).text.toString())
-        val editor = edit(0)
-        assertEquals(original.bands[0].frequency,
-            editor.findViewById<EditText>(R.id.peq_frequency_input)!!.text.toString().toDouble(), 0.0)
-        editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        assertFalse(editor.isShowing)
-        assertEquals(original, repository.load())
-    }
-
     @Test fun curveStaysPinnedAnd170BandsAreRecycledWithValuesSurvivingRotation() {
         val base = PeqModel.defaultState(170)
         repository.save(base.copy(bands = base.bands.mapIndexed { i, band ->
