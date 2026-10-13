@@ -78,7 +78,9 @@ class EqualizerPreference : DialogPreference, SharedPreferences.OnSharedPreferen
         super.onBindViewHolder(holder)
 
         val binding = PreferenceGraphicEqualizerBinding.bind(holder.itemView)
-        binding.root.findViewById<android.widget.TextView>(R.id.preview_title).text = "EQ"
+        binding.previewTitle.setText(R.string.fusion_eq_title)
+        binding.previewTitle.setCompoundDrawablesRelativeWithIntrinsicBounds(
+            R.drawable.ic_baseline_equalizer_24dp, 0, 0, 0)
         binding.nodeCount.text = "15 个频段 · 点击调节"
         equalizerView = binding.layoutPeq
         updateFromPreferences()

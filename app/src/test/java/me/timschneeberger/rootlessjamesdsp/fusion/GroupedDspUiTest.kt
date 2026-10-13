@@ -91,18 +91,17 @@ class GroupedDspUiTest {
             (children.findFragmentById(R.id.card_bass) as PreferenceFragmentCompat).preferenceManager.sharedPreferencesName)
     }
 
-    @Test fun categoryExpansionChangesNoSavedAudioSettingsAndSurvivesRecreation() {
+    @Test fun everyEffectSectionIsVisibleWithoutExpandingAndSurvivesRecreation() {
         val host = launch()
         val before = snapshot()
-        val content = host.findViewById<View>(R.id.group_bass_content)
-        assertEquals(View.GONE, content.visibility)
-        host.findViewById<View>(R.id.group_bass_header).performClick()
-        idle()
-        assertEquals(View.VISIBLE, content.visibility)
-        assertEquals(before, snapshot())
+        val sections = listOf(R.id.group_equalizers_content, R.id.group_bass_content,
+            R.id.group_clarity_content, R.id.group_spatial_content, R.id.group_crossfeed_content,
+            R.id.group_reverb_content, R.id.group_analog_content, R.id.group_dynamics_content,
+            R.id.group_advanced_content)
+        sections.forEach { assertEquals(View.VISIBLE, host.findViewById<View>(it).visibility) }
         controller!!.recreate()
         idle()
-        assertEquals(View.VISIBLE, controller!!.get().findViewById<View>(R.id.group_bass_content).visibility)
+        sections.forEach { assertEquals(View.VISIBLE, controller!!.get().findViewById<View>(it).visibility) }
         assertEquals(before, snapshot())
         assertEquals(25, dsp(controller!!.get()).childFragmentManager.fragments.size)
     }
@@ -136,6 +135,12 @@ class GroupedDspUiTest {
 
     @Test fun eqTabsOnlyChangePresentationAndPowerControlsSelectedEngine() {
         val host = launch()
+        val eqTab = host.findViewById<android.widget.TextView>(R.id.eq_tab)
+        val peqTab = host.findViewById<android.widget.TextView>(R.id.peq_tab)
+        assertEquals(app.getString(R.string.fusion_eq_title), eqTab.text.toString())
+        assertEquals(app.getString(R.string.fusion_peq_title), peqTab.text.toString())
+        assertNotNull(eqTab.compoundDrawables[1])
+        assertNotNull(peqTab.compoundDrawables[1])
         val eq = app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
         val peq = app.getSharedPreferences(Constants.PREF_GEQ, Context.MODE_PRIVATE)
         val eqKey = app.getString(R.string.key_eq_enable)
@@ -166,7 +171,7 @@ class GroupedDspUiTest {
         assertTrue(controller!!.get().findViewById<View>(R.id.eq_power).isSelected)
     }
 
-    @Test fun ordinaryEffectsShowParametersWithoutSecondExpansionAndAdvancedDspStaysFoldable() {
+    @Test fun ordinaryAndAdvancedEffectsShowParametersWithoutSecondExpansion() {
         val host = launch()
         val children = dsp(host).childFragmentManager
         val viper = children.findFragmentById(R.id.viper_effect_bass) as ViperEffectPreferenceFragment
@@ -176,7 +181,10 @@ class GroupedDspUiTest {
         val james = children.findFragmentById(R.id.card_bass) as PreferenceFragmentCompat
         assertTrue(james.findPreference<SwitchPreferenceGroup>(app.getString(R.string.key_bass_enable))!!.isExpanded)
         val advanced = children.findFragmentById(R.id.card_liveprog) as PreferenceFragmentCompat
-        assertFalse(advanced.findPreference<SwitchPreferenceGroup>(app.getString(R.string.key_liveprog_enable))!!.isExpanded)
+        val advancedHeader = advanced.findPreference<SwitchPreferenceGroup>(app.getString(R.string.key_liveprog_enable))!!
+        assertTrue(advancedHeader.isExpanded)
+        advancedHeader.setExpanded(false)
+        assertTrue(advancedHeader.isExpanded)
     }
 
     @Test fun mainPowerIconHasTransparentBackgroundAndGreenGrayStates() {

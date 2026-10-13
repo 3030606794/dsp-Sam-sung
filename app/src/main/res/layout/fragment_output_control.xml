@@ -11,7 +11,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:paddingHorizontal="6dp">
+        android:paddingStart="2dp"
+        android:paddingEnd="6dp">
 
         <TextView
             android:id="@+id/output_driver_status"

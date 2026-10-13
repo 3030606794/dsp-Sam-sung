@@ -62,6 +62,7 @@
         app:elevation="0dp"
         app:hoveredFocusedTranslationZ="0dp"
         app:pressedTranslationZ="0dp"
+        app:powerAnimationsEnabled="false"
         app:srcCompat="@drawable/ic_twotone_power_settings_24dp"
         android:hapticFeedbackEnabled="true"
         android:contentDescription="@string/power_button_alt" />

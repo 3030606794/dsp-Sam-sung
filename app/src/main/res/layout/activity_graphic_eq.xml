@@ -20,6 +20,8 @@
                 android:layout_height="40dp"
                 android:minHeight="0dp"
                 app:maxButtonHeight="48dp"
+                app:titleMarginTop="0dp"
+                app:titleMarginBottom="0dp"
                 app:titleCentered="true" />
             <LinearLayout
                 android:id="@+id/peq_toolbar_summary_row"

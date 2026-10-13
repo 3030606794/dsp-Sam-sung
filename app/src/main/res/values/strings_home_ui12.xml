@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fusion_eq_title">多模态均衡器</string>
+    <string name="eq_interpolator_fir_only_hint">插值器仅对 FIR 生效；当前选择会保留。</string>
+</resources>

@@ -23,6 +23,9 @@
                 android:singleLine="true"
                 android:textAppearance="?android:attr/textAppearanceListItem"
                 android:text="@string/fusion_peq_title"
+                android:drawableStart="@drawable/ic_baseline_chart_timeline_variant_24dp"
+                android:drawablePadding="8dp"
+                android:drawableTint="?attr/colorControlNormal"
                 android:ellipsize="marquee"/>
             <TextView
                 android:id="@+id/node_count"

@@ -16,6 +16,15 @@ class FloatingToggleButton @JvmOverloads constructor(
     private var touchY = Float.NaN
     private var pendingClickAt: Long? = null
     private var transition: PowerTransition? = null
+    private val powerAnimationsEnabled = context.obtainStyledAttributes(
+        attrs, R.styleable.FloatingToggleButton
+    ).let { attributes ->
+        try {
+            attributes.getBoolean(R.styleable.FloatingToggleButton_powerAnimationsEnabled, true)
+        } finally {
+            attributes.recycle()
+        }
+    }
 
     override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
         if (event.actionMasked == android.view.MotionEvent.ACTION_UP) {
@@ -33,6 +42,7 @@ class FloatingToggleButton @JvmOverloads constructor(
     private fun animatePowerChange(enabled: Boolean) {
         val clickedAt = pendingClickAt ?: return
         pendingClickAt = null
+        if (!powerAnimationsEnabled) return
         if (android.os.SystemClock.uptimeMillis() - clickedAt > 2000L || !isAttachedToWindow ||
             !android.animation.ValueAnimator.areAnimatorsEnabled()) return
         val host = rootView as? android.view.ViewGroup ?: return

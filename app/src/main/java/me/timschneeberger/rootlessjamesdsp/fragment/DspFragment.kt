@@ -11,7 +11,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.isVisible
-import androidx.core.view.ViewCompat
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentTransaction
@@ -50,11 +49,14 @@ class DspFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListen
             .getBoolean(getString(R.string.key_geq_enable), false)
         root.findViewById<View>(R.id.card_eq).isVisible = !selectedPeq
         root.findViewById<View>(R.id.card_geq).isVisible = selectedPeq
-        listOf(Triple(R.id.eq_tab, "EQ", eqOn), Triple(R.id.peq_tab, "PEQ", peqOn)).forEachIndexed { index, (id, label, enabled) ->
+        listOf(Triple(R.id.eq_tab, getString(R.string.fusion_eq_title), eqOn),
+            Triple(R.id.peq_tab, getString(R.string.fusion_peq_title), peqOn)).forEachIndexed { index, (id, label, enabled) ->
             root.findViewById<TextView>(id).apply {
-                text = if (enabled) "$label  ●" else label
-                setTextColor(if (enabled) android.graphics.Color.rgb(46, 173, 85) else
-                    com.google.android.material.color.MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface))
+                text = label
+                val color = if (enabled) android.graphics.Color.rgb(46, 173, 85) else
+                    com.google.android.material.color.MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface)
+                setTextColor(color)
+                compoundDrawableTintList = android.content.res.ColorStateList.valueOf(color)
                 paintFlags = if (selectedPeq == (index == 1)) paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
                     else paintFlags and android.graphics.Paint.UNDERLINE_TEXT_FLAG.inv()
                 isSelected = selectedPeq == (index == 1)
@@ -63,7 +65,7 @@ class DspFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListen
         root.findViewById<androidx.appcompat.widget.AppCompatImageButton>(R.id.eq_power).apply {
             isSelected = if (selectedPeq) peqOn else eqOn
             imageTintList = requireContext().getColorStateList(R.color.selector_floating_toggle_foreground_tint)
-            contentDescription = "${if (selectedPeq) "PEQ" else "EQ"}：${if (isSelected) "已开启，点击关闭" else "已关闭，点击开启"}"
+            contentDescription = "${getString(if (selectedPeq) R.string.fusion_peq_title else R.string.fusion_eq_title)}：${if (isSelected) "已开启，点击关闭" else "已关闭，点击开启"}"
         }
     }
     private val viperListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
@@ -114,19 +116,6 @@ class DspFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListen
             renderEqualizerTabs()
         }
         renderEqualizerTabs()
-        categoryContainers.forEach { (headerId, contentId) ->
-            val header = view.findViewById<TextView>(headerId)
-            val content = view.findViewById<View>(contentId)
-            fun expand(expanded: Boolean) {
-                content.isVisible = expanded
-                ViewCompat.setStateDescription(header, getString(if (expanded)
-                    R.string.effect_group_expanded else R.string.effect_group_collapsed))
-                header.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0,
-                    if (expanded) R.drawable.ic_chevron_up_24dp else R.drawable.ic_chevron_down_24dp, 0)
-            }
-            expand(savedInstanceState?.getBoolean("category_$contentId", false) ?: false)
-            header.setOnClickListener { expand(!content.isVisible) }
-        }
         @Suppress("DEPRECATION")
         val prefs = requireContext().getSharedPreferences(ViperParameters.PREFS, Context.MODE_MULTI_PROCESS)
         viperPreferences = prefs
@@ -136,9 +125,6 @@ class DspFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListen
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("selected_peq", selectedPeq)
-        categoryContainers.forEach { (_, contentId) ->
-            view?.findViewById<View>(contentId)?.let { outState.putBoolean("category_$contentId", it.isVisible) }
-        }
         super.onSaveInstanceState(outState)
     }
 
@@ -279,17 +265,6 @@ class DspFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListen
             "v_clarity" to R.id.viper_effect_clarity,
             "v_cure" to R.id.viper_effect_cure,
             "v_analog" to R.id.viper_effect_analog,
-        )
-        private val categoryContainers = listOf(
-            R.id.group_equalizers_header to R.id.group_equalizers_content,
-            R.id.group_bass_header to R.id.group_bass_content,
-            R.id.group_clarity_header to R.id.group_clarity_content,
-            R.id.group_spatial_header to R.id.group_spatial_content,
-            R.id.group_crossfeed_header to R.id.group_crossfeed_content,
-            R.id.group_reverb_header to R.id.group_reverb_content,
-            R.id.group_analog_header to R.id.group_analog_content,
-            R.id.group_dynamics_header to R.id.group_dynamics_content,
-            R.id.group_advanced_header to R.id.group_advanced_content,
         )
 
         fun newInstance(): DspFragment {

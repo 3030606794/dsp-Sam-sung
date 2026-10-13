@@ -31,6 +31,7 @@ class EqualizerActivity : BaseActivity() {
     private lateinit var scroll: ScrollView
     private lateinit var filterButton: MaterialButton
     private lateinit var interpolationButton: MaterialButton
+    private lateinit var interpolationHint: TextView
     private var pinResponse = false
     private val pinMenuId = 0x451001
 
@@ -84,7 +85,7 @@ class EqualizerActivity : BaseActivity() {
         binding.toolbar.layoutParams = binding.toolbar.layoutParams.apply { height = dp(64) }
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
-        supportActionBar?.title = "EQ"
+        supportActionBar?.title = getString(R.string.fusion_eq_title)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
         settings = getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
@@ -105,6 +106,11 @@ class EqualizerActivity : BaseActivity() {
         }
         body.addView(filterButton)
         body.addView(interpolationButton)
+        interpolationHint = TextView(this).apply {
+            setText(R.string.eq_interpolator_fir_only_hint)
+            setPadding(dp(16), 0, dp(16), dp(8))
+        }
+        body.addView(interpolationHint)
         body.addView(TextView(this).apply { text = "15 个频段 · 实时保存"; setPadding(0, dp(12), 0, dp(12)) })
         val presets = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val labels = resources.getStringArray(R.array.equalizer_preset_modes)
@@ -182,7 +188,9 @@ class EqualizerActivity : BaseActivity() {
         val interpolationValues = resources.getStringArray(R.array.eq_interpolators_values)
         val interpolationIndex = interpolationValues.indexOf(settings.getString(getString(R.string.key_eq_interpolation), "0")).coerceAtLeast(0)
         interpolationButton.text = "${getString(R.string.eq_interpolator)}\n${interpolators[interpolationIndex]}"
-        interpolationButton.isEnabled = typeIndex == 0
+        // Both controls retain their own selection. The existing native IIR design
+        // uses its own response; the saved interpolator is applied when using FIR.
+        interpolationHint.visibility = if (typeIndex == 0) View.GONE else View.VISIBLE
         refreshing = true
         sliders.forEachIndexed { i, slider ->
             slider.value = (kotlin.math.round(levels[i].coerceIn(-12.0, 12.0) * 10) / 10).toFloat()

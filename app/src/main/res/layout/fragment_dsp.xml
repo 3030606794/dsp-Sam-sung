@@ -58,31 +58,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-                <TextView
-                    android:id="@+id/group_equalizers_header"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="64dp"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="20dp"
-                    android:paddingVertical="16dp"
-                    android:text="@string/effect_group_equalizers"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textColor="?attr/colorOnSurface"
-                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
-                    android:drawableTint="?attr/colorOnSurfaceVariant"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true" />
                 <LinearLayout
                     android:id="@+id/group_equalizers_content"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
                     <LinearLayout android:layout_width="match_parent" android:layout_height="56dp" android:gravity="center_vertical" android:orientation="horizontal" android:paddingHorizontal="12dp">
-                        <TextView android:id="@+id/eq_tab" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="EQ" android:textAppearance="?attr/textAppearanceTitleMedium" android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true" />
-                        <TextView android:id="@+id/peq_tab" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="PEQ" android:textAppearance="?attr/textAppearanceTitleMedium" android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true" />
+                        <TextView android:id="@+id/eq_tab" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="@string/fusion_eq_title" android:textAppearance="?attr/textAppearanceTitleMedium" android:singleLine="true" android:drawableTop="@drawable/ic_baseline_equalizer_24dp" android:drawablePadding="3dp" android:drawableTint="?attr/colorOnSurface" android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true" />
+                        <TextView android:id="@+id/peq_tab" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="@string/fusion_peq_title" android:textAppearance="?attr/textAppearanceTitleMedium" android:singleLine="true" android:drawableTop="@drawable/ic_baseline_chart_timeline_variant_24dp" android:drawablePadding="3dp" android:drawableTint="?attr/colorOnSurface" android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true" />
                         <androidx.appcompat.widget.AppCompatImageButton android:id="@+id/eq_power" android:layout_width="48dp" android:layout_height="48dp" android:padding="8dp" android:background="@android:color/transparent" android:contentDescription="@string/power_button_alt" app:srcCompat="@drawable/ic_twotone_power_settings_24dp" />
                     </LinearLayout>
                     <androidx.fragment.app.FragmentContainerView
@@ -105,28 +88,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-                <TextView
-                    android:id="@+id/group_bass_header"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="64dp"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="20dp"
-                    android:paddingVertical="16dp"
-                    android:text="@string/effect_group_bass"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textColor="?attr/colorOnSurface"
-                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
-                    android:drawableTint="?attr/colorOnSurfaceVariant"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true" />
                 <LinearLayout
                     android:id="@+id/group_bass_content"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
                     <androidx.fragment.app.FragmentContainerView
                         android:id="@+id/viper_effect_bass"
                         android:layout_width="match_parent"
@@ -147,28 +113,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-                <TextView
-                    android:id="@+id/group_clarity_header"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="64dp"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="20dp"
-                    android:paddingVertical="16dp"
-                    android:text="@string/effect_group_clarity"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textColor="?attr/colorOnSurface"
-                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
-                    android:drawableTint="?attr/colorOnSurfaceVariant"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true" />
                 <LinearLayout
                     android:id="@+id/group_clarity_content"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
                     <androidx.fragment.app.FragmentContainerView
                         android:id="@+id/viper_effect_clarity"
                         android:layout_width="match_parent"
@@ -189,28 +138,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-                <TextView
-                    android:id="@+id/group_spatial_header"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="64dp"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="20dp"
-                    android:paddingVertical="16dp"
-                    android:text="@string/effect_group_spatial"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textColor="?attr/colorOnSurface"
-                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
-                    android:drawableTint="?attr/colorOnSurfaceVariant"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true" />
                 <LinearLayout
                     android:id="@+id/group_spatial_content"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
                     <androidx.fragment.app.FragmentContainerView
                         android:id="@+id/viper_effect_field"
                         android:layout_width="match_parent"
@@ -239,28 +171,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-                <TextView
-                    android:id="@+id/group_crossfeed_header"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="64dp"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="20dp"
-                    android:paddingVertical="16dp"
-                    android:text="@string/effect_group_crossfeed"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textColor="?attr/colorOnSurface"
-                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
-                    android:drawableTint="?attr/colorOnSurfaceVariant"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true" />
                 <LinearLayout
                     android:id="@+id/group_crossfeed_content"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
                     <androidx.fragment.app.FragmentContainerView
                         android:id="@+id/viper_effect_cure"
                         android:layout_width="match_parent"
@@ -281,28 +196,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-                <TextView
-                    android:id="@+id/group_reverb_header"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="64dp"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="20dp"
-                    android:paddingVertical="16dp"
-                    android:text="@string/effect_group_reverb"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textColor="?attr/colorOnSurface"
-                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
-                    android:drawableTint="?attr/colorOnSurfaceVariant"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true" />
                 <LinearLayout
                     android:id="@+id/group_reverb_content"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
                     <androidx.fragment.app.FragmentContainerView
                         android:id="@+id/viper_effect_reverb"
                         android:layout_width="match_parent"
@@ -323,28 +221,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-                <TextView
-                    android:id="@+id/group_analog_header"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="64dp"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="20dp"
-                    android:paddingVertical="16dp"
-                    android:text="@string/effect_group_analog"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textColor="?attr/colorOnSurface"
-                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
-                    android:drawableTint="?attr/colorOnSurfaceVariant"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true" />
                 <LinearLayout
                     android:id="@+id/group_analog_content"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
                     <androidx.fragment.app.FragmentContainerView
                         android:id="@+id/viper_effect_tube"
                         android:layout_width="match_parent"
@@ -369,28 +250,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-                <TextView
-                    android:id="@+id/group_dynamics_header"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="64dp"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="20dp"
-                    android:paddingVertical="16dp"
-                    android:text="@string/effect_group_dynamics"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textColor="?attr/colorOnSurface"
-                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
-                    android:drawableTint="?attr/colorOnSurfaceVariant"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true" />
                 <LinearLayout
                     android:id="@+id/group_dynamics_content"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
                     <androidx.fragment.app.FragmentContainerView
                         android:id="@+id/viper_effect_dynamic"
                         android:layout_width="match_parent"
@@ -426,28 +290,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
-                <TextView
-                    android:id="@+id/group_advanced_header"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="64dp"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="20dp"
-                    android:paddingVertical="16dp"
-                    android:text="@string/effect_group_advanced"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    android:textColor="?attr/colorOnSurface"
-                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
-                    android:drawableTint="?attr/colorOnSurfaceVariant"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true" />
                 <LinearLayout
                     android:id="@+id/group_advanced_content"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
                     <androidx.fragment.app.FragmentContainerView
                         android:id="@+id/card_ddc"
                         android:layout_width="match_parent"

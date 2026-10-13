@@ -107,6 +107,26 @@ class PinnedOutputControlTest {
     private fun slider(activity: OutputHostActivity, tile: Int): Slider =
         activity.findViewById<View>(tile).findViewById(R.id.output_slider)
 
+    @Test fun driverStatusSharesTheThresholdTextStartAndGainUsesTheShortTitle() {
+        val activity = launch()
+        val driver = activity.findViewById<TextView>(R.id.output_driver_status)
+        val rate = activity.findViewById<TextView>(R.id.output_sample_rate)
+        val threshold = activity.findViewById<View>(R.id.output_threshold)
+            .findViewById<TextView>(R.id.output_label)
+        val gain = activity.findViewById<View>(R.id.output_postgain)
+            .findViewById<TextView>(R.id.output_label)
+        // GridLayout reparses only individual left/top/right/bottom margins, so the
+        // include's layout_marginHorizontal is not applied here. Compare real text
+        // positions rather than adding that nominal 6 dp to the value row's 2 dp.
+        val driverPosition = IntArray(2).also(driver::getLocationOnScreen)
+        val thresholdPosition = IntArray(2).also(threshold::getLocationOnScreen)
+        assertEquals("The status starts directly above the threshold label",
+            thresholdPosition[0] + threshold.paddingLeft,
+            driverPosition[0] + driver.paddingLeft)
+        assertSame("Driver and processing rate remain on one row", driver.parent, rate.parent)
+        assertEquals("增益", gain.text.toString())
+    }
+
     @Test fun allOutputControlsStayFixedWhileEffectParametersScroll() {
         val activity = launch()
         val card = activity.findViewById<View>(R.id.pinned_output_card)
