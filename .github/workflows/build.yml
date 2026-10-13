@@ -146,4 +146,4 @@ jobs:
           cd release
           sha256sum *.apk *.zip > SHA256SUMS.txt
           TAG="v0.1.0-alpha12-build.${{ github.run_number }}"
-          gh release create "$TAG" --target "$GITHUB_SHA" --draft --prerelease --title "DSP音效 0.1.0 alpha 12 · 实时 DSP 修复与多选编辑 · build ${{ github.run_number }}" --notes-file ../docs/RELEASE-NOTES.zh-CN.md ./*
+          gh release create "$TAG" --target "$GITHUB_SHA" --draft --prerelease --title "DSP音效 0.1.0 alpha 12 · 三星设置精简版 · build ${{ github.run_number }}" --notes-file ../docs/SAMSUNG-DEFAULTS.zh-CN.md ./*
