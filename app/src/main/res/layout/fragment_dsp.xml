@@ -50,143 +50,411 @@
         android:paddingBottom="16dp"
         android:showDividers="middle">
 
-        <androidx.fragment.app.FragmentContainerView
-            android:id="@+id/card_fusion_viper"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="1dp" />
-
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_fusion_tone"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/group_equalizers_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="64dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="16dp"
+                    android:text="@string/effect_group_equalizers"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface"
+                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
+                    android:drawableTint="?attr/colorOnSurfaceVariant"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <LinearLayout
+                    android:id="@+id/group_equalizers_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_eq"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_geq"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_compressor"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/group_bass_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="64dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="16dp"
+                    android:text="@string/effect_group_bass"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface"
+                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
+                    android:drawableTint="?attr/colorOnSurfaceVariant"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <LinearLayout
+                    android:id="@+id/group_bass_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/viper_effect_bass"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_bass"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_bass"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/group_clarity_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="64dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="16dp"
+                    android:text="@string/effect_group_clarity"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface"
+                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
+                    android:drawableTint="?attr/colorOnSurfaceVariant"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <LinearLayout
+                    android:id="@+id/group_clarity_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/viper_effect_clarity"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/viper_effect_spectrum"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_eq"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/group_spatial_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="64dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="16dp"
+                    android:text="@string/effect_group_spatial"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface"
+                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
+                    android:drawableTint="?attr/colorOnSurfaceVariant"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <LinearLayout
+                    android:id="@+id/group_spatial_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/viper_effect_field"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/viper_effect_diff"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_stereowide"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_geq"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/group_crossfeed_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="64dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="16dp"
+                    android:text="@string/effect_group_crossfeed"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface"
+                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
+                    android:drawableTint="?attr/colorOnSurfaceVariant"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <LinearLayout
+                    android:id="@+id/group_crossfeed_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/viper_effect_cure"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_crossfeed"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_ddc"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/group_reverb_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="64dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="16dp"
+                    android:text="@string/effect_group_reverb"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface"
+                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
+                    android:drawableTint="?attr/colorOnSurfaceVariant"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <LinearLayout
+                    android:id="@+id/group_reverb_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/viper_effect_reverb"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_reverb"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_convolver"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/group_analog_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="64dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="16dp"
+                    android:text="@string/effect_group_analog"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface"
+                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
+                    android:drawableTint="?attr/colorOnSurfaceVariant"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <LinearLayout
+                    android:id="@+id/group_analog_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/viper_effect_tube"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/viper_effect_analog"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_tube"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_liveprog"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/group_dynamics_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="64dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="16dp"
+                    android:text="@string/effect_group_dynamics"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface"
+                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
+                    android:drawableTint="?attr/colorOnSurfaceVariant"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <LinearLayout
+                    android:id="@+id/group_dynamics_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/viper_effect_dynamic"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_compressor"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_tube"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_fusion_tone"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_stereowide"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/group_advanced_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="64dp"
+                    android:gravity="center_vertical"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="16dp"
+                    android:text="@string/effect_group_advanced"
+                    android:textAppearance="?attr/textAppearanceTitleMedium"
+                    android:textColor="?attr/colorOnSurface"
+                    android:drawableEnd="@drawable/ic_chevron_down_24dp"
+                    android:drawableTint="?attr/colorOnSurfaceVariant"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true" />
+                <LinearLayout
+                    android:id="@+id/group_advanced_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_ddc"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_convolver"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/card_liveprog"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_crossfeed"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-        </com.google.android.material.card.MaterialCardView>
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="1dp">
-
-            <androidx.fragment.app.FragmentContainerView
-                android:id="@+id/card_reverb"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-        </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </LinearLayout>

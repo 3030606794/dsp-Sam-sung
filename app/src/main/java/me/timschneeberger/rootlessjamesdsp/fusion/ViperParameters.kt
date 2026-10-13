@@ -22,7 +22,7 @@ object ViperParameters {
             Control("v_spectrum_freq", "参考频率", 65549, 3000, 12000, 7600, unit = " Hz"),
             Control("v_spectrum_amount", "谐波重建强度", 65550, 0, 560, 56, unit = "%"),
         )),
-        Group("v_field", "环境声场", 65553, listOf(
+        Group("v_field", "立体声场增强", 65553, listOf(
             Control("v_field_widen", "立体声拓展", 65554, 0, 100, 0, unit = "%"),
             Control("v_field_center", "中央声像", 65555, 100, 200, 150, unit = "%"),
             Control("v_field_depth", "声场深度", 65556, 200, 800, 200),
@@ -37,10 +37,10 @@ object ViperParameters {
             Control("v_reverb_wet", "湿声（混响声）", 65563, 0, 100, 0, unit = "%"),
             Control("v_reverb_dry", "干声（原声）", 65564, 0, 100, 50, unit = "%"),
         ), "房间大小与宽度现在可按 1% 微调；原版 0–10 档分别对应这里的 0–100%。"),
-        Group("v_dynamic", "动态系统", 65569, listOf(
+        Group("v_dynamic", "动态音色处理", 65569, listOf(
             Control("v_dynamic_strength", "低音动态强度", 65573, 0, 100, 0, scale = 20, offset = 100),
         ), "设备响应可选择预设，参数与原驱动一致。"),
-        Group("v_tube", "电子管模拟器（6N1J）", 65583, emptyList()),
+        Group("v_tube", "电子管模拟器", 65583, emptyList()),
         Group("v_bass", "ViPER 低音", 65574, listOf(
             Control("v_bass_mode", "处理模式", 65575, 0, 2, 0, choices = listOf("自然低音", "Pure Bass+", "低音炮")),
             Control("v_bass_freq", "低音频率", 65576, 15, 150, 70, unit = " Hz"),
@@ -50,10 +50,10 @@ object ViperParameters {
             Control("v_clarity_mode", "处理模式", 65579, 0, 2, 0, choices = listOf("自然", "Ozone", "XHiFi")),
             Control("v_clarity_amount", "增强强度", 65580, 0, 9, 0, scale = 50),
         )),
-        Group("v_cure", "听觉系统保护 / 交叉馈送", 65581, listOf(
+        Group("v_cure", "ViPER 耳机交叉馈送", 65581, listOf(
             Control("v_cure_level", "效果强度", 65582, 0, 2, 0, choices = listOf("轻度", "中度", "强")),
         )),
-        Group("v_analog", "AnalogX", 65584, listOf(
+        Group("v_analog", "模拟谐波染色", 65584, listOf(
             Control("v_analog_mode", "模拟模式", 65585, 0, 2, 0, choices = listOf("轻度", "中度", "强")),
         )),
     )

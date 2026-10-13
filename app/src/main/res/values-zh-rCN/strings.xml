@@ -108,7 +108,7 @@
     <string name="geq_nodes">幅度响应</string>
     <string name="bass_enable">动态低音提升</string>
     <string name="bass_max_gain">最大增益</string>
-    <string name="reverb_enable">虚拟场效果</string>
+    <string name="reverb_enable">房间混响</string>
     <string name="reverb_room_type">场类型</string>
     <string name="reverb_preset_default">默认</string>
     <string name="reverb_preset_small_hall1">小厅一</string>
@@ -123,16 +123,16 @@
     <string name="reverb_preset_plate_low">板式低频</string>
     <string name="reverb_preset_long_reverb1">长混响一</string>
     <string name="reverb_preset_long_reverb2">长混响二</string>
-    <string name="convolver_enable">脉冲反馈</string>
+    <string name="convolver_enable">卷积处理</string>
     <string name="convolver_impulse">脉冲响应</string>
     <string name="convolver_advanced_editing">高级波形编辑</string>
     <string name="convolver_convolution_mode">脉冲响应优化</string>
     <string name="convolver_convolution_mode_original">原始</string>
     <string name="convolver_convolution_mode_shrink">收缩</string>
     <string name="convolver_convolution_mode_minimum_phase_shrink">最小相变和收缩</string>
-    <string name="ddc_enable">ViPER-DDC 音效</string>
+    <string name="ddc_enable">DDC 耳机响应校正</string>
     <string name="ddc_file">DDC 文件</string>
-    <string name="liveprog_enable">实时可编程 DSP</string>
+    <string name="liveprog_enable">可编程 DSP</string>
     <string name="liveprog_file">DSP 脚本</string>
     <string name="liveprog_additional_params">附加脚本参数</string>
     <string name="liveprog_additional_params_not_supported">所选脚本没有可自定义的参数</string>
@@ -140,7 +140,7 @@
     <string name="liveprog_no_script_selected">未选择脚本</string>
     <string name="liveprog_edit_header">编辑选中的脚本</string>
     <string name="liveprog_edit">在内置编辑器中打开活动脚本</string>
-    <string name="tube_enable">数仿模拟</string>
+    <string name="tube_enable">模拟音色仿真</string>
     <string name="tube_drive">前置放大器</string>
     <string name="output_control_header">输出控制</string>
     <string name="output_limiter_threshold">限制器阈值</string>
@@ -153,7 +153,7 @@
     <string name="stereowide_level_wide">较宽</string>
     <string name="stereowide_level_very_narrow">极窄</string>
     <string name="stereowide_level_narrow">较窄</string>
-    <string name="crossfeed_enable">交叉反馈</string>
+    <string name="crossfeed_enable">交叉馈送</string>
     <string name="crossfeed_preset">预设</string>
     <string name="crossfeed_preset_bs2b_weak">BS2B 弱</string>
     <string name="crossfeed_preset_bs2b_strong">BS2B 强</string>

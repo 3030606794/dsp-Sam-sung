@@ -1,0 +1,13 @@
+<resources>
+    <string name="effect_group_equalizers">均衡器</string>
+    <string name="effect_group_bass">低频增强</string>
+    <string name="effect_group_clarity">清晰度与高频增强</string>
+    <string name="effect_group_spatial">立体声与空间成像</string>
+    <string name="effect_group_crossfeed">耳机交叉馈送</string>
+    <string name="effect_group_reverb">混响</string>
+    <string name="effect_group_analog">模拟音色</string>
+    <string name="effect_group_dynamics">动态处理</string>
+    <string name="effect_group_advanced">校正与高级 DSP</string>
+    <string name="effect_group_expanded">已展开</string>
+    <string name="effect_group_collapsed">已收起</string>
+</resources>

@@ -124,7 +124,7 @@
     <string name="bass_enable">Dynamic bass boost</string>
     <string name="bass_max_gain">Maximum gain</string>
 
-    <string name="reverb_enable">Virtual room effect</string>
+    <string name="reverb_enable">房间混响</string>
     <string name="reverb_room_type">Room type</string>
     <string name="reverb_preset_default">Default</string>
     <string name="reverb_preset_small_hall1">Small hall 1</string>
@@ -140,7 +140,7 @@
     <string name="reverb_preset_long_reverb1">Long reverb 1</string>
     <string name="reverb_preset_long_reverb2">Long reverb 2</string>
 
-    <string name="convolver_enable">Convolver</string>
+    <string name="convolver_enable">卷积处理</string>
     <string name="convolver_impulse">Impulse response</string>
     <string name="convolver_advanced_editing">Advanced waveform editing</string>
     <string name="convolver_convolution_mode">Impulse response optimization</string>
@@ -148,10 +148,10 @@
     <string name="convolver_convolution_mode_shrink">Shrink</string>
     <string name="convolver_convolution_mode_minimum_phase_shrink">Minimum phase transform and shrink</string>
 
-    <string name="ddc_enable">ViPER-DDC</string>
+    <string name="ddc_enable">DDC 耳机响应校正</string>
     <string name="ddc_file">DDC file</string>
 
-    <string name="liveprog_enable">Live programmable DSP</string>
+    <string name="liveprog_enable">可编程 DSP</string>
     <string name="liveprog_file">Liveprog script</string>
     <string name="liveprog_additional_params">Additional script parameters</string>
     <string name="liveprog_additional_params_not_supported">Selected script has no customizable parameters</string>
@@ -160,7 +160,7 @@
     <string name="liveprog_edit_header">Edit selected script</string>
     <string name="liveprog_edit">Open active script in built-in editor</string>
 
-    <string name="tube_enable">Analog modelling</string>
+    <string name="tube_enable">模拟音色仿真</string>
     <string name="tube_drive">Preamp</string>
 
     <string name="output_control_header">Output control</string>
@@ -176,7 +176,7 @@
     <string name="stereowide_level_very_narrow">Very narrow</string>
     <string name="stereowide_level_narrow">Narrow</string>
 
-    <string name="crossfeed_enable">Crossfeed</string>
+    <string name="crossfeed_enable">交叉馈送</string>
     <string name="crossfeed_preset">Preset</string>
     <string name="crossfeed_preset_bs2b_weak">BS2B Weak</string>
     <string name="crossfeed_preset_bs2b_strong">BS2B Strong</string>
