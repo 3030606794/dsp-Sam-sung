@@ -46,7 +46,7 @@
                 app:icon="@drawable/ic_twotone_delete_24dp" app:iconPadding="0dp" app:iconSize="20dp" app:iconGravity="textStart" app:iconTint="#D32F2F"
                 app:layout_constraintStart_toStartOf="@id/peq_header_edge_1" app:layout_constraintEnd_toEndOf="@id/peq_header_edge_2"
                 app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent" />
-            <TextView android:id="@+id/peq_band_title" android:layout_width="0dp"
+            <me.timschneeberger.rootlessjamesdsp.peq.PeqFilterLabelView android:id="@+id/peq_band_title" android:layout_width="0dp"
                 android:layout_height="0dp" android:gravity="center" android:paddingHorizontal="1dp"
                 android:maxLines="1" android:ellipsize="end" android:autoSizeTextType="uniform"
                 android:autoSizeMinTextSize="10sp" android:autoSizeMaxTextSize="14sp" android:autoSizeStepGranularity="1sp"

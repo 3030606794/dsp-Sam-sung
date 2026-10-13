@@ -22,5 +22,8 @@ class GraphicEqualizerActivity : BaseActivity() {
         }
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
+        binding.peqSystemPresets.setOnClickListener {
+            (supportFragmentManager.findFragmentById(R.id.params) as? PeqFragment)?.showSystemPresets()
+        }
     }
 }

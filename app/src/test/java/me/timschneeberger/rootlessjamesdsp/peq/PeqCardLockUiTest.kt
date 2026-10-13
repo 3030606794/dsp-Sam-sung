@@ -10,6 +10,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
@@ -28,9 +29,10 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowToast
+import org.robolectric.shadows.ShadowDialog
 import java.time.Duration
 
-/** Lock gestures and label shortcuts change protection only, including after holder reuse. */
+/** Immediate master-lock gestures and dedicated field locks stay safe across holder reuse. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class, qualifiers = "w411dp-h820dp-port")
 @LooperMode(LooperMode.Mode.PAUSED)
@@ -135,13 +137,11 @@ class PeqCardLockUiTest {
 
     private fun fieldState(id: String) = PeqEditField.entries.associateWith { locks.isFieldLocked(id, it) }
 
-    @Test fun physicalSingleTapChangesOnlyTheMasterAfterItsConfirmationWindow() {
+    @Test fun physicalSingleTapChangesOnlyTheMasterImmediatelyOnRelease() {
         launch(fieldLocks = true)
         val before = lockPrefs.all.toMap()
         val card = row()
         tap(card.findViewById(R.id.peq_band_lock))
-        assertEquals(before, lockPrefs.all)
-        awaitConfirmation()
         assertTrue(locks.isBandLocked("a"))
         assertEquals(before.toMutableMap().apply { put("a.band", true) }, lockPrefs.all)
         assertTrue(locks.isNew("a"))
@@ -209,7 +209,26 @@ class PeqCardLockUiTest {
         assertAudioAndParametersUnchanged()
     }
 
-    @Test fun LabelsAndSmallLocksToggleTheSameFieldForBothQAndBandwidthCards() {
+    @Test fun FieldsOnlyDoubleTapRestoresAnOriginallyUnlockedMasterOnTheSecondDown() {
+        assertTrue(PeqEditorPreferences(app).save(PeqEditorSettings(doubleTapUnlocksBand = false)))
+        launch(fieldLocks = true)
+        val card = row()
+        val button = card.findViewById<View>(R.id.peq_band_lock)
+        tap(button)
+        assertTrue("The first release is already a complete immediate single", locks.isBandLocked("a"))
+        assertTrue(fieldState("a").values.all { it })
+        advance(80)
+        event(button, MotionEvent.ACTION_DOWN)
+        assertFalse("Only-fields doubles preserve the master state before the first tap", locks.isBandLocked("a"))
+        assertTrue(fieldState("a").values.none { it })
+        event(button, MotionEvent.ACTION_UP)
+        awaitConfirmation()
+        assertFalse(locks.isBandLocked("a"))
+        assertTrue(card.findViewById<View>(R.id.peq_band_slider).isEnabled)
+        assertAudioAndParametersUnchanged()
+    }
+
+    @Test fun LabelsAreReadOnlyAndOnlySmallLocksToggleFieldsForBothQAndBandwidthCards() {
         launch()
         val mappings = listOf(
             Triple(R.id.peq_gain_label, R.id.peq_gain_lock, PeqEditField.GAIN),
@@ -225,7 +244,10 @@ class PeqCardLockUiTest {
                 val label = card.findViewById<TextView>(labelId)
                 val smallLock = card.findViewById<MaterialButton>(lockId)
                 assertTrue(label.isEnabled)
-                assertTrue(label.performClick())
+                assertFalse(label.isClickable)
+                assertFalse(label.performClick())
+                assertEquals(before, lockPrefs.all)
+                assertTrue(smallLock.performClick())
                 assertTrue(locks.isFieldLocked(band.id, field))
                 assertEquals(before.toMutableMap().apply { put("${band.id}.${field.name}", true) }, lockPrefs.all)
                 assertEquals(Color.rgb(211, 47, 47), smallLock.iconTint!!.defaultColor)
@@ -269,18 +291,22 @@ class PeqCardLockUiTest {
         assertAudioAndParametersUnchanged()
     }
 
-    @Test fun EnteringSelectionAndLeavingTheScreenCancelPendingMasterTaps() {
+    @Test fun EnteringSelectionAndLeavingTheScreenCancelTouchesBeforeRelease() {
         launch(fieldLocks = true)
         val before = lockPrefs.all.toMap()
-        tap(row().findViewById(R.id.peq_band_lock))
+        val firstLock = row().findViewById<View>(R.id.peq_band_lock)
+        event(firstLock, MotionEvent.ACTION_DOWN)
         view<View>(R.id.peq_edit_selection).performClick()
         layout()
+        event(firstLock, MotionEvent.ACTION_UP)
         awaitConfirmation()
         assertEquals(before, lockPrefs.all)
         view<View>(R.id.peq_selection_done).performClick()
         layout()
-        tap(row().findViewById(R.id.peq_band_lock))
+        val secondLock = row().findViewById<View>(R.id.peq_band_lock)
+        event(secondLock, MotionEvent.ACTION_DOWN)
         controller!!.pause()
+        event(secondLock, MotionEvent.ACTION_UP)
         awaitConfirmation()
         assertEquals(before, lockPrefs.all)
         assertAudioAndParametersUnchanged()
@@ -291,12 +317,14 @@ class PeqCardLockUiTest {
         assertAudioAndParametersUnchanged()
     }
 
-    @Test fun BindingTheHolderToAnotherBandCancelsTheOldTapInsteadOfLockingEitherBand() {
+    @Test fun BindingTheHolderToAnotherBandCancelsTheOldTouchBeforeRelease() {
         launch(fieldLocks = true)
         val before = lockPrefs.all.toMap()
         val holder = holder()
-        tap(holder.itemView.findViewById(R.id.peq_band_lock))
+        val button = holder.itemView.findViewById<View>(R.id.peq_band_lock)
+        event(button, MotionEvent.ACTION_DOWN)
         adapter().onBindViewHolder(holder, 1)
+        event(button, MotionEvent.ACTION_UP)
         awaitConfirmation()
         assertEquals(before, lockPrefs.all)
         assertAudioAndParametersUnchanged()
@@ -307,21 +335,83 @@ class PeqCardLockUiTest {
         assertAudioAndParametersUnchanged()
     }
 
-    @Test fun DetachedAndRecycledHoldersDiscardPendingTapsBeforeReuse() {
+    @Test fun DetachedAndRecycledHoldersDiscardUnreleasedTouchesBeforeReuse() {
         launch(fieldLocks = true)
         val before = lockPrefs.all.toMap()
         val holder = holder()
-        tap(holder.itemView.findViewById(R.id.peq_band_lock))
+        val button = holder.itemView.findViewById<View>(R.id.peq_band_lock)
+        event(button, MotionEvent.ACTION_DOWN)
         adapter().onViewDetachedFromWindow(holder)
+        event(button, MotionEvent.ACTION_UP)
         awaitConfirmation()
         assertEquals(before, lockPrefs.all)
         adapter().onViewAttachedToWindow(holder)
-        tap(holder.itemView.findViewById(R.id.peq_band_lock))
+        event(button, MotionEvent.ACTION_DOWN)
         adapter().onViewRecycled(holder)
         adapter().onBindViewHolder(holder, 1)
         adapter().onViewAttachedToWindow(holder)
+        event(button, MotionEvent.ACTION_UP)
         awaitConfirmation()
         assertEquals(before, lockPrefs.all)
+        assertAudioAndParametersUnchanged()
+    }
+
+    @Test fun RebindingAfterAnImmediateSingleDropsItsDoubleSnapshotWithoutUndoingTheCompletedSingle() {
+        launch(fieldLocks = true)
+        val holder = holder()
+        val button = holder.itemView.findViewById<View>(R.id.peq_band_lock)
+        tap(button)
+        assertTrue(locks.isBandLocked("a"))
+        adapter().onBindViewHolder(holder, 1)
+        advance(80)
+        tap(button)
+        assertTrue(locks.isBandLocked("a"))
+        assertTrue("A new identity gets a fresh single, never the previous card's double", locks.isBandLocked("b"))
+        assertTrue(fieldState("a").values.all { it })
+        assertTrue(fieldState("b").values.all { it })
+        awaitConfirmation()
+        assertTrue(locks.isBandLocked("a"))
+        assertTrue(locks.isBandLocked("b"))
+        assertAudioAndParametersUnchanged()
+    }
+
+    @Test fun FineEditorLocksRefreshTheirCardWithoutRebindingAnyVisibleHolder() {
+        launch()
+        val first = requireNotNull(list().findViewHolderForAdapterPosition(0))
+        val second = requireNotNull(list().findViewHolderForAdapterPosition(1))
+        first.itemView.findViewById<View>(R.id.peq_band_number).performClick()
+        idle()
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        assertTrue(dialog.isShowing)
+        var invalidations = 0
+        adapter().registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+            override fun onChanged() { invalidations++ }
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int, payload: Any?) { invalidations++ }
+        })
+        dialog.findViewById<View>(R.id.peq_gain_lock)!!.performClick()
+        idle()
+        assertTrue(locks.isFieldLocked("a", PeqEditField.GAIN))
+        assertFalse(first.itemView.findViewById<View>(R.id.peq_band_slider).isEnabled)
+        assertTrue(second.itemView.findViewById<View>(R.id.peq_band_slider).isEnabled)
+
+        val master = dialog.findViewById<MaterialButton>(R.id.peq_band_dialog_lock)!!
+        master.performClick()
+        idle()
+        assertTrue(locks.isBandLocked("a"))
+        assertEquals(Color.rgb(211, 47, 47), first.itemView.findViewById<MaterialButton>(R.id.peq_band_lock).iconTint!!.defaultColor)
+        assertEquals(Color.GRAY, second.itemView.findViewById<MaterialButton>(R.id.peq_band_lock).iconTint!!.defaultColor)
+
+        val unlockAll = master.createAccessibilityNodeInfo().actionList.single {
+            it.label?.toString() == app.getString(R.string.peq_unlock_all_field_locks)
+        }
+        assertTrue(master.performAccessibilityAction(unlockAll.id, null))
+        layout()
+        assertFalse(locks.isBandLocked("a"))
+        assertFalse(locks.isFieldLocked("a", PeqEditField.GAIN))
+        assertTrue(first.itemView.findViewById<View>(R.id.peq_band_slider).isEnabled)
+        assertEquals("Protection-only changes never invalidate adapter bindings", 0, invalidations)
+        assertSame(first, list().findViewHolderForAdapterPosition(0))
+        assertSame(second, list().findViewHolderForAdapterPosition(1))
         assertAudioAndParametersUnchanged()
     }
 

@@ -12,8 +12,6 @@ import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.TextView
-import androidx.appcompat.content.res.AppCompatResources
 import com.google.android.material.color.MaterialColors
 import me.timschneeberger.rootlessjamesdsp.R
 import kotlin.math.roundToInt
@@ -38,12 +36,7 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
             if (field == value) return
             field = value
             types.forEach { (type, cell) ->
-                val icon = if (value) AppCompatResources.getDrawable(context, iconId(type))?.mutate()?.apply {
-                    setBounds(0, 0, dp(22), dp(16))
-                } else null
-                cell.setCompoundDrawables(null, null, null, icon)
-                cell.compoundDrawablePadding = if (value) dp(3) else 0
-                cell.compoundDrawableTintList = cell.textColors
+                cell.filterIcon = type.takeIf { value }
             }
             for (index in 0 until choices.childCount) {
                 val child = choices.getChildAt(index)
@@ -61,7 +54,7 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
     private val feedback = TypedValue().also {
         context.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
     }.resourceId
-    private val types = linkedMapOf<PeqFilterType, TextView>()
+    private val types = linkedMapOf<PeqFilterType, PeqFilterLabelView>()
     private val choices = object : LinearLayout(context) {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = border; strokeWidth = dp(1).toFloat() }
         override fun dispatchDraw(canvas: Canvas) {
@@ -132,7 +125,6 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
             })
             val foreground = when { saved -> purpleText; pending && monitoring -> Color.WHITE; else -> normalText }
             cell.setTextColor(foreground)
-            cell.compoundDrawableTintList = ColorStateList.valueOf(foreground)
         }
         monitor.isEnabled = canEdit
         monitor.isSelected = monitoring
@@ -154,7 +146,7 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
         confirm.alpha = if (confirm.isEnabled) 1f else 0.45f
     }
 
-    private fun textCell(label: String, identifier: Int) = TextView(context).apply {
+    private fun textCell(label: String, identifier: Int) = PeqFilterLabelView(context).apply {
         id = identifier
         text = label
         gravity = Gravity.CENTER
@@ -170,13 +162,4 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
 
-    private fun iconId(type: PeqFilterType): Int = when (type) {
-        PeqFilterType.PEAK -> R.drawable.ic_peq_filter_peak
-        PeqFilterType.LOW_SHELF -> R.drawable.ic_peq_filter_low_shelf
-        PeqFilterType.HIGH_SHELF -> R.drawable.ic_peq_filter_high_shelf
-        PeqFilterType.LOW_PASS -> R.drawable.ic_peq_filter_low_pass
-        PeqFilterType.HIGH_PASS -> R.drawable.ic_peq_filter_high_pass
-        PeqFilterType.NOTCH -> R.drawable.ic_peq_filter_notch
-        PeqFilterType.BAND_PASS -> R.drawable.ic_peq_filter_band_pass
-    }
 }

@@ -140,14 +140,7 @@ class PeqFilterSelectorDrawingTest {
                             }
                             assertTrue("$type label has visible rendered pixels", inkRows.isNotEmpty())
                             if (icons) {
-                                assertTrue("$type has actual curve pixels below its label at $width dp",
-                                    inkRows.count { it >= area.height() / 2 + 1 } >= 3)
-                                assertTrue("$type text remains above its curve at $width dp",
-                                    inkRows.count { it < area.height() / 2 - 1 } >= 3)
-                                assertTrue("$type label and curve do not overlap at $width dp",
-                                    (area.height() / 2 - 6..area.height() / 2 + 6).any { gap ->
-                                        gap !in inkRows && inkRows.any { it < gap } && inkRows.any { it > gap }
-                                    })
+                                assertCompactTextCurveGap(inkRows, "Footer $type at $width dp")
                             } else {
                                 assertTrue("Text-only mode leaves no stale icon at the bottom of $type",
                                     inkRows.none { it >= area.height() - 7 })
@@ -160,6 +153,58 @@ class PeqFilterSelectorDrawingTest {
             adapter.onViewDetachedFromWindow(holder)
             preferences.edit().clear().commit()
         }
+    }
+
+    @Test fun collapsedInlineRowRendersAllHeaderCurvesWithTheSameCompactGapInsideItsFixedSlot() {
+        val context = ContextThemeWrapper(RuntimeEnvironment.getApplication(), R.style.Theme_RootlessJamesDSP)
+        val band = PeqBand("header-raster", frequency = 1000.0, gain = 3.0)
+        val preferences = context.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE)
+        preferences.edit().clear().commit()
+        PeqBandLockStore(context).setBandLocked(band.id, false)
+        val adapter = PeqBandAdapter(onBandChanged = { true }, onEdit = {})
+        val holder = adapter.onCreateViewHolder(FrameLayout(context), 0)
+        val card = holder.itemView as ViewGroup
+        try {
+            for (width in listOf(320, 411)) for (type in PeqFilterType.entries) {
+                adapter.submitState(PeqState(listOf(band.copy(type = type))))
+                adapter.onBindViewHolder(holder, 0)
+                measure(card, width)
+                val label = card.findViewById<PeqFilterLabelView>(R.id.peq_band_title)
+                val area = Rect().also { label.getDrawingRect(it); card.offsetDescendantRectToMyCoords(label, it) }
+                assertEquals("Header stays fixed even with an icon", 40, area.height())
+                assertEquals(type, label.filterIcon)
+                assertEquals(View.GONE, card.findViewById<View>(R.id.peq_inline_filter).visibility)
+                val bitmap = Bitmap.createBitmap(card.width, card.height, Bitmap.Config.ARGB_8888)
+                try {
+                    bitmap.eraseColor(MaterialColors.getColor(card, com.google.android.material.R.attr.colorSurface))
+                    card.draw(Canvas(bitmap))
+                    writeRaster(bitmap, "compact-card-header-${type.name.lowercase()}-$width")
+                    val background = bitmap.getPixel(area.left + 3, area.top + 3)
+                    val inkRows = (3 until area.height() - 3).filter { y ->
+                        (area.left + 3 until area.right - 3).any { x ->
+                            val pixel = bitmap.getPixel(x, area.top + y)
+                            abs(Color.red(pixel) - Color.red(background)) +
+                                abs(Color.green(pixel) - Color.green(background)) +
+                                abs(Color.blue(pixel) - Color.blue(background)) >= 75
+                        }
+                    }
+                    assertCompactTextCurveGap(inkRows, "Header $type at $width dp")
+                    assertTrue("Header text and curve have padding inside their fixed slot",
+                        inkRows.first() >= 4 && inkRows.last() <= area.height() - 5)
+                } finally { bitmap.recycle() }
+            }
+        } finally { preferences.edit().clear().commit() }
+    }
+
+    private fun assertCompactTextCurveGap(inkRows: List<Int>, description: String) {
+        assertTrue("$description renders visible text and a visible curve", inkRows.size >= 6)
+        val separation = inkRows.zipWithNext().maxByOrNull { (before, after) -> after - before }!!
+        val gap = separation.second - separation.first - 1
+        // Pixel coverage of a 3 dp geometric gap varies at antialiased glyph edges.
+        // This rejects the old 16 dp compound-drawable gap as well as overlapping ink.
+        assertTrue("$description keeps a compact 3 dp visible gap, found $gap raster rows", gap in 2..5)
+        assertTrue("$description has text above the gap", inkRows.count { it <= separation.first } >= 3)
+        assertTrue("$description has a curve below the gap", inkRows.count { it >= separation.second } >= 3)
     }
 
     private fun checkDraftOutline(rtl: Boolean = false) {

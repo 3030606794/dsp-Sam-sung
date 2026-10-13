@@ -39,9 +39,10 @@ class PeqBandLockStore(context: Context) {
     }
 
     /** Publish the final master/field state together so a double tap never unlocks in stages. */
-    fun unlockAll(id: String, includeBand: Boolean) {
+    fun unlockAll(id: String, includeBand: Boolean, preservedBandLocked: Boolean? = null) {
         preferences.edit().apply {
             if (includeBand) putBoolean("$id.band", false)
+            else if (preservedBandLocked != null) putBoolean("$id.band", preservedBandLocked)
             PeqEditField.entries.forEach { putBoolean("$id.${it.name}", false) }
         }.apply()
     }

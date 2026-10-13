@@ -12,12 +12,24 @@
         android:fitsSystemWindows="true"
         app:liftOnScroll="false">
 
+        <FrameLayout android:layout_width="match_parent" android:layout_height="64dp">
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="64dp"
             app:titleCentered="true" app:subtitleCentered="true"
             app:subtitleTextAppearance="@style/PeqToolbarSubtitle" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/peq_system_presets" style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="76dp" android:layout_height="32dp"
+            android:layout_gravity="top|start" android:layout_marginStart="56dp"
+            android:layout_marginTop="2dp" android:minWidth="0dp" android:minHeight="0dp"
+            android:insetTop="0dp" android:insetBottom="0dp"
+            android:paddingStart="2dp" android:paddingEnd="2dp"
+            android:paddingTop="0dp" android:paddingBottom="0dp"
+            android:includeFontPadding="false"
+            android:textSize="13sp" android:text="@string/peq_system_presets" />
+        </FrameLayout>
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.constraintlayout.widget.ConstraintLayout

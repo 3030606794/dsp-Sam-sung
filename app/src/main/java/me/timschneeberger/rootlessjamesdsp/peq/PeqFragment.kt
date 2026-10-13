@@ -81,6 +81,8 @@ class PeqFragment : Fragment() {
     private val pendingSave = Runnable { flushPendingSave() }
     private val dialogs = mutableListOf<AlertDialog>()
     private var presetDialogs: PeqPresetsDialog? = null
+    private var systemPresetDialogs: PeqSystemPresetsDialog? = null
+    private var loadingSystemPresets = false
     private var powerPreferences: SharedPreferences? = null
     private val powerListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == getString(R.string.key_geq_enable)) renderPower()
@@ -1032,6 +1034,38 @@ class PeqFragment : Fragment() {
         }
     }
 
+    fun showSystemPresets() {
+        if (loadingSystemPresets || binding == null) return
+        stopInlineFilterPreview()
+        flushPendingSave()
+        systemPresetDialogs?.let { it.show(); return }
+        loadingSystemPresets = true
+        val appContext = requireContext().applicationContext
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val presets = withContext(Dispatchers.IO) { PeqSystemPresets.load(appContext) }
+                if (binding == null) return@launch
+                systemPresetDialogs = PeqSystemPresetsDialog(requireContext(), presets) { preset ->
+                    stopInlineFilterPreview()
+                    flushPendingSave()
+                    binding?.peqBandList?.stopScroll()
+                    clearMarker()
+                    val applied = save(preset.applyTo(editorState))
+                    if (applied) {
+                        finishSelection()
+                        binding?.peqBandList?.scrollToPosition(0)
+                        toast(getString(R.string.peq_system_presets_applied, preset.name, preset.bands.size))
+                    }
+                    applied
+                }.also { it.show() }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (binding != null) toast(getString(R.string.peq_system_presets_failed))
+            } finally { loadingSystemPresets = false }
+        }
+    }
+
     private fun save(next: PeqState, interactingBand: String? = null): Boolean {
         cancelPendingSave()
         if (!repository.save(next)) {
@@ -1428,12 +1462,12 @@ class PeqFragment : Fragment() {
                     }
                     renderLocks()
                     previewDraft()
-                    bandAdapter.notifyDataSetChanged()
+                    bandAdapter.refreshLocks(id)
                 }
             }
         }
         fun toggleFineMasterLock() {
-            if (fineFilterDialog !== activeDialog) return
+            if (fineFilterDialog !== activeDialog || editingSelection || editorState.bands.none { it.id == id }) return
             val locked = !locks.isBandLocked(id)
             locks.setBandLocked(id, locked)
             if (locked) {
@@ -1449,22 +1483,27 @@ class PeqFragment : Fragment() {
                 updateTypeFields()
             }
             renderLocks()
-            bandAdapter.notifyDataSetChanged()
+            bandAdapter.refreshLocks(id)
+        }
+        fun unlockFineLocks(preservedBandLocked: Boolean? = null) {
+            if (fineFilterDialog !== activeDialog || editingSelection || editorState.bands.none { it.id == id }) return
+            val includeBand = displaySettings.doubleTapUnlocksBand
+            locks.unlockAll(id, includeBand, preservedBandLocked)
+            renderLocks()
+            bandAdapter.refreshLocks(id)
+            toast(getString(when {
+                includeBand -> R.string.peq_all_band_locks_unlocked
+                locks.isBandLocked(id) -> R.string.peq_all_field_locks_unlocked_band_locked
+                else -> R.string.peq_all_field_locks_unlocked
+            }))
         }
         val lockGestures = PeqBandLockGestures(titleUi.peqBandDialogLock,
             onSingle = ::toggleFineMasterLock,
-            onDouble = {
-                if (fineFilterDialog === activeDialog && !editingSelection) {
-                    val includeBand = displaySettings.doubleTapUnlocksBand
-                    locks.unlockAll(id, includeBand)
-                    renderLocks()
-                    bandAdapter.notifyDataSetChanged()
-                    toast(getString(when {
-                        includeBand -> R.string.peq_all_band_locks_unlocked
-                        locks.isBandLocked(id) -> R.string.peq_all_field_locks_unlocked_band_locked
-                        else -> R.string.peq_all_field_locks_unlocked
-                    }))
-                }
+            onDouble = { unlockFineLocks() },
+            immediateSingle = true,
+            captureDoubleAction = {
+                val originallyLocked = locks.isBandLocked(id)
+                ({ unlockFineLocks(originallyLocked) })
             })
         fineLockGestures += lockGestures
         titleUi.peqBandDialogPower.setOnClickListener {
@@ -1588,7 +1627,10 @@ class PeqFragment : Fragment() {
         return dialog
     }
 
-    private fun dismissDialogs() { dialogs.toList().forEach { it.dismiss() } }
+    private fun dismissDialogs() {
+        dialogs.toList().forEach { it.dismiss() }
+        systemPresetDialogs?.dismissAll()
+    }
 
     override fun onPause() {
         stopInlineFilterPreview()
@@ -1614,6 +1656,8 @@ class PeqFragment : Fragment() {
         dismissDialogs()
         presetDialogs?.dismissAll()
         presetDialogs = null
+        systemPresetDialogs = null
+        loadingSystemPresets = false
         clearMarker()
         appliedPinResponse = null
         selectionBackCallback = null

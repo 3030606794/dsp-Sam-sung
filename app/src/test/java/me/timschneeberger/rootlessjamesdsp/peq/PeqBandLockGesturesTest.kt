@@ -22,7 +22,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import java.time.Duration
 
-/** Physical double taps must never briefly toggle the master lock as a first single tap. */
+/** Deferred copy gestures and immediate reversible lock gestures share lifecycle protection. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class)
 @LooperMode(LooperMode.Mode.PAUSED)
@@ -175,6 +175,109 @@ class PeqBandLockGesturesTest {
         event(MotionEvent.ACTION_UP)
         awaitConfirmation()
         assertEquals(listOf("double"), actions)
+    }
+
+    private fun immediate(single: () -> Unit = { actions += "single" },
+                          capture: (() -> (() -> Unit))? = null) {
+        gestures.cancel()
+        gestures = PeqBandLockGestures(button, single, { actions += "double" },
+            immediateSingle = true, captureDoubleAction = capture)
+    }
+
+    @Test fun immediateSingleRunsOnFirstUpAndNeverRunsAgainAtConfirmation() {
+        immediate()
+        event(MotionEvent.ACTION_DOWN)
+        assertTrue(actions.isEmpty())
+        advance(20)
+        event(MotionEvent.ACTION_UP)
+        assertEquals(listOf("single"), actions)
+        assertFalse(button.isPressed)
+        awaitConfirmation()
+        assertEquals(listOf("single"), actions)
+    }
+
+    @Test fun immediateDoubleUsesTheStateCapturedBeforeSingleOnItsSecondDown() {
+        for (originalLocked in listOf(true, false)) {
+            actions.clear()
+            var locked = originalLocked
+            var fieldsLocked = true
+            immediate(single = { locked = !locked; actions += "single" }, capture = {
+                val beforeSingle = locked
+                ({ locked = beforeSingle; fieldsLocked = false; actions += "restored-double" })
+            })
+            tap()
+            assertEquals(!originalLocked, locked)
+            assertTrue(fieldsLocked)
+            advance(80)
+            event(MotionEvent.ACTION_DOWN)
+            assertEquals(originalLocked, locked)
+            assertFalse(fieldsLocked)
+            assertEquals(listOf("single", "restored-double"), actions)
+            advance(20)
+            event(MotionEvent.ACTION_UP)
+            awaitConfirmation()
+            assertEquals(listOf("single", "restored-double"), actions)
+        }
+    }
+
+    @Test fun cancellationRetainsCompletedImmediateSingleButDropsItsDoubleCandidate() {
+        immediate()
+        tap()
+        assertEquals(listOf("single"), actions)
+        gestures.cancel()
+        advance(80)
+        tap()
+        assertEquals(listOf("single", "single"), actions)
+        awaitConfirmation()
+        assertEquals(listOf("single", "single"), actions)
+    }
+
+    @Test fun immediateModeDoesNotActOnCancelledMovedOrMultiPointerFirstTouches() {
+        immediate()
+        event(MotionEvent.ACTION_DOWN)
+        event(MotionEvent.ACTION_CANCEL)
+        event(MotionEvent.ACTION_UP)
+        event(MotionEvent.ACTION_DOWN)
+        event(MotionEvent.ACTION_MOVE, 700f, 200f)
+        event(MotionEvent.ACTION_UP, 700f, 200f)
+        event(MotionEvent.ACTION_DOWN)
+        event(MotionEvent.ACTION_POINTER_DOWN)
+        event(MotionEvent.ACTION_UP)
+        awaitConfirmation()
+        assertTrue(actions.isEmpty())
+        assertFalse(button.isPressed)
+    }
+
+    @Test fun immediateSingleCallbackCanCancelOrDisableWithoutKeepingADoubleCandidate() {
+        immediate(single = { actions += "single"; gestures.cancel(); button.isEnabled = false })
+        tap()
+        assertEquals(listOf("single"), actions)
+        button.isEnabled = true
+        advance(80)
+        tap()
+        awaitConfirmation()
+        assertEquals(listOf("single", "single"), actions)
+    }
+
+    @Test fun accessibilityDoubleAfterImmediateSingleUsesCurrentStateNotItsSavedPhysicalSnapshot() {
+        immediate(capture = { ({ actions += "captured-double" }) })
+        tap()
+        val action = button.createAccessibilityNodeInfo().actionList.last {
+            it.label?.toString() == button.context.getString(R.string.peq_unlock_all_field_locks)
+        }
+        assertTrue(button.performAccessibilityAction(action.id, null))
+        awaitConfirmation()
+        assertEquals(listOf("single", "double"), actions)
+    }
+
+    @Test fun directClickBetweenImmediateTapsCannotBecomeAPhysicalDouble() {
+        immediate(capture = { ({ actions += "captured-double" }) })
+        tap()
+        button.performClick()
+        advance(80)
+        tap()
+        awaitConfirmation()
+        assertEquals(listOf("single", "single", "single"), actions)
     }
 
     class HostActivity : FragmentActivity() {

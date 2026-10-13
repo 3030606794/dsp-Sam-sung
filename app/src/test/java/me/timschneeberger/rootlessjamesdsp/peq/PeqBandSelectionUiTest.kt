@@ -201,7 +201,7 @@ class PeqBandSelectionUiTest {
             val card = list.findViewHolderForAdapterPosition(0)!!.itemView as MaterialCardView
             val originalHeight = card.height
             PeqFilterType.entries.forEach { type ->
-                assertNull(card.findViewById<TextView>(PeqFilterTypeDialog.buttonId(type)).compoundDrawables[3])
+                assertNull(card.findViewById<PeqFilterLabelView>(PeqFilterTypeDialog.buttonId(type)).filterIcon)
             }
             inlineActions.clear()
             adapter.submitCardFilterIcons(true)
@@ -210,13 +210,12 @@ class PeqBandSelectionUiTest {
             assertTrue(inlineActions.isEmpty())
             PeqFilterType.entries.forEach { type ->
                 val id = PeqFilterTypeDialog.buttonId(type)
-                val label = card.findViewById<TextView>(id)
-                assertNotNull(label.compoundDrawables[3])
+                val label = card.findViewById<PeqFilterLabelView>(id)
+                assertEquals(type, label.filterIcon)
                 assertEquals(PeqBandAdapter.typeLabel(card.context, type), label.text.toString())
-                assertEquals(label.currentTextColor, label.compoundDrawableTintList!!.defaultColor)
                 val rectangle = bounds(card, id)
                 // Hit the icon's lower part instead of only testing the label's old center.
-                tap(card, rectangle.exactCenterX(), rectangle.bottom - 12 * card.resources.displayMetrics.density)
+                tap(card, rectangle.exactCenterX(), rectangle.exactCenterY() + 9 * card.resources.displayMetrics.density)
             }
             assertEquals(PeqFilterType.entries.map { "icons" to PeqInlineFilterAction.Select(it) }, inlineActions)
             assertTrue(card.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.HIGH_PASS)).isSelected)
@@ -228,6 +227,59 @@ class PeqBandSelectionUiTest {
             assertEquals(PeqFilterType.entries.size, inlineActions.size)
             assertEquals(original, state)
         }
+    }
+
+    @Test fun parameterLabelsNeverChangeLocksWhileLockIconsStillToggleThem() {
+        launch(PeqState(listOf(PeqBand("q-label"), PeqBand("bw-label", qualityDisplay = PeqQualityDisplay.BW))))
+        val original = state
+        val locks = PeqBandLockStore(controller!!.get())
+        val controls = listOf(Triple(R.id.peq_gain_label, R.id.peq_gain_lock, PeqEditField.GAIN),
+            Triple(R.id.peq_q_label, R.id.peq_q_lock, PeqEditField.QUALITY),
+            Triple(R.id.peq_frequency_label, R.id.peq_frequency_lock, PeqEditField.FREQUENCY))
+        state.bands.forEachIndexed { index, band ->
+            val card = row(index)
+            controls.forEach { (labelId, lockId, field) ->
+                val label = card.findViewById<View>(labelId)
+                tap(card, labelId)
+                assertFalse(label.performClick())
+                assertFalse(locks.isFieldLocked(band.id, field))
+                tap(card, lockId)
+                assertTrue(locks.isFieldLocked(band.id, field))
+                tap(card, labelId)
+                assertTrue("Tapping the text cannot unlock $field", locks.isFieldLocked(band.id, field))
+                tap(card, lockId)
+                assertFalse(locks.isFieldLocked(band.id, field))
+            }
+        }
+        assertEquals(original, state)
+        assertTrue(changes.isEmpty())
+        assertTrue(fields.isEmpty())
+    }
+
+    @Test fun hiddenInlineRowShowsHeaderCurveRegardlessOfOptionalFooterIconPreference() {
+        launch(PeqState(listOf(PeqBand("header-curve", type = PeqFilterType.HIGH_PASS))))
+        val card = row()
+        val title = card.findViewById<PeqFilterLabelView>(R.id.peq_band_title)
+        val header = bounds(card, R.id.peq_band_header)
+        val titleSlot = bounds(card, R.id.peq_band_title)
+        for (footerIcons in listOf(false, true)) {
+            adapter.submitCardFilterIcons(footerIcons)
+            adapter.submitInlineFilter(false)
+            layout()
+            assertEquals(PeqFilterType.HIGH_PASS, title.filterIcon)
+            assertEquals("高通", title.text.toString())
+            assertEquals(View.GONE, card.findViewById<View>(R.id.peq_inline_filter).visibility)
+            tap(card, R.id.peq_band_title)
+            adapter.submitInlineFilter(true)
+            layout()
+            assertNull(title.filterIcon)
+            val footerLabel = card.findViewById<PeqFilterLabelView>(R.id.peq_filter_high_pass)
+            assertEquals(PeqFilterType.HIGH_PASS.takeIf { footerIcons }, footerLabel.filterIcon)
+            assertEquals(header, bounds(card, R.id.peq_band_header))
+            assertEquals(titleSlot, bounds(card, R.id.peq_band_title))
+        }
+        assertEquals(listOf("header-curve", "header-curve"), types)
+        assertTrue(changes.isEmpty())
     }
 
     @Test fun restoredUnitsAndSignedGainExtremesFitExistingSlotsWithoutMovingControls() {
@@ -314,7 +366,8 @@ class PeqBandSelectionUiTest {
             R.id.peq_q_value, R.id.peq_frequency_value, R.id.peq_band_locate, R.id.peq_band_warning,
             R.id.peq_band_lock, R.id.peq_band_power, R.id.peq_gain_lock, R.id.peq_q_lock,
             R.id.peq_frequency_lock, R.id.peq_band_plus, R.id.peq_band_slider, R.id.peq_frequency_slider,
-            R.id.peq_q_slider, R.id.peq_q_plus, R.id.peq_band_drag_handle)
+            R.id.peq_q_slider, R.id.peq_q_plus, R.id.peq_band_drag_handle,
+            R.id.peq_gain_label, R.id.peq_q_label, R.id.peq_frequency_label)
         controls.forEach { id ->
             val before = selectedClicks.size
             tap(card, id)
