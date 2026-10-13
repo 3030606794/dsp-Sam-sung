@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/peq_filter_dialog_root"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:paddingHorizontal="16dp" android:paddingVertical="16dp">
+    <TextView android:id="@+id/peq_filter_dialog_title"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:gravity="center" android:textAppearance="?attr/textAppearanceTitleLarge"
+        android:textStyle="bold" />
+    <HorizontalScrollView android:id="@+id/peq_filter_scroll"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="16dp" android:fillViewport="false"
+        android:scrollbars="none" android:clipToPadding="false">
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/peq_filter_types"
+            android:layout_width="wrap_content" android:layout_height="48dp"
+            android:orientation="horizontal" app:singleSelection="true" app:selectionRequired="true" />
+    </HorizontalScrollView>
+    <TextView android:id="@+id/peq_filter_lock_hint"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:gravity="center"
+        android:textAppearance="?attr/textAppearanceBodySmall"
+        android:textColor="?attr/colorOnSurfaceVariant" android:visibility="gone" />
+    <LinearLayout android:id="@+id/peq_filter_footer"
+        android:layout_width="match_parent" android:layout_height="48dp"
+        android:layout_marginTop="12dp" android:orientation="horizontal" android:gravity="center_vertical">
+        <com.google.android.material.button.MaterialButton android:id="@+id/peq_filter_cancel"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
+            android:minWidth="0dp" android:paddingHorizontal="2dp" android:textSize="14sp"
+            android:text="@android:string/cancel" android:maxLines="1" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/peq_filter_monitor"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
+            android:minWidth="0dp" android:paddingHorizontal="2dp" android:textSize="14sp"
+            android:text="@string/peq_filter_monitor" android:maxLines="1" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/peq_filter_confirm"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
+            android:minWidth="0dp" android:paddingHorizontal="2dp" android:textSize="14sp"
+            android:text="@android:string/ok" android:maxLines="1" />
+    </LinearLayout>
+</LinearLayout>

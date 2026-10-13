@@ -15,6 +15,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.color.MaterialColors
 import me.timschneeberger.rootlessjamesdsp.R
@@ -50,6 +51,7 @@ class PeqSelectionUiTest {
     @Before fun clear() {
         prefs.edit().clear().commit()
         application.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
+        assertTrue(PeqEditorPreferences(application).save(PeqEditorSettings(confirmDelete = true)))
         presets.load().forEach { presets.delete(it.id) }
     }
     @After fun close() { controller?.pause()?.stop()?.destroy(); idle() }
@@ -92,7 +94,9 @@ class PeqSelectionUiTest {
     }
     private fun dialog(): AlertDialog { idle(); return ShadowDialog.getLatestDialog() as AlertDialog }
     private fun choose(dialog: AlertDialog, index: Int) {
-        dialog.listView.performItemClick(null, index, index.toLong())
+        if (dialog.findViewById<View>(R.id.peq_filter_types) != null)
+            dialog.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.entries[index]))!!.performClick()
+        else dialog.listView.performItemClick(null, index, index.toLong())
         idle()
     }
     private fun parameters(index: Int): AlertDialog {
@@ -165,7 +169,7 @@ class PeqSelectionUiTest {
         assertSaved(reset)
         val picker = parameters(2)
         choose(picker, PeqFilterType.PEAK.ordinal)
-        picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        picker.findViewById<View>(R.id.peq_filter_confirm)!!.performClick()
         layout()
         val afterType = reset.copy(bands = reset.bands.mapIndexed { index, band ->
             if (index != 1) band.copy(type = PeqFilterType.PEAK) else band
@@ -180,7 +184,7 @@ class PeqSelectionUiTest {
         assertSaved(original.copy(bands = listOf(original.bands[1])))
         assertTrue(row(0).isSelected)
         assertEquals(1, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
-        assertTrue(view<TextView>(R.id.peq_summary).text.startsWith("1 "))
+        assertTrue(controller!!.get().findViewById<MaterialToolbar>(R.id.toolbar).subtitle.toString().startsWith("1 "))
         assertEquals(1, settingCount())
         assertTrue(view<View>(R.id.peq_add_front).isEnabled)
         assertTrue(view<View>(R.id.peq_add_back).isEnabled)
@@ -263,7 +267,7 @@ class PeqSelectionUiTest {
         layout()
         assertSaved(original.copy(bands = listOf(original.bands[1])))
         assertEquals(1, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
-        assertTrue(view<TextView>(R.id.peq_summary).text.startsWith("1 "))
+        assertTrue(controller!!.get().findViewById<MaterialToolbar>(R.id.toolbar).subtitle.toString().startsWith("1 "))
         assertEquals(1, settingCount())
         click(R.id.peq_add_back)
         assertEquals(2, repository.load().bands.size)

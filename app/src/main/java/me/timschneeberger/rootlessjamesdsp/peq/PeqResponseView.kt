@@ -70,9 +70,14 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private val lifecycleGeneration = AtomicInteger()
     private var displayedRevision = -1
     private var selectedBandId: String? = null
+    private var previewBandId: String? = null
+    private var displayOptions = PeqEditorSettings()
     var isMarkerVisible: Boolean = false
         private set
     var requestedState: PeqState? = null
+        private set
+    /** The curve-only bank may preview one disabled band; requestedState is always the real bank. */
+    internal var requestedPlotState: PeqState? = null
         private set
     data class AxisLabel(val text: String, val position: Float, val bounds: RectF)
     internal var renderedFrequencyLabels: List<AxisLabel> = emptyList()
@@ -101,7 +106,10 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val horizontalCrosshair: MarkerLine,
         val verticalCrosshair: MarkerLine,
         val gainAxisMarker: MarkerDot,
-        val frequencyAxisMarker: MarkerDot
+        val frequencyAxisMarker: MarkerDot,
+        val statusText: String?,
+        val labelLines: List<String>,
+        val textSizeSp: Float
     )
     internal var renderedMarker: BandMarker? = null
         private set
@@ -119,6 +127,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         worker?.close()
         worker = null
         requestedState = null
+        requestedPlotState = null
+        previewBandId = null
         hideMarker()
         gainRange = range
         responseFrequencies = frequencies.copyOf()
@@ -127,13 +137,15 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     }
 
     fun setState(state: PeqState, animate: Boolean = true) {
-        val previousState = requestedState
-        val sameResponse = previousState != null && sameFilters(previousState, state)
+        requestedState = state
+        val plotState = displayState(state)
+        val previousState = requestedPlotState
+        val sameResponse = previousState != null && sameFilters(previousState, plotState)
         val sameWidth = requestedWidth == width
         if (!animate && animator?.isRunning == true) {
             if (sameResponse) animator?.end() else animator?.cancel()
         }
-        requestedState = state
+        requestedPlotState = plotState
         updateMarkerDescription()
         requestedWidth = width
         gainRange = state.gainRange
@@ -145,7 +157,31 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val points = (requestedWidth / density * 4).roundToInt().coerceIn(BASE_POINTS, 4096)
         val current = worker?.takeUnless { it.isClosed } ?: createPreviewWorker().also { worker = it }
         // Conflate drag events: at most one computation and one newest request exist.
-        current.submit(PeqResponse.PreviewWorker.Request(state, points, revision, animate))
+        current.submit(PeqResponse.PreviewWorker.Request(plotState, points, revision, animate))
+    }
+
+    fun setDisplayOptions(settings: PeqEditorSettings) {
+        settings.validate()
+        if (displayOptions == settings) return
+        displayOptions = settings
+        requestedState?.let { setState(it, false) }
+        updateMarkerDescription()
+        invalidate()
+    }
+
+    /** Opt-in visual inspection only: no audio session, enable switch, or repository is touched. */
+    fun setPreviewBand(id: String?) {
+        if (previewBandId == id) return
+        previewBandId = id
+        requestedState?.let { setState(it, false) }
+    }
+
+    private fun displayState(state: PeqState): PeqState {
+        val id = previewBandId?.takeIf {
+            displayOptions.previewDisabledBands && isMarkerVisible && it == selectedBandId
+        } ?: return state
+        if (state.bands.none { it.id == id && !it.enabled }) return state
+        return state.copy(bands = state.bands.map { if (it.id == id) it.copy(enabled = true) else it })
     }
 
     private fun sameFilters(first: PeqState, second: PeqState): Boolean =
@@ -160,7 +196,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val lifecycle = lifecycleGeneration.get()
         return PeqResponse.PreviewWorker(onComplete = { request, next ->
             post {
-                if (lifecycle == lifecycleGeneration.get() && request.revision > displayedRevision) {
+                if (lifecycle == lifecycleGeneration.get() && request.revision == generation.get() &&
+                    request.revision > displayedRevision) {
                     displayedRevision = request.revision
                     updateCurve(next, request.animate && request.revision == generation.get())
                 }
@@ -172,6 +209,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     fun setSelectedBand(id: String?) {
         if (selectedBandId == id) return
         selectedBandId = id
+        requestedState?.let { setState(it, false) }
         updateMarkerDescription()
         invalidate()
     }
@@ -180,6 +218,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     fun showMarker(id: String? = selectedBandId) {
         setSelectedBand(id)
         isMarkerVisible = true
+        requestedState?.let { setState(it, false) }
         updateMarkerDescription()
         invalidate()
     }
@@ -187,6 +226,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     fun hideMarker() {
         isMarkerVisible = false
         renderedMarker = null
+        previewBandId = null
+        requestedState?.let { setState(it, false) }
         updateMarkerDescription()
         invalidate()
     }
@@ -214,10 +255,20 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         "BW: ${String.format(Locale.ROOT, "%.3f", it)}"
     }
 
+    private fun markerStatusText(band: PeqBand): String? = if (!band.enabled)
+        context.getString(R.string.peq_marker_disabled) else null
+
+    private fun markerLines(band: PeqBand): List<String> = listOfNotNull(
+        markerStatusText(band),
+        markerFrequencyText(band).takeIf { displayOptions.showMarkerFrequency },
+        markerGainText(band).takeIf { displayOptions.showMarkerGain },
+        markerQText(band).takeIf { displayOptions.showMarkerQuality },
+        markerBwText(band).takeIf { displayOptions.showMarkerQuality })
+
     private fun updateMarkerDescription() {
         val title = context.getString(R.string.peq_response_title)
         contentDescription = selectedBand()?.takeIf { isMarkerVisible }?.let {
-            listOfNotNull(title, markerFrequencyText(it), markerGainText(it), markerQText(it), markerBwText(it))
+            (listOf(title) + markerLines(it))
                 .joinToString(", ")
         } ?: title
     }
@@ -354,29 +405,31 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val markerX = x(band.frequency).coerceIn(graphBounds.left + radius, graphBounds.right - radius)
         val gain = markerGain(band)
         val markerY = y(gain).coerceIn(graphBounds.top + radius, graphBounds.bottom - radius)
-        val frequencyText = markerFrequencyText(band)
-        val gainText = markerGainText(band)
-        val qText = markerQText(band)
-        val bwText = markerBwText(band)
-        val labelLines = listOfNotNull(frequencyText, gainText, qText, bwText)
+        val frequencyText = markerFrequencyText(band).takeIf { displayOptions.showMarkerFrequency }.orEmpty()
+        val gainText = markerGainText(band).takeIf { displayOptions.showMarkerGain }.orEmpty()
+        val qText = markerQText(band).takeIf { displayOptions.showMarkerQuality }
+        val bwText = markerBwText(band).takeIf { displayOptions.showMarkerQuality }
+        val statusText = markerStatusText(band)
+        val labelLines = markerLines(band)
         val horizontalCrosshair = MarkerLine(graphBounds.left, markerY, graphBounds.right, markerY, crosshairPaint.strokeWidth)
         val verticalCrosshair = MarkerLine(markerX, graphBounds.top, markerX, graphBounds.bottom, crosshairPaint.strokeWidth)
         val gainAxisMarker = MarkerDot(horizontalCrosshair.x1, horizontalCrosshair.y1, radius)
         val frequencyAxisMarker = MarkerDot(verticalCrosshair.x2, verticalCrosshair.y2, radius)
         val padding = 4f * density
         val gap = radius + 5f * density
-        markerTextPaint.textSize = 9f * resources.displayMetrics.scaledDensity
+        markerTextPaint.textSize = displayOptions.markerTextSizeSp * resources.displayMetrics.scaledDensity
         // Keep all values readable on compact displays without clipping the graph's axes.
-        val naturalWidth = labelLines.maxOf { markerTextPaint.measureText(it) }
+        val naturalWidth = labelLines.maxOfOrNull { markerTextPaint.measureText(it) } ?: 1f
         val availableWidth = (graphBounds.width() - padding * 2).coerceAtLeast(1f)
         val naturalMetrics = markerTextPaint.fontMetrics
-        val naturalHeight = labelLines.size * (naturalMetrics.descent - naturalMetrics.ascent)
+        val naturalHeight = maxOf(1f, labelLines.size * (naturalMetrics.descent - naturalMetrics.ascent))
         val availableHeight = (graphBounds.height() - padding * 2).coerceAtLeast(1f)
         markerTextPaint.textSize *= minOf(1f, availableWidth / naturalWidth, availableHeight / naturalHeight)
         val metrics = markerTextPaint.fontMetrics
         val lineHeight = metrics.descent - metrics.ascent
-        val labelWidth = labelLines.maxOf { markerTextPaint.measureText(it) } + padding * 2
-        val labelHeight = lineHeight * labelLines.size + padding * 2
+        val labelWidth = if (labelLines.isEmpty()) 0f else
+            labelLines.maxOf { markerTextPaint.measureText(it) } + padding * 2
+        val labelHeight = if (labelLines.isEmpty()) 0f else lineHeight * labelLines.size + padding * 2
         val preferredLeft = if (markerX + gap + labelWidth <= graphBounds.right) markerX + gap
             else markerX - gap - labelWidth
         val labelLeft = preferredLeft.coerceIn(graphBounds.left, maxOf(graphBounds.left, graphBounds.right - labelWidth))
@@ -384,7 +437,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val label = RectF(labelLeft, labelTop, labelLeft + labelWidth, labelTop + labelHeight)
         renderedMarker = BandMarker(band.id, band.frequency, gain, band.q, markerBandwidth(band),
             markerX, markerY, radius, frequencyText, gainText, qText, bwText, RectF(label), RectF(graphBounds),
-            horizontalCrosshair, verticalCrosshair, gainAxisMarker, frequencyAxisMarker)
+            horizontalCrosshair, verticalCrosshair, gainAxisMarker, frequencyAxisMarker,
+            statusText, labelLines, markerTextPaint.textSize / resources.displayMetrics.scaledDensity)
         canvas.save()
         canvas.clipRect(graphBounds)
         canvas.drawLine(horizontalCrosshair.x1, horizontalCrosshair.y1,
@@ -392,7 +446,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         canvas.drawLine(verticalCrosshair.x1, verticalCrosshair.y1,
             verticalCrosshair.x2, verticalCrosshair.y2, crosshairPaint)
         canvas.restore()
-        canvas.drawRoundRect(label, 3f * density, 3f * density, markerBackgroundPaint)
+        if (labelLines.isNotEmpty()) canvas.drawRoundRect(label, 3f * density, 3f * density, markerBackgroundPaint)
         val baseline = label.top + padding - metrics.ascent
         labelLines.forEachIndexed { index, text ->
             canvas.drawText(text, label.left + padding, baseline + lineHeight * index, markerTextPaint)

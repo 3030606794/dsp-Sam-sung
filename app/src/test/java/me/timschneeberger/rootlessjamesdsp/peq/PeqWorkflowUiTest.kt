@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputLayout
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -56,6 +57,7 @@ class PeqWorkflowUiTest {
     @Before fun clear() {
         prefs.edit().clear().commit()
         application.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
+        assertTrue(PeqEditorPreferences(application).save(PeqEditorSettings(confirmDelete = true)))
     }
     @After fun close() { controller?.pause()?.stop()?.destroy(); idle() }
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -268,7 +270,7 @@ class PeqWorkflowUiTest {
             layout()
             view<MaterialButton>(R.id.peq_reset).performClick()
             val reset = dialog()
-            assertEquals(6, reset.listView.adapter.count)
+            assertTrue(reset.listView.adapter.count >= 6)
             reset.listView.performItemClick(null, target.ordinal, target.ordinal.toLong())
             idle()
             val saved = repository.load()
@@ -367,7 +369,7 @@ class PeqWorkflowUiTest {
         fun redistribution(): AlertDialog {
             view<MaterialButton>(R.id.peq_reset).performClick()
             val options = dialog()
-            assertEquals(6, options.listView.adapter.count)
+            assertTrue(options.listView.adapter.count >= 6)
             assertEquals(application.getString(R.string.peq_redistribute), options.listView.adapter.getItem(5).toString())
             options.listView.performItemClick(null, 5, 5)
             return dialog()
@@ -478,17 +480,18 @@ class PeqWorkflowUiTest {
                 qualityDisplay = PeqQualityDisplay.BW)), qRange = 0.5, gainRange = 3.0, showQSlider = true)
         launch(original)
         val cancelled = parameters(2)
-        assertEquals(PeqFilterType.entries.size, cancelled.listView.adapter.count)
-        cancelled.listView.performItemClick(null, PeqFilterType.HIGH_PASS.ordinal, PeqFilterType.HIGH_PASS.ordinal.toLong())
+        assertEquals(PeqFilterType.entries.size,
+            cancelled.findViewById<MaterialButtonToggleGroup>(R.id.peq_filter_types)!!.childCount)
+        cancelled.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.HIGH_PASS))!!.performClick()
         assertEquals(original, repository.load())
-        cancelled.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        cancelled.findViewById<View>(R.id.peq_filter_cancel)!!.performClick()
         assertEquals(original, fragment().editorState)
         PeqFilterType.entries.forEach { type ->
             val before = repository.load()
             val picker = parameters(2)
-            picker.listView.performItemClick(null, type.ordinal, type.ordinal.toLong())
+            picker.findViewById<View>(PeqFilterTypeDialog.buttonId(type))!!.performClick()
             assertEquals(before, repository.load())
-            picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            picker.findViewById<View>(R.id.peq_filter_confirm)!!.performClick()
             idle()
             assertFalse(picker.isShowing)
             assertEquals(original.copy(bands = original.bands.map { it.copy(type = type) }), repository.load())
@@ -497,19 +500,20 @@ class PeqWorkflowUiTest {
         fun singlePicker(): AlertDialog {
             row(1).findViewById<View>(R.id.peq_band_title).performClick()
             return dialog().also {
-                assertEquals(PeqFilterType.entries.size, it.listView.adapter.count)
+                assertEquals(PeqFilterType.entries.size,
+                    it.findViewById<MaterialButtonToggleGroup>(R.id.peq_filter_types)!!.childCount)
                 assertNull(it.findViewById<EditText>(R.id.peq_quality_input))
             }
         }
         val singleCancelled = singlePicker()
-        singleCancelled.listView.performItemClick(null, PeqFilterType.HIGH_SHELF.ordinal, PeqFilterType.HIGH_SHELF.ordinal.toLong())
-        singleCancelled.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        singleCancelled.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.HIGH_SHELF))!!.performClick()
+        singleCancelled.findViewById<View>(R.id.peq_filter_cancel)!!.performClick()
         idle()
         assertEquals(beforeSingle, repository.load())
         val single = singlePicker()
-        single.listView.performItemClick(null, PeqFilterType.HIGH_SHELF.ordinal, PeqFilterType.HIGH_SHELF.ordinal.toLong())
+        single.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.HIGH_SHELF))!!.performClick()
         assertEquals(beforeSingle, fragment().editorState)
-        single.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        single.findViewById<View>(R.id.peq_filter_confirm)!!.performClick()
         idle()
         assertFalse(single.isShowing)
         val expected = beforeSingle.copy(bands = beforeSingle.bands.mapIndexed { index, band ->

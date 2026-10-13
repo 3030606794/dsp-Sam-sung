@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_filter_monitor">实时监听</string>
+    <item name="peq_filter_peak" type="id" />
+    <item name="peq_filter_low_shelf" type="id" />
+    <item name="peq_filter_high_shelf" type="id" />
+    <item name="peq_filter_low_pass" type="id" />
+    <item name="peq_filter_high_pass" type="id" />
+    <item name="peq_filter_notch" type="id" />
+    <item name="peq_filter_band_pass" type="id" />
+</resources>

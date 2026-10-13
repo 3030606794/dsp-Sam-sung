@@ -13,10 +13,10 @@
                 android:contentDescription="@string/peq_band_count" />
             <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_count_box"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="70dp" android:layout_height="wrap_content" app:hintEnabled="false">
+                android:layout_width="60dp" android:layout_height="wrap_content" app:hintEnabled="false">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_band_count"
-                    android:layout_width="match_parent" android:layout_height="45dp"
-                    android:minHeight="45dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
+                    android:layout_width="match_parent" android:layout_height="40dp"
+                    android:minHeight="40dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
                     android:gravity="center" android:maxLines="1" android:selectAllOnFocus="true"
                     android:contentDescription="@string/peq_band_count" android:inputType="number" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -31,10 +31,10 @@
                 android:contentDescription="@string/peq_gain_step" />
             <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_gain_step_box"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="70dp" android:layout_height="wrap_content" app:hintEnabled="false">
+                android:layout_width="60dp" android:layout_height="wrap_content" app:hintEnabled="false">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_gain_step"
-                    android:layout_width="match_parent" android:layout_height="45dp"
-                    android:minHeight="45dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
+                    android:layout_width="match_parent" android:layout_height="40dp"
+                    android:minHeight="40dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
                     android:gravity="center" android:maxLines="1" android:selectAllOnFocus="true"
                     android:contentDescription="@string/peq_gain_step" android:inputType="numberDecimal" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -49,10 +49,10 @@
                 android:contentDescription="@string/peq_gain_range" />
             <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_gain_range_box"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="70dp" android:layout_height="wrap_content" app:hintEnabled="false">
+                android:layout_width="60dp" android:layout_height="wrap_content" app:hintEnabled="false">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_gain_range"
-                    android:layout_width="match_parent" android:layout_height="45dp"
-                    android:minHeight="45dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
+                    android:layout_width="match_parent" android:layout_height="40dp"
+                    android:minHeight="40dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
                     android:gravity="center" android:maxLines="1" android:selectAllOnFocus="true"
                     android:contentDescription="@string/peq_gain_range" android:inputType="numberDecimal" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -67,10 +67,10 @@
                 android:contentDescription="@string/peq_q_step" />
             <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_q_step_box"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="70dp" android:layout_height="wrap_content" app:hintEnabled="false">
+                android:layout_width="60dp" android:layout_height="wrap_content" app:hintEnabled="false">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_q_step"
-                    android:layout_width="match_parent" android:layout_height="45dp"
-                    android:minHeight="45dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
+                    android:layout_width="match_parent" android:layout_height="40dp"
+                    android:minHeight="40dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
                     android:gravity="center" android:maxLines="1" android:selectAllOnFocus="true"
                     android:contentDescription="@string/peq_q_step" android:inputType="numberDecimal" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -85,10 +85,10 @@
                 android:contentDescription="@string/peq_q_range" />
             <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_q_range_box"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="70dp" android:layout_height="wrap_content" app:hintEnabled="false">
+                android:layout_width="60dp" android:layout_height="wrap_content" app:hintEnabled="false">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_q_range"
-                    android:layout_width="match_parent" android:layout_height="45dp"
-                    android:minHeight="45dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
+                    android:layout_width="match_parent" android:layout_height="40dp"
+                    android:minHeight="40dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
                     android:gravity="center" android:maxLines="1" android:selectAllOnFocus="true"
                     android:contentDescription="@string/peq_q_range" android:inputType="numberDecimal" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -103,10 +103,10 @@
                 android:contentDescription="@string/peq_frequency_step" />
             <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_frequency_step_box"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                android:layout_width="70dp" android:layout_height="wrap_content" app:hintEnabled="false">
+                android:layout_width="60dp" android:layout_height="wrap_content" app:hintEnabled="false">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_frequency_step"
-                    android:layout_width="match_parent" android:layout_height="45dp"
-                    android:minHeight="45dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
+                    android:layout_width="match_parent" android:layout_height="40dp"
+                    android:minHeight="40dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
                     android:gravity="center" android:maxLines="1" android:selectAllOnFocus="true"
                     android:contentDescription="@string/peq_frequency_step" android:inputType="numberDecimal" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -117,5 +117,56 @@
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_frequency_slider"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_show_frequency_slider" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:labelFor="@id/peq_marker_duration"
+            android:text="@string/peq_marker_duration" android:textAppearance="?attr/textAppearanceBodyMedium" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center_vertical" android:orientation="horizontal">
+            <com.google.android.material.slider.Slider android:id="@+id/peq_marker_duration_slider"
+                android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp"
+                android:contentDescription="@string/peq_marker_duration" />
+            <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_marker_duration_box"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="60dp" android:layout_height="wrap_content" app:hintEnabled="false">
+                <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_marker_duration"
+                    android:layout_width="match_parent" android:layout_height="40dp"
+                    android:minHeight="40dp" android:paddingVertical="6dp" android:paddingHorizontal="4dp" android:textSize="13sp"
+                    android:gravity="center" android:maxLines="1" android:selectAllOnFocus="true"
+                    android:contentDescription="@string/peq_marker_duration" android:inputType="number" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:labelFor="@id/peq_marker_text_size"
+            android:text="@string/peq_marker_text_size" android:textAppearance="?attr/textAppearanceBodyMedium" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center_vertical" android:orientation="horizontal">
+            <com.google.android.material.slider.Slider android:id="@+id/peq_marker_text_size_slider"
+                android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp"
+                android:contentDescription="@string/peq_marker_text_size" />
+            <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_marker_text_size_box"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                android:layout_width="60dp" android:layout_height="wrap_content" app:hintEnabled="false">
+                <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_marker_text_size"
+                    android:layout_width="match_parent" android:layout_height="40dp"
+                    android:minHeight="40dp" android:paddingVertical="6dp" android:paddingHorizontal="6dp" android:textSize="13sp"
+                    android:gravity="center" android:maxLines="1" android:selectAllOnFocus="true"
+                    android:contentDescription="@string/peq_marker_text_size" android:inputType="number" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_frequency"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_show_marker_frequency" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_gain"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_show_marker_gain" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_quality"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_show_marker_quality" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_confirm_delete"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_confirm_delete" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_preview_disabled_bands"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_preview_disabled_bands" />
     </LinearLayout>
 </ScrollView>

@@ -35,6 +35,7 @@ class PeqBandAdapter(
     private val onEditType: (String) -> Unit = { onEdit(it) },
     private val onToggleSelection: (String) -> Unit = {},
     private val onStartDrag: (RecyclerView.ViewHolder) -> Unit = {},
+    private val onDelete: (String) -> Unit = {},
 ) : RecyclerView.Adapter<PeqBandAdapter.Holder>() {
     private var state = PeqState(emptyList())
     private var editing = false
@@ -144,6 +145,11 @@ class PeqBandAdapter(
 
         private fun canEdit(id: String, field: PeqEditField? = null) = !editing && locks.canEdit(id, field)
 
+        private fun markUsed(id: String) {
+            locks.markUsed(id)
+            binding.peqBandNew.visibility = View.INVISIBLE
+        }
+
         private fun renderLock(button: MaterialButton, locked: Boolean, description: String) {
             button.setIconResource(if (locked) R.drawable.ic_peq_lock else R.drawable.ic_peq_lock_open)
             button.iconTint = ColorStateList.valueOf(if (locked) Color.rgb(211, 47, 47) else Color.GRAY)
@@ -156,6 +162,7 @@ class PeqBandAdapter(
             val band = state.bands.firstOrNull { it.id == id } ?: return
             val context = binding.root.context
             val mainLocked = locks.isBandLocked(id)
+            binding.peqBandNew.visibility = if (locks.isNew(id)) View.VISIBLE else View.INVISIBLE
             renderLock(binding.peqBandLock, mainLocked, context.getString(
                 if (mainLocked) R.string.peq_unlock_band else R.string.peq_lock_band))
             val fieldLocks = listOf(Triple(binding.peqGainLock, PeqEditField.GAIN, R.string.peq_gain),
@@ -187,6 +194,7 @@ class PeqBandAdapter(
             binding.peqBandHeaderFrequency.isEnabled = frequencyEnabled
             binding.peqBandNumber.isEnabled = canEdit(id)
             binding.peqBandTitle.isEnabled = canEdit(id)
+            binding.peqBandDelete.isEnabled = canEdit(id)
             binding.peqBandDragHandle.isEnabled = canEdit(id) && state.bands.size > 1
             binding.peqBandLocate.isEnabled = !editing
             binding.peqBandWarning.isEnabled = !editing
@@ -258,7 +266,12 @@ class PeqBandAdapter(
                 else { onStartDrag(this); true }
             }
             binding.peqBandNumber.setOnClickListener {
-                if (!selectInstead(band.id) && canEdit(band.id)) { onBandSelected(band.id); onEdit(band.id) }
+                if (!selectInstead(band.id) && canEdit(band.id)) {
+                    markUsed(band.id); onBandSelected(band.id); onEdit(band.id)
+                }
+            }
+            binding.peqBandDelete.setOnClickListener {
+                if (!selectInstead(band.id) && canEdit(band.id)) onDelete(band.id)
             }
             binding.peqBandLock.setOnClickListener {
                 if (!selectInstead(band.id)) {
@@ -280,6 +293,7 @@ class PeqBandAdapter(
             binding.peqBandPower.setOnClickListener {
                 if (!selectInstead(band.id)) {
                     state.bands.firstOrNull { it.id == band.id }?.let { current ->
+                        markUsed(band.id)
                         onBandChanged(current.copy(enabled = !current.enabled))
                         onInteractionFinished()
                         renderControlState()
@@ -288,14 +302,14 @@ class PeqBandAdapter(
             }
             fun editField(field: PeqEditField) {
                 if (!selectInstead(band.id) && canEdit(band.id, field)) {
-                    onBandSelected(band.id); onEditField(band.id, field)
+                    markUsed(band.id); onBandSelected(band.id); onEditField(band.id, field)
                 }
             }
             binding.peqBandGain.setOnClickListener { editField(PeqEditField.GAIN) }
             binding.peqBandSummary.setOnClickListener { editField(PeqEditField.QUALITY) }
             binding.peqQValue.setOnClickListener { editField(PeqEditField.QUALITY) }
             binding.peqBandTitle.setOnClickListener {
-                if (!selectInstead(band.id) && canEdit(band.id)) { onBandSelected(band.id); onEditType(band.id) }
+                if (!selectInstead(band.id) && canEdit(band.id)) { markUsed(band.id); onBandSelected(band.id); onEditType(band.id) }
             }
             binding.peqBandHeaderFrequency.setOnClickListener { editField(PeqEditField.FREQUENCY) }
             binding.peqFrequencyValue.setOnClickListener { editField(PeqEditField.FREQUENCY) }
@@ -358,6 +372,7 @@ class PeqBandAdapter(
             fun userGain(requested: Double) {
                 val current = currentBand() ?: return
                 if (!canEdit(band.id, PeqEditField.GAIN) || !current.type.usesGain) { renderSliders(); return }
+                markUsed(band.id)
                 onBandSelected(current.id)
                 val next = requested.coerceIn(-state.gainRange, state.gainRange)
                 if (next != current.gain) onBandChanged(current.copy(gain = next))
@@ -369,7 +384,9 @@ class PeqBandAdapter(
                 if (fromUser) userGain(dragGain(changed, state.gainRange))
             }
             slider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-                override fun onStartTrackingTouch(slider: Slider) { if (!editing) onInteractionStarted(band.id) }
+                override fun onStartTrackingTouch(slider: Slider) {
+                    if (!editing && slider.isEnabled) { markUsed(band.id); onInteractionStarted(band.id) }
+                }
                 override fun onStopTrackingTouch(slider: Slider) = onInteractionFinished()
             })
             binding.peqBandMinus.setOnClickListener { currentBand()?.let {
@@ -396,10 +413,12 @@ class PeqBandAdapter(
             fun userQuality(requested: Double) {
                 val current = currentBand() ?: return
                 if (!canEdit(band.id, PeqEditField.QUALITY)) { renderSliders(); return }
+                markUsed(band.id)
                 changeBand(withQuality(current, requested, state.qRange))
             }
             fun userFrequency(requested: Double) {
                 if (!canEdit(band.id, PeqEditField.FREQUENCY)) { renderSliders(); return }
+                markUsed(band.id)
                 currentBand()?.let {
                     val moved = withFrequency(it, requested, state.qRange)
                     changeBand(if (locks.isFieldLocked(it.id, PeqEditField.QUALITY)) moved.copy(q = it.q) else moved)
@@ -431,7 +450,9 @@ class PeqBandAdapter(
                     }
                 }
                 control.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-                    override fun onStartTrackingTouch(slider: Slider) { if (!editing) onInteractionStarted(band.id) }
+                    override fun onStartTrackingTouch(slider: Slider) {
+                    if (!editing && slider.isEnabled) { markUsed(band.id); onInteractionStarted(band.id) }
+                }
                     override fun onStopTrackingTouch(slider: Slider) = onInteractionFinished()
                 })
             }

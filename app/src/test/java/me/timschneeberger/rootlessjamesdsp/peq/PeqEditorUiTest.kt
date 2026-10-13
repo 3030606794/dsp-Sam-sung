@@ -50,6 +50,7 @@ class PeqEditorUiTest {
     @Before fun clear() {
         prefs.edit().clear().commit()
         application.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
+        assertTrue(PeqEditorPreferences(application).save(PeqEditorSettings(confirmDelete = true)))
     }
     @After fun close() {
         controller?.pause()?.stop()?.destroy()
@@ -165,6 +166,8 @@ class PeqEditorUiTest {
         edit(0).findViewById<MaterialButton>(R.id.peq_band_copy)!!.performClick()
         layout()
         assertEquals(listOf(1000.0, 1000.0, 1000.0), repository.load().bands.map { it.frequency })
+        assertTrue(repository.load().bands.first().enabled)
+        assertFalse(repository.load().bands[1].enabled)
         controller!!.recreate()
         layout()
         assertEquals(listOf(1000.0, 1000.0, 1000.0), repository.load().bands.map { it.frequency })

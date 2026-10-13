@@ -1,0 +1,5 @@
+<resources>
+    <style name="PeqToolbarSubtitle" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">13sp</item>
+    </style>
+</resources>

@@ -5,16 +5,16 @@ import android.content.Context
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.Looper
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
-import androidx.fragment.app.FragmentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
@@ -47,6 +47,7 @@ class PeqRefinementUiTest {
     @Before fun clear() {
         prefs.edit().clear().commit()
         app.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
+        app.getSharedPreferences(PeqEditorPreferences.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
         clearPreview()
     }
 
@@ -100,11 +101,12 @@ class PeqRefinementUiTest {
 
     private fun filterPicker(): AlertDialog {
         row().findViewById<View>(R.id.peq_band_title).performClick()
-        return dialog().also { assertEquals(PeqFilterType.entries.size, it.listView.adapter.count) }
+        return dialog().also { assertEquals(PeqFilterType.entries.size,
+            it.findViewById<MaterialButtonToggleGroup>(R.id.peq_filter_types)!!.childCount) }
     }
 
     private fun choose(dialog: AlertDialog, type: PeqFilterType) {
-        dialog.listView.performItemClick(null, type.ordinal, type.ordinal.toLong())
+        dialog.findViewById<View>(PeqFilterTypeDialog.buttonId(type))!!.performClick()
         idle()
     }
 
@@ -124,13 +126,14 @@ class PeqRefinementUiTest {
 
     @Test fun summaryAndEditAreCenteredAroundTheGraphWhilePowerStaysInTheFooter() {
         launch()
-        val summary = view<TextView>(R.id.peq_summary)
+        val toolbar = controller!!.get().findViewById<MaterialToolbar>(R.id.toolbar)
+        val summary = (0 until toolbar.childCount).map { toolbar.getChildAt(it) }
+            .filterIsInstance<TextView>().single { it.text == toolbar.subtitle }
         val graph = bounds(view(R.id.peq_curve))
         val edit = bounds(view(R.id.peq_edit_selection))
         val power = bounds(view(R.id.peq_power))
         val root = bounds(fragment().requireView())
         assertTrue(bounds(summary).bottom <= graph.top)
-        assertEquals(Gravity.CENTER_HORIZONTAL, summary.gravity and Gravity.HORIZONTAL_GRAVITY_MASK)
         assertEquals(13f, summary.textSize / app.resources.displayMetrics.scaledDensity, 0.01f)
         assertEquals(root.exactCenterX(), bounds(summary).exactCenterX(), 1f)
         assertTrue(edit.top >= graph.bottom)
@@ -170,7 +173,7 @@ class PeqRefinementUiTest {
         launch(original)
         val saved = prefs.all.toMap()
         val picker = filterPicker()
-        val monitor = picker.getButton(AlertDialog.BUTTON_NEUTRAL)
+        val monitor = picker.findViewById<View>(R.id.peq_filter_monitor)!!
         assertFalse(monitor.isSelected)
         assertNull(PeqPreviewSession.current())
         choose(picker, PeqFilterType.LOW_PASS)
@@ -194,7 +197,7 @@ class PeqRefinementUiTest {
         monitor.performClick()
         idle()
         assertEquals(withType(original, PeqFilterType.HIGH_PASS), PeqPreviewSession.current())
-        picker.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        picker.findViewById<View>(R.id.peq_filter_cancel)!!.performClick()
         idle()
         assertNull(PeqPreviewSession.current())
         assertEquals(saved, prefs.all)
@@ -205,7 +208,7 @@ class PeqRefinementUiTest {
         launch(original)
         val saved = prefs.all.toMap()
         val exits: List<(AlertDialog) -> Unit> = listOf(
-            { it.getButton(AlertDialog.BUTTON_NEGATIVE).performClick() },
+            { it.findViewById<View>(R.id.peq_filter_cancel)!!.performClick() },
             {
                 it.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK))
                 it.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK))
@@ -214,7 +217,7 @@ class PeqRefinementUiTest {
         )
         for (exit in exits) {
             val picker = filterPicker()
-            picker.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
+            picker.findViewById<View>(R.id.peq_filter_monitor)!!.performClick()
             choose(picker, PeqFilterType.NOTCH)
             assertNotNull(PeqPreviewSession.current())
             exit(picker)
@@ -225,12 +228,12 @@ class PeqRefinementUiTest {
             assertEquals(original, fragment().editorState)
         }
         val paused = filterPicker()
-        paused.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
+        paused.findViewById<View>(R.id.peq_filter_monitor)!!.performClick()
         choose(paused, PeqFilterType.BAND_PASS)
         controller!!.pause()
         idle()
         assertNull(PeqPreviewSession.current())
-        assertFalse(paused.getButton(AlertDialog.BUTTON_NEUTRAL).isSelected)
+        assertFalse(paused.findViewById<View>(R.id.peq_filter_monitor)!!.isSelected)
         assertEquals(saved, prefs.all)
         controller!!.resume()
         idle()
@@ -243,10 +246,10 @@ class PeqRefinementUiTest {
         prefs.edit().putBoolean(enableKey, true).commit()
         launch(original)
         val picker = filterPicker()
-        picker.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
+        picker.findViewById<View>(R.id.peq_filter_monitor)!!.performClick()
         choose(picker, PeqFilterType.HIGH_PASS)
         assertEquals(original, repository.load())
-        picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        picker.findViewById<View>(R.id.peq_filter_confirm)!!.performClick()
         idle()
         assertFalse(picker.isShowing)
         assertNull(PeqPreviewSession.current())
@@ -254,9 +257,9 @@ class PeqRefinementUiTest {
         assertEquals(repository.load(), fragment().editorState)
         assertTrue(prefs.getBoolean(enableKey, false))
         val reopened = filterPicker()
-        assertFalse(reopened.getButton(AlertDialog.BUTTON_NEUTRAL).isSelected)
+        assertFalse(reopened.findViewById<View>(R.id.peq_filter_monitor)!!.isSelected)
         assertNull(PeqPreviewSession.current())
-        reopened.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        reopened.findViewById<View>(R.id.peq_filter_cancel)!!.performClick()
     }
 
     @Test fun numberedSettingsRespectEveryIndividualParameterLockWhenSaving() {
@@ -303,14 +306,14 @@ class PeqRefinementUiTest {
         assertEquals(original.bands.reversed(), fragment().editorState.bands)
     }
 
-    class HostActivity : FragmentActivity() {
+    class HostActivity : AppCompatActivity() {
         override fun onCreate(savedInstanceState: Bundle?) {
             setTheme(R.style.Theme_RootlessJamesDSP)
             super.onCreate(savedInstanceState)
-            setContentView(FrameLayout(this).apply { id = HOST_ID })
+            setContentView(R.layout.activity_graphic_eq)
+            setSupportActionBar(findViewById(R.id.toolbar))
             if (savedInstanceState == null) supportFragmentManager.beginTransaction()
-                .add(HOST_ID, PeqFragment(), "peq").commitNow()
+                .replace(R.id.params, PeqFragment(), "peq").commitNow()
         }
-        companion object { const val HOST_ID = 0x6206 }
     }
 }

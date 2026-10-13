@@ -43,6 +43,7 @@ class PeqBandSelectionUiTest {
     private val locations = mutableListOf<String>()
     private val fields = mutableListOf<PeqEditField>()
     private val changes = mutableListOf<PeqBand>()
+    private val deleted = mutableListOf<String>()
     private val draggedHolders = mutableListOf<RecyclerView.ViewHolder>()
     private val list get() = controller!!.get().list
 
@@ -63,7 +64,8 @@ class PeqBandSelectionUiTest {
             true
         }, onEdit = { edits += it }, onLocate = { locations += it },
             onEditField = { _, field -> fields += field }, onEditType = { types += it },
-            onToggleSelection = { selectedClicks += it }, onStartDrag = { draggedHolders += it })
+            onToggleSelection = { selectedClicks += it }, onStartDrag = { draggedHolders += it },
+            onDelete = { deleted += it })
         list.adapter = adapter
         adapter.submitState(state)
         layout()
@@ -118,11 +120,14 @@ class PeqBandSelectionUiTest {
                 val card = list.findViewHolderForAdapterPosition(0)!!.itemView as MaterialCardView
                 assertEquals("Power center at width $width", card.width / 2f,
                     bounds(card, R.id.peq_band_power).exactCenterX(), 1f)
-                val ids = listOf(R.id.peq_band_number, R.id.peq_band_title, R.id.peq_band_drag_handle,
-                    R.id.peq_band_power, R.id.peq_band_locate, R.id.peq_band_gain, R.id.peq_band_lock)
+                val ids = listOf(R.id.peq_band_number, R.id.peq_band_delete, R.id.peq_band_title, R.id.peq_band_warning,
+                    R.id.peq_band_power, R.id.peq_band_drag_handle, R.id.peq_band_new, R.id.peq_band_lock)
                 ids.zipWithNext().forEach { (left, right) ->
                     assertTrue("Header controls must not overlap at width $width", bounds(card, left).right <= bounds(card, right).left)
                 }
+                assertEquals(bounds(card, R.id.peq_band_title).right, bounds(card, R.id.peq_band_warning).left)
+                assertTrue(bounds(card, R.id.peq_band_power).bottom <= bounds(card, R.id.peq_band_gain).top)
+                assertTrue(bounds(card, R.id.peq_band_gain).right <= bounds(card, R.id.peq_band_locate).left)
                 assertNotNull(card.findViewById<View>(R.id.peq_band_number).background)
                 assertEquals(if (frequency == 0.0) View.VISIBLE else View.INVISIBLE,
                     card.findViewById<View>(R.id.peq_band_warning).visibility)
@@ -183,7 +188,7 @@ class PeqBandSelectionUiTest {
         adapter.submitSelection(true, emptySet())
         layout()
         tap(card, card.width / 2f, card.height - 1f)
-        val controls = listOf(R.id.peq_band_number, R.id.peq_band_title, R.id.peq_band_gain,
+        val controls = listOf(R.id.peq_band_number, R.id.peq_band_delete, R.id.peq_band_title, R.id.peq_band_gain,
             R.id.peq_q_value, R.id.peq_frequency_value, R.id.peq_band_locate, R.id.peq_band_warning,
             R.id.peq_band_lock, R.id.peq_band_power, R.id.peq_gain_lock, R.id.peq_q_lock,
             R.id.peq_frequency_lock, R.id.peq_band_plus, R.id.peq_band_slider, R.id.peq_frequency_slider,
@@ -199,6 +204,7 @@ class PeqBandSelectionUiTest {
         assertTrue(locations.isEmpty())
         assertTrue(edits.isEmpty())
         assertTrue(changes.isEmpty())
+        assertTrue(deleted.isEmpty())
         assertEquals(original, state)
         val locks = PeqBandLockStore(controller!!.get())
         assertFalse(locks.isBandLocked("clicks"))
@@ -258,6 +264,94 @@ class PeqBandSelectionUiTest {
         assertEquals(listOf("locked"), types)
         tap(card, R.id.peq_band_power)
         assertEquals(before, state.bands.single())
+    }
+
+    @Test fun deletingUsesItsOwnCallbackAndRespectsMasterLockAndSelectionMode() {
+        launch(PeqModel.defaultState(2), unlock = false)
+        val card = row()
+        val firstId = state.bands.first().id
+        tap(card, R.id.peq_band_delete)
+        assertTrue(deleted.isEmpty())
+        tap(card, R.id.peq_band_lock)
+        tap(card, R.id.peq_band_delete)
+        assertEquals(listOf(firstId), deleted)
+        assertTrue(edits.isEmpty())
+        assertTrue(changes.isEmpty())
+        adapter.submitSelection(true, emptySet())
+        layout()
+        tap(card, R.id.peq_band_delete)
+        assertEquals(listOf(firstId), deleted)
+        assertEquals(listOf(firstId), selectedClicks)
+    }
+
+    @Test fun newBadgeSurvivesLocatingAndLockingButAnyParameterEntryClearsIt() {
+        launch(PeqState(listOf(PeqBand("fresh"))))
+        val locks = PeqBandLockStore(controller!!.get())
+        locks.setBandLocked("fresh", true)
+        PeqEditField.entries.forEach { locks.setFieldLocked("fresh", it, true) }
+        locks.markNew("fresh")
+        adapter.notifyDataSetChanged()
+        val card = row()
+        assertFalse(locks.isBandLocked("fresh"))
+        PeqEditField.entries.forEach { assertFalse(locks.isFieldLocked("fresh", it)) }
+        assertEquals(View.VISIBLE, card.findViewById<View>(R.id.peq_band_new).visibility)
+        tap(card, R.id.peq_band_locate)
+        tap(card, R.id.peq_band_lock)
+        tap(card, R.id.peq_band_lock)
+        tap(card, R.id.peq_gain_lock)
+        tap(card, R.id.peq_gain_lock)
+        assertTrue(locks.isNew("fresh"))
+        assertEquals(View.VISIBLE, card.findViewById<View>(R.id.peq_band_new).visibility)
+        tap(card, R.id.peq_band_title)
+        assertFalse(locks.isNew("fresh"))
+        assertEquals(View.INVISIBLE, card.findViewById<View>(R.id.peq_band_new).visibility)
+        assertTrue(changes.isEmpty())
+        // Rebinding a recycled card must read the persisted status rather than its old badge.
+        adapter.notifyDataSetChanged()
+        assertEquals(View.INVISIBLE, row().findViewById<View>(R.id.peq_band_new).visibility)
+    }
+
+    @Test fun touchingUnchangedGainOrPowerClearsNewBadgeWithoutMutatingOtherParameters() {
+        launch(PeqState(listOf(PeqBand("fresh", gain = 0.0))))
+        val locks = PeqBandLockStore(controller!!.get())
+        locks.markNew("fresh")
+        adapter.notifyDataSetChanged()
+        val card = row()
+        val original = state
+        tap(card, R.id.peq_band_slider)
+        assertFalse(locks.isNew("fresh"))
+        assertEquals(original, state)
+        assertEquals(View.INVISIBLE, card.findViewById<View>(R.id.peq_band_new).visibility)
+        locks.markNew("fresh")
+        adapter.notifyDataSetChanged()
+        val rebound = row()
+        tap(rebound, R.id.peq_band_power)
+        assertFalse(locks.isNew("fresh"))
+        assertEquals(original.copy(bands = listOf(original.bands.single().copy(enabled = false))), state)
+    }
+
+    @Test fun editingAndLockedParameterAttemptsPreserveNewBadgeAndDisabledBandStaysDisabledWhenAdjusted() {
+        launch(PeqState(listOf(PeqBand("fresh", enabled = false))))
+        val locks = PeqBandLockStore(controller!!.get())
+        locks.markNew("fresh")
+        locks.setFieldLocked("fresh", PeqEditField.GAIN, true)
+        adapter.notifyDataSetChanged()
+        val card = row()
+        card.findViewById<View>(R.id.peq_band_plus).performClick()
+        assertTrue(locks.isNew("fresh"))
+        adapter.submitSelection(true, emptySet())
+        layout()
+        tap(card, R.id.peq_band_power)
+        tap(card, R.id.peq_band_title)
+        assertTrue(locks.isNew("fresh"))
+        assertFalse(state.bands.single().enabled)
+        adapter.submitSelection(false, emptySet())
+        layout()
+        tap(card, R.id.peq_gain_lock)
+        tap(card, R.id.peq_band_plus)
+        assertFalse(locks.isNew("fresh"))
+        assertEquals(0.5, state.bands.single().gain, 0.0)
+        assertFalse(state.bands.single().enabled)
     }
 
     @Test fun individualLocksProtectEachFieldAndSurviveRebindingAndReordering() {

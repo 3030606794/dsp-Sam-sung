@@ -5,4 +5,6 @@
     <string name="peq_unlock_parameter">解锁%1$s</string>
     <string name="peq_enable_band">开启频段</string>
     <string name="peq_disable_band">关闭频段</string>
+    <string name="peq_new_band_badge">新</string>
+    <string name="peq_delete_band_action">删除频段</string>
 </resources>

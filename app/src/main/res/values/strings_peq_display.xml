@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_confirm_delete">删除频段前确认</string>
+    <string name="peq_marker_duration">图形标记显示时长（秒）</string>
+    <string name="peq_marker_duration_forever">永久</string>
+    <string name="peq_invalid_marker_duration">请输入 0（永久）或 2–10 秒</string>
+    <string name="peq_marker_text_size">图形标记字号</string>
+    <string name="peq_show_marker_frequency">显示标记频率</string>
+    <string name="peq_show_marker_gain">显示标记增益</string>
+    <string name="peq_show_marker_quality">显示标记 Q / BW</string>
+    <string name="peq_preview_disabled_bands">预览未开启频段</string>
+    <string name="peq_marker_disabled">未开启</string>
+</resources>
