@@ -87,13 +87,14 @@ class PeqFineSliderUiTest {
         idle()
     }
     private fun confirm(dialog: AlertDialog, expected: PeqState) {
+        val listening = dialog.findViewById<View>(R.id.peq_band_monitor)!!.isSelected
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         idle()
         assertNull(dialog.findViewById<TextInputLayout>(R.id.peq_quality_box)!!.error)
         assertFalse("A valid endpoint must confirm, rather than leave an error dialog", dialog.isShowing)
         assertEquals(expected, repository.load())
         assertEquals(expected, fragment().editorState)
-        assertNull(PeqPreviewSession.current())
+        assertEquals(if (listening) expected else null, PeqPreviewSession.current())
     }
 
     @Test fun bandwidthSliderAtOneKhzConfirmsBothExactQBoundsDespiteRoundedDisplay() {

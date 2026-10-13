@@ -110,6 +110,10 @@ class PeqBandSelectionUiTest {
         val rectangle = bounds(card, id)
         assertFalse("Control must have a hit area: $id", rectangle.isEmpty)
         tap(card, rectangle.exactCenterX(), rectangle.exactCenterY())
+        if (id == R.id.peq_band_lock) {
+            // These callers request a single tap; actual double-tap sequences have separate coverage.
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ViewConfiguration.getDoubleTapTimeout().toLong() + 1))
+        }
     }
 
     @Test fun nineEqualHeaderSlotsStayFixedWhenWarningAndNewBadgeVisibilityChanges() {
@@ -155,24 +159,24 @@ class PeqBandSelectionUiTest {
         }
     }
 
-    @Test fun compactRowsKeepLabelsBeforeMinusAndNumericBoxesBetweenSliderAndPlus() {
+    @Test fun compactRowsKeepSmallLocksBeforeLabelsAndNumericBoxesBetweenSliderAndPlus() {
         launch(PeqState(listOf(PeqBand("compact", qualityDisplay = PeqQualityDisplay.BW))))
         val rows = listOf(
-            listOf(R.id.peq_gain_label, R.id.peq_band_minus, R.id.peq_band_slider, R.id.peq_band_gain, R.id.peq_band_plus, R.id.peq_gain_lock),
-            listOf(R.id.peq_q_label, R.id.peq_q_minus, R.id.peq_q_slider, R.id.peq_q_value, R.id.peq_q_plus, R.id.peq_q_lock),
-            listOf(R.id.peq_frequency_label, R.id.peq_frequency_minus, R.id.peq_frequency_slider, R.id.peq_frequency_value, R.id.peq_frequency_plus, R.id.peq_frequency_lock)
+            listOf(R.id.peq_gain_lock, R.id.peq_gain_label, R.id.peq_band_minus, R.id.peq_band_slider, R.id.peq_band_gain, R.id.peq_band_plus),
+            listOf(R.id.peq_q_lock, R.id.peq_q_label, R.id.peq_q_minus, R.id.peq_q_slider, R.id.peq_q_value, R.id.peq_q_plus),
+            listOf(R.id.peq_frequency_lock, R.id.peq_frequency_label, R.id.peq_frequency_minus, R.id.peq_frequency_slider, R.id.peq_frequency_value, R.id.peq_frequency_plus)
         )
         for (width in listOf(320, 411)) {
             layout(width)
             val card = list.findViewHolderForAdapterPosition(0)!!.itemView as MaterialCardView
             val density = card.resources.displayMetrics.density
-            assertTrue("Three rows and header stay compact at width $width", card.height / density in 155f..173f)
+            assertTrue("Three rows and header stay compact at width $width", card.height / density in 137f..155f)
             rows.forEach { ids ->
                 val rectangles = ids.map { bounds(card, it) }
                 rectangles.zipWithNext().forEach { (left, right) -> assertTrue(left.right <= right.left) }
                 rectangles.forEach { assertEquals(rectangles.first().exactCenterY(), it.exactCenterY(), 1f) }
-                assertNotNull(card.findViewById<View>(ids[3]).background)
-                assertTrue("Compact layout must keep a usable slider track", card.findViewById<Slider>(ids[2]).trackWidth / density >= 50f)
+                assertNotNull(card.findViewById<View>(ids[4]).background)
+                assertTrue("Compact layout must keep a usable slider track", card.findViewById<Slider>(ids[3]).trackWidth / density >= 50f)
             }
             assertEquals("BW 值", card.findViewById<TextView>(R.id.peq_q_label).text.toString())
             assertFalse(card.findViewById<TextView>(R.id.peq_q_value).text.contains("BW"))
@@ -325,7 +329,10 @@ class PeqBandSelectionUiTest {
         assertTrue(locks.isBandLocked("locked"))
         assertEquals(Color.rgb(211, 47, 47), lock.iconTint!!.defaultColor)
         assertFalse(card.findViewById<Slider>(R.id.peq_band_slider).isEnabled)
-        listOf(R.id.peq_band_gain, R.id.peq_band_plus,
+        val title = card.findViewById<TextView>(R.id.peq_band_title)
+        assertFalse(title.isEnabled)
+        assertEquals(Color.GRAY, title.currentTextColor)
+        listOf(R.id.peq_band_title, R.id.peq_band_gain, R.id.peq_band_plus,
             R.id.peq_q_plus, R.id.peq_frequency_plus, R.id.peq_gain_lock).forEach { card.findViewById<View>(it).performClick() }
         assertTrue(edits.isEmpty()); assertTrue(types.isEmpty()); assertTrue(fields.isEmpty()); assertTrue(changes.isEmpty())
         val before = state.bands.single()
@@ -343,7 +350,7 @@ class PeqBandSelectionUiTest {
         assertEquals(before, state.bands.single())
     }
 
-    @Test fun lockedBandNumberAndTypeOpenReadOnlyWithoutClearingNewBadgeAndSelectionModeStillOwnsTheTap() {
+    @Test fun mainLockOnlyAllowsNumberInspectionWhileFieldLockAllowsTypeInspectionWithoutClearingNewBadge() {
         launch(PeqState(listOf(PeqBand("inspect", gain = 3.0, frequency = 1234.0))), unlock = false)
         val locks = PeqBandLockStore(controller!!.get())
         locks.markNew("inspect")
@@ -360,14 +367,23 @@ class PeqBandSelectionUiTest {
         assertEquals(listOf("inspect"), edits)
         assertTrue(locks.isNew("inspect"))
         assertEquals(View.VISIBLE, card.findViewById<View>(R.id.peq_band_new).visibility)
-        assertTrue(card.findViewById<View>(R.id.peq_band_title).isEnabled)
-        tap(card, R.id.peq_band_title)
+        val title = card.findViewById<TextView>(R.id.peq_band_title)
+        assertFalse(title.isEnabled)
+        assertEquals(Color.GRAY, title.currentTextColor)
+        title.performClick()
+        assertTrue(types.isEmpty())
         listOf(R.id.peq_band_plus, R.id.peq_q_plus, R.id.peq_frequency_plus)
             .forEach { card.findViewById<View>(it).performClick() }
         assertEquals(original, state)
         assertTrue(changes.isEmpty())
-        assertEquals(listOf("inspect"), types)
         assertTrue(fields.isEmpty())
+        tap(card, R.id.peq_band_lock)
+        assertTrue(locks.isFieldLocked("inspect", PeqEditField.FILTER_TYPE))
+        assertTrue(title.isEnabled)
+        tap(card, R.id.peq_band_title)
+        assertEquals(listOf("inspect"), types)
+        assertTrue(locks.isNew("inspect"))
+        tap(card, R.id.peq_band_lock)
         adapter.submitSelection(true, emptySet())
         layout()
         tap(card, R.id.peq_band_number)
@@ -585,6 +601,88 @@ class PeqBandSelectionUiTest {
         assertFalse(row().findViewById<View>(R.id.peq_band_drag_handle).isEnabled)
     }
 
+    @Test fun reorderPolicyImmediatelyRefreshesExistingHandlesWithoutRebindingOrBypassingEditingAndSingleBandRules() {
+        launch(PeqModel.defaultState(2))
+        val original = state
+        val card = row()
+        val holder = list.findViewHolderForAdapterPosition(0)!!
+        val handle = card.findViewById<MaterialButton>(R.id.peq_band_drag_handle)
+        val slider = card.findViewById<Slider>(R.id.peq_band_slider)
+        val themeTint = handle.iconTint
+        val originalTitleColors = card.findViewById<TextView>(R.id.peq_band_title).textColors
+        tap(card, R.id.peq_band_lock)
+        assertFalse(handle.isEnabled)
+        assertEquals(Color.GRAY, handle.iconTint!!.defaultColor)
+        assertFalse(handle.performLongClick())
+        assertTrue(draggedHolders.isEmpty())
+        var adapterNotifications = 0
+        adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+            override fun onChanged() { adapterNotifications++ }
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int, payload: Any?) { adapterNotifications++ }
+        })
+
+        adapter.submitReorderPolicy(true)
+        assertTrue("Already attached handles must update without waiting for a rebind", handle.isEnabled)
+        assertEquals(themeTint, handle.iconTint)
+        assertSame(holder, list.findViewHolderForAdapterPosition(0))
+        assertSame(slider, card.findViewById<Slider>(R.id.peq_band_slider))
+        assertFalse("The policy must not unlock any audio parameter", slider.isEnabled)
+        assertTrue(handle.performLongClick())
+        assertSame(holder, draggedHolders.single())
+        draggedHolders.clear()
+
+        adapter.submitReorderPolicy(false)
+        assertFalse(handle.isEnabled)
+        assertEquals(Color.GRAY, handle.iconTint!!.defaultColor)
+        assertFalse(handle.performLongClick())
+        assertTrue(draggedHolders.isEmpty())
+        assertEquals(0, adapterNotifications)
+        assertEquals(original, state)
+
+        adapter.submitSelection(true, emptySet())
+        layout()
+        adapter.submitReorderPolicy(true)
+        assertFalse(handle.isEnabled)
+        assertEquals(Color.GRAY, handle.iconTint!!.defaultColor)
+        assertFalse(handle.performLongClick())
+        assertTrue(draggedHolders.isEmpty())
+        adapter.submitSelection(false, emptySet())
+        layout()
+        assertTrue(handle.isEnabled)
+        tap(card, R.id.peq_band_lock)
+        assertEquals(originalTitleColors, card.findViewById<TextView>(R.id.peq_band_title).textColors)
+        state = state.copy(bands = state.bands.take(1))
+        adapter.submitState(state)
+        val onlyHandle = row().findViewById<MaterialButton>(R.id.peq_band_drag_handle)
+        assertFalse(onlyHandle.isEnabled)
+        assertEquals(Color.GRAY, onlyHandle.iconTint!!.defaultColor)
+        assertFalse(onlyHandle.performLongClick())
+    }
+
+    @Test fun staleTitleAndDragCallbacksRecheckTheCurrentMasterLockAndReorderPolicy() {
+        launch(PeqModel.defaultState(2))
+        val card = row()
+        val title = card.findViewById<TextView>(R.id.peq_band_title)
+        val handle = card.findViewById<MaterialButton>(R.id.peq_band_drag_handle)
+        // View.performLongClick can return true for its fallback tooltip after our
+        // drag listener returns false. Isolate the callback result under test.
+        handle.tooltipText = null
+        assertTrue(title.isEnabled)
+        assertTrue(handle.isEnabled)
+        PeqBandLockStore(controller!!.get()).setBandLocked(state.bands.first().id, true)
+        // The host can lock a band before the already-installed listeners are rebound.
+        title.performClick()
+        assertFalse(handle.performLongClick())
+        assertTrue(types.isEmpty())
+        assertTrue(draggedHolders.isEmpty())
+        adapter.submitReorderPolicy(true)
+        assertTrue(handle.performLongClick())
+        title.performClick()
+        assertTrue(types.isEmpty())
+        assertEquals(1, draggedHolders.size)
+        assertTrue(changes.isEmpty())
+    }
+
     @Test fun reorderPayloadUpdatesEveryRankWithoutReplacingHoldersOrSliderCallbacks() {
         launch(PeqModel.defaultState(3).copy(showQSlider = false, showFrequencySlider = false))
         val firstId = state.bands.first().id
@@ -621,7 +719,7 @@ class PeqBandSelectionUiTest {
         assertEquals(listOf(ids[1], ids[2], ids[0]), state.bands.map { it.id })
     }
 
-    @Test fun repeatedGainStepsSurviveSelectionRefreshAndStopWhenEditingModeChanges() {
+    @Test fun repeatedGainStepsSurviveSelectionAndReorderPolicyRefreshAndStopWhenEditingModeChanges() {
         launch(PeqState(listOf(PeqBand("repeat")), gainStep = 0.25))
         val plus = row().findViewById<View>(R.id.peq_band_plus)
         val down = SystemClock.uptimeMillis()
@@ -631,6 +729,7 @@ class PeqBandSelectionUiTest {
         assertEquals(0.25, state.bands.single().gain, 0.0)
         for (index in 2..4) {
             adapter.submitSelection(false, emptySet())
+            adapter.submitReorderPolicy(index % 2 == 0)
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
             assertEquals(index * 0.25, state.bands.single().gain, 0.0)
         }

@@ -36,9 +36,11 @@ class PeqInlineFilterUiTest {
     private val locks get() = PeqBandLockStore(host.get())
     private val actions = mutableListOf<Pair<String, PeqInlineFilterAction>>()
     private val selections = mutableListOf<String>()
+    private val openedTypes = mutableListOf<String>()
     private var mutations = 0
     private var state = PeqModel.defaultState(30)
     private val adapter = PeqBandAdapter(onBandChanged = { mutations++; true }, onEdit = {},
+        onEditType = openedTypes::add,
         onToggleSelection = selections::add, onInlineFilterAction = { id, action -> actions += id to action })
 
     @After fun close() { host.pause().stop().destroy(); idle() }
@@ -135,11 +137,16 @@ class PeqInlineFilterUiTest {
     @Test fun filterLockStopsPreviewButKeepsItsUnlockAndOtherParametersUsable() {
         launch()
         show(draft(monitoring = true))
+        val title = card().findViewById<TextView>(R.id.peq_band_title)
+        val titleColor = title.currentTextColor
         cell(R.id.peq_inline_lock).performClick()
         assertTrue(locks.isFieldLocked(state.bands.first().id, PeqEditField.FILTER_TYPE))
         assertEquals(listOf(state.bands.first().id to PeqInlineFilterAction.Unavailable), actions)
         assertFalse(type(PeqFilterType.NOTCH).isEnabled)
         assertTrue("The saved type still opens its read-only dialog", card().findViewById<View>(R.id.peq_band_title).isEnabled)
+        assertEquals("A field lock must not grey out the available inspection entry", titleColor, title.currentTextColor)
+        title.performClick()
+        assertEquals(listOf(state.bands.first().id), openedTypes)
         assertTrue(cell(R.id.peq_inline_lock).isEnabled)
         assertTrue(card().findViewById<View>(R.id.peq_band_plus).isEnabled)
         type(PeqFilterType.NOTCH).performClick()
@@ -148,6 +155,11 @@ class PeqInlineFilterUiTest {
         assertFalse(locks.isFieldLocked(state.bands.first().id, PeqEditField.FILTER_TYPE))
         assertTrue(type(PeqFilterType.NOTCH).isEnabled)
         assertTrue(card().findViewById<View>(R.id.peq_band_title).isEnabled)
+        card().findViewById<View>(R.id.peq_band_lock).performClick()
+        assertFalse(title.isEnabled)
+        assertEquals(Color.GRAY, title.currentTextColor)
+        title.performClick()
+        assertEquals("The master lock prevents even a stale programmatic type click", listOf(state.bands.first().id), openedTypes)
     }
 
     @Test fun enteringSelectionModeStopsPreviewAndEveryInlineTouchOnlySelectsTheCard() {

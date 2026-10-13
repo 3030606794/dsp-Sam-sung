@@ -149,6 +149,19 @@ class PeqFilterSelector @JvmOverloads constructor(
                 option.view.background = GradientDrawable().apply {
                     setColor(Color.TRANSPARENT)
                     setStroke(dp(2), selectedText)
+                    // The end cells share the capsule's curved silhouette. A square
+                    // draft outline otherwise cuts across those curves after clipping.
+                    val radius = (this@PeqFilterSelector.cornerRadius - paddingTop).coerceAtLeast(0f)
+                    val rtl = this@PeqFilterSelector.layoutDirection == View.LAYOUT_DIRECTION_RTL
+                    val start = if (rtl) floatArrayOf(0f, 0f, radius, radius, radius, radius, 0f, 0f)
+                        else floatArrayOf(radius, radius, 0f, 0f, 0f, 0f, radius, radius)
+                    val end = if (rtl) floatArrayOf(radius, radius, 0f, 0f, 0f, 0f, radius, radius)
+                        else floatArrayOf(0f, 0f, radius, radius, radius, radius, 0f, 0f)
+                    cornerRadii = when (type) {
+                        PeqFilterType.PEAK -> start
+                        PeqFilterType.BAND_PASS -> end
+                        else -> FloatArray(8)
+                    }
                 }
             } else option.view.setBackgroundColor(color)
             val foreground = when {
@@ -159,6 +172,11 @@ class PeqFilterSelector @JvmOverloads constructor(
             option.label.setTextColor(foreground)
             option.icon.imageTintList = ColorStateList.valueOf(foreground)
         }
+    }
+
+    override fun onRtlPropertiesChanged(layoutDirection: Int) {
+        super.onRtlPropertiesChanged(layoutDirection)
+        if (childCount > 0) render()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -174,8 +192,10 @@ class PeqFilterSelector @JvmOverloads constructor(
         try {
             canvas.clipPath(roundedClip)
             super.dispatchDraw(canvas)
-            for (index in 1 until childCount) {
+            for (index in 0 until childCount) {
                 val x = getChildAt(index).left.toFloat()
+                // Child order reverses in RTL; only the physical left edge has no divider.
+                if (x <= paddingLeft) continue
                 canvas.drawLine(x, paddingTop.toFloat(), x, (height - paddingBottom).toFloat(), dividerPaint)
             }
         } finally {

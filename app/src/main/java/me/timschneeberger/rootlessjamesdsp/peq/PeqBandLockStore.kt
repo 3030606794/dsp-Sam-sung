@@ -33,5 +33,12 @@ class PeqBandLockStore(context: Context) {
         preferences.edit().putBoolean("$id.${field.name}", locked).apply()
     }
 
+    /** One update clears every field lock while preserving the master lock and all other state. */
+    fun unlockAllFields(id: String) {
+        preferences.edit().apply {
+            PeqEditField.entries.forEach { putBoolean("$id.${it.name}", false) }
+        }.apply()
+    }
+
     companion object { const val PREFERENCES = "peq_editor_locks" }
 }

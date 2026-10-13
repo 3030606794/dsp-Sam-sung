@@ -176,7 +176,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         invalidate()
     }
 
-    /** Opt-in visual inspection only: no audio session, enable switch, or repository is touched. */
+    /** Graph-only inspection: no audio session, enable switch, or repository is touched. */
     fun setPreviewBand(id: String?) {
         if (previewBandId == id) return
         previewBandId = id
@@ -196,12 +196,12 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     }
 
     private fun displayState(state: PeqState): PeqState {
-        // An explicit filter draft must be visible even when ordinary disabled-band
-        // inspection is off. Neither option changes the real bank or starts audio.
-        // Draft lifetime belongs to the editor, not the marker's short display timeout.
+        // Disabled bands are always available for visual inspection. A filter draft's
+        // lifetime belongs to the editor, not the marker's short display timeout.
+        // Both paths retain the actual enable switches and never start audio.
         val explicitId = previewStatusBandId?.takeIf { it == selectedBandId }
         val id = explicitId ?: previewBandId?.takeIf {
-            displayOptions.previewDisabledBands && isMarkerVisible && it == selectedBandId
+            isMarkerVisible && it == selectedBandId
         } ?: return state
         if (state.bands.none { it.id == id && !it.enabled }) return state
         return state.copy(bands = state.bands.map { if (it.id == id) it.copy(enabled = true) else it })
@@ -284,9 +284,11 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private fun markerFilterTypeText(band: PeqBand): String? =
         PeqBandAdapter.typeLabel(context, band.type).takeIf { displayOptions.showMarkerFilterType }
 
+    private fun markerIsListening(band: PeqBand) = previewStatusBandId == band.id && previewStatusListening
+
     private fun markerPreviewStatusText(band: PeqBand): String? =
-        if (displayOptions.showMarkerPreviewStatus && previewStatusBandId == band.id)
-            context.getString(if (previewStatusListening) R.string.peq_marker_listening else R.string.peq_marker_preview)
+        if (displayOptions.showMarkerPreviewStatus && (!band.enabled || previewStatusBandId == band.id))
+            context.getString(if (markerIsListening(band)) R.string.peq_marker_listening else R.string.peq_marker_preview)
         else null
 
     private fun markerHeadingText(band: PeqBand): String? {
@@ -467,7 +469,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
                 val prefix = text.removeSuffix(previewStatusText)
                 buildList {
                     if (prefix.isNotEmpty()) add(MarkerTextRun(prefix, foreground))
-                    add(MarkerTextRun(previewStatusText, if (previewStatusListening)
+                    add(MarkerTextRun(previewStatusText, if (markerIsListening(band))
                         Color.rgb(46, 125, 50) else Color.rgb(25, 118, 210)))
                 }
             } else listOf(MarkerTextRun(text, if (text == gainText) gainColor else foreground))

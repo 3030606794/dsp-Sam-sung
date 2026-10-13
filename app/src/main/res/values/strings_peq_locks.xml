@@ -7,4 +7,7 @@
     <string name="peq_disable_band">关闭频段</string>
     <string name="peq_new_band_badge">新</string>
     <string name="peq_delete_band_action">删除频段</string>
+    <string name="peq_unlock_all_field_locks">解锁当前频段全部小锁</string>
+    <string name="peq_all_field_locks_unlocked">已解锁全部小锁</string>
+    <string name="peq_all_field_locks_unlocked_band_locked">已解锁全部小锁，整卡仍锁定</string>
 </resources>

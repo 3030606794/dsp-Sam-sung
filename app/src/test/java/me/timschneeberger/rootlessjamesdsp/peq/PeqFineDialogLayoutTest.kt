@@ -68,18 +68,29 @@ class PeqFineDialogLayoutTest {
         }
     }
 
-    @Test fun customTitleKeepsBandNumberAndMasterLockInOneRowWithoutShrinkingTheLockTarget() {
-        val root = inflate(R.layout.peq_band_dialog_title, 272)
-        val title = root.findViewById<TextView>(R.id.peq_band_dialog_title)
-        val lock = root.findViewById<MaterialButton>(R.id.peq_band_dialog_lock)
-        title.text = host.get().getString(R.string.peq_fine_band_title, 170)
-        measure(root, 272)
-        assertEquals("精调频段 • 第170段", title.text.toString())
-        assertTrue(title.right <= lock.left)
-        assertEquals(48f, lock.width / root.resources.displayMetrics.density, 1f)
-        assertEquals(48f, lock.height / root.resources.displayMetrics.density, 1f)
-        assertEquals(28f, lock.iconSize / root.resources.displayMetrics.density, 1f)
-        assertTrue(lock.isClickable)
+    @Test fun customTitleFitsItsBandNumberBesideAnAbsolutelyCenteredPowerAndRightAlignedMasterLock() {
+        for (width in listOf(272, 363)) {
+            val root = inflate(R.layout.peq_band_dialog_title, width)
+            val title = root.findViewById<TextView>(R.id.peq_band_dialog_title)
+            val power = root.findViewById<MaterialButton>(R.id.peq_band_dialog_power)
+            val lock = root.findViewById<MaterialButton>(R.id.peq_band_dialog_lock)
+            title.text = host.get().getString(R.string.peq_fine_band_title, 170)
+            measure(root, width)
+            assertEquals("精调频段\n第170段", title.text.toString())
+            assertEquals(2, title.lineCount)
+            for (line in 0 until title.lineCount) assertEquals(0, title.layout.getEllipsisCount(line))
+            assertTrue(title.right <= power.left)
+            assertTrue(power.right <= lock.left)
+            assertEquals(root.width / 2f, (power.left + power.right) / 2f, 1f)
+            assertEquals((lock.top + lock.bottom) / 2f, (power.top + power.bottom) / 2f, 1f)
+            assertEquals(root.width - root.paddingRight, lock.right)
+            listOf(power, lock).forEach { button ->
+                assertEquals(48f, button.width / root.resources.displayMetrics.density, 1f)
+                assertEquals(48f, button.height / root.resources.displayMetrics.density, 1f)
+                assertEquals(28f, button.iconSize / root.resources.displayMetrics.density, 1f)
+                assertTrue(button.isClickable)
+            }
+        }
     }
 
     class HostActivity : AppCompatActivity() {

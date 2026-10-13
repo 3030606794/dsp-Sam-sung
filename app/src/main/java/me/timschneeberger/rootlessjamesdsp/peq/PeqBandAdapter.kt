@@ -45,12 +45,20 @@ class PeqBandAdapter(
     private val itemIds = mutableMapOf<String, Long>()
     private var nextItemId = 0L
     private val attachedHolders = mutableSetOf<Holder>()
+    private var allowLockedBandReorder = false
     private var showInlineFilters = false
     private var inlineDraft: PeqInlineFilterDraft? = null
 
     init { setHasStableIds(true) }
 
     fun cancelPendingRepeats() = attachedHolders.forEach { it.cancelRepeats() }
+
+    /** Apply this display policy without rebinding sliders or interrupting their gestures. */
+    fun submitReorderPolicy(allowLocked: Boolean) {
+        if (allowLockedBandReorder == allowLocked) return
+        allowLockedBandReorder = allowLocked
+        attachedHolders.toList().forEach { it.renderReorderState() }
+    }
 
     /** Updates only the bottom strip; ongoing slider gestures never need to be rebound. */
     fun submitInlineFilter(show: Boolean, draft: PeqInlineFilterDraft? = null) {
@@ -129,6 +137,7 @@ class PeqBandAdapter(
     override fun onViewAttachedToWindow(holder: Holder) {
         super.onViewAttachedToWindow(holder)
         attachedHolders += holder
+        holder.renderReorderState()
         holder.renderInline()
     }
     override fun onViewDetachedFromWindow(holder: Holder) {
@@ -149,6 +158,11 @@ class PeqBandAdapter(
         private val defaultGainTrackTint = binding.peqBandSlider.trackActiveTintList
         private val defaultGainHaloTint = binding.peqBandSlider.haloTintList
         private val defaultGainTextColors = binding.peqBandGain.textColors
+        private val defaultTitleTextColors = binding.peqBandTitle.textColors
+        private val defaultDragHandleTint = binding.peqBandDragHandle.iconTint
+        private val defaultGainLabelColors = binding.peqGainLabel.textColors
+        private val defaultQualityLabelColors = binding.peqQLabel.textColors
+        private val defaultFrequencyLabelColors = binding.peqFrequencyLabel.textColors
         private var lastGainSign: Int? = null
         private var lastGainDimmed: Boolean? = null
         private val gainDisabledSurface = MaterialColors.getColor(binding.root,
@@ -167,8 +181,35 @@ class PeqBandAdapter(
             com.google.android.material.R.attr.colorPrimary)
         private val locks = PeqBandLockStore(binding.root.context)
         private var boundId: String? = null
-        fun cancelRepeats() = repeaters.forEach { it.cancel() }
+        private val lockGestures = PeqBandLockGestures(binding.peqBandLock,
+            onSingle = ::toggleBandLock, onDouble = ::unlockFieldLocks)
+
+        fun cancelRepeats() {
+            repeaters.forEach { it.cancel() }
+            lockGestures.cancel()
+        }
         fun stopInline() { boundId?.let(::invalidateInlineDraft) }
+
+        private fun lockTarget() = boundId?.takeIf { id ->
+            !editing && this in attachedHolders && state.bands.any { it.id == id }
+        }
+
+        private fun toggleBandLock() {
+            val id = lockTarget() ?: return
+            cancelRepeats()
+            locks.setBandLocked(id, !locks.isBandLocked(id))
+            renderControlState()
+        }
+
+        private fun unlockFieldLocks() {
+            val id = lockTarget() ?: return
+            cancelRepeats()
+            locks.unlockAllFields(id)
+            renderControlState()
+            Toast.makeText(binding.root.context, if (locks.isBandLocked(id))
+                R.string.peq_all_field_locks_unlocked_band_locked else R.string.peq_all_field_locks_unlocked,
+                Toast.LENGTH_SHORT).show()
+        }
 
         fun renderInline() {
             val id = boundId ?: return
@@ -188,6 +229,16 @@ class PeqBandAdapter(
         }
 
         private fun canEdit(id: String, field: PeqEditField? = null) = !editing && locks.canEdit(id, field)
+
+        private fun canReorder(id: String) = !editing && state.bands.size > 1 &&
+            state.bands.any { it.id == id } && (allowLockedBandReorder || !locks.isBandLocked(id))
+
+        fun renderReorderState() {
+            val id = boundId ?: return
+            val enabled = canReorder(id)
+            binding.peqBandDragHandle.isEnabled = enabled
+            binding.peqBandDragHandle.iconTint = if (enabled) defaultDragHandleTint else ColorStateList.valueOf(Color.GRAY)
+        }
 
         private fun markUsed(id: String) {
             locks.markUsed(id)
@@ -218,6 +269,16 @@ class PeqBandAdapter(
                     if (locked) R.string.peq_unlock_parameter else R.string.peq_lock_parameter, context.getString(label)))
                 button.isEnabled = !editing && !mainLocked
             }
+            listOf(Triple(binding.peqGainLabel, PeqEditField.GAIN, defaultGainLabelColors),
+                Triple(binding.peqQLabel, PeqEditField.QUALITY, defaultQualityLabelColors),
+                Triple(binding.peqFrequencyLabel, PeqEditField.FREQUENCY, defaultFrequencyLabelColors))
+                .forEach { (label, field, colors) ->
+                    label.isEnabled = !editing && !mainLocked
+                    label.isFocusable = true
+                    label.setTextColor(if (label.isEnabled) colors else ColorStateList.valueOf(Color.GRAY))
+                    label.contentDescription = context.getString(if (locks.isFieldLocked(id, field))
+                        R.string.peq_unlock_parameter else R.string.peq_lock_parameter, label.text)
+                }
             val gainEnabled = canEdit(id, PeqEditField.GAIN) && band.type.usesGain
             binding.peqBandSlider.isEnabled = gainEnabled
             binding.peqBandMinus.isEnabled = gainEnabled && band.gain > -state.gainRange
@@ -239,10 +300,11 @@ class PeqBandAdapter(
             binding.peqBandHeaderFrequency.isEnabled = frequencyEnabled
             // Opening the editor is also the read-only inspection path for a protected band.
             binding.peqBandNumber.isEnabled = !editing
-            binding.peqBandTitle.isEnabled = !editing
+            binding.peqBandTitle.isEnabled = !editing && !mainLocked
+            binding.peqBandTitle.setTextColor(if (mainLocked) ColorStateList.valueOf(Color.GRAY) else defaultTitleTextColors)
             binding.peqBandDelete.isEnabled = canEdit(id)
             binding.peqBandDelete.iconTint = ColorStateList.valueOf(if (canEdit(id)) Color.rgb(211, 47, 47) else Color.GRAY)
-            binding.peqBandDragHandle.isEnabled = canEdit(id) && state.bands.size > 1
+            renderReorderState()
             binding.peqBandLocate.isEnabled = !editing
             binding.peqBandWarning.isEnabled = !editing
             binding.peqBandPower.isEnabled = !editing
@@ -328,7 +390,7 @@ class PeqBandAdapter(
                 if (!selectInstead(band.id)) Toast.makeText(context, R.string.peq_frequency_unset_warning, Toast.LENGTH_LONG).show()
             }
             binding.peqBandDragHandle.setOnLongClickListener {
-                if (!canEdit(band.id) || state.bands.size <= 1) false
+                if (!canReorder(band.id)) false
                 else { onStartDrag(this); true }
             }
             binding.peqBandNumber.setOnClickListener {
@@ -339,15 +401,9 @@ class PeqBandAdapter(
             binding.peqBandDelete.setOnClickListener {
                 if (!selectInstead(band.id) && canEdit(band.id)) onDelete(band.id)
             }
-            binding.peqBandLock.setOnClickListener {
-                if (!selectInstead(band.id)) {
-                    cancelRepeats()
-                    locks.setBandLocked(band.id, !locks.isBandLocked(band.id))
-                    renderControlState()
-                }
-            }
             listOf(binding.peqGainLock to PeqEditField.GAIN, binding.peqQLock to PeqEditField.QUALITY,
-                binding.peqFrequencyLock to PeqEditField.FREQUENCY).forEach { (button, field) ->
+                binding.peqFrequencyLock to PeqEditField.FREQUENCY, binding.peqGainLabel to PeqEditField.GAIN,
+                binding.peqQLabel to PeqEditField.QUALITY, binding.peqFrequencyLabel to PeqEditField.FREQUENCY).forEach { (button, field) ->
                 button.setOnClickListener {
                     if (!selectInstead(band.id) && canEdit(band.id)) {
                         cancelRepeats()
@@ -375,7 +431,7 @@ class PeqBandAdapter(
             binding.peqBandSummary.setOnClickListener { editField(PeqEditField.QUALITY) }
             binding.peqQValue.setOnClickListener { editField(PeqEditField.QUALITY) }
             binding.peqBandTitle.setOnClickListener {
-                if (!selectInstead(band.id)) {
+                if (!selectInstead(band.id) && canEdit(band.id)) {
                     onBandSelected(band.id); onEditType(band.id)
                 }
             }

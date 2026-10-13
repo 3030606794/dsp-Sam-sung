@@ -17,7 +17,10 @@ import me.timschneeberger.rootlessjamesdsp.R
 
 /** Compact filter chooser. Its host owns draft persistence and the audio preview lifetime. */
 object PeqFilterTypeDialog {
-    private class MonitorControl(val update: (Boolean, Boolean) -> Unit)
+    private class MonitorControl(
+        val update: (Boolean, Boolean) -> Unit,
+        val synchronize: (PeqFilterType?, PeqFilterType?, Boolean) -> Unit
+    )
 
     fun create(
         context: Context,
@@ -49,6 +52,7 @@ object PeqFilterTypeDialog {
         val monitorOff = MaterialColors.getColor(root, com.google.android.material.R.attr.colorOnSurfaceVariant)
         val monitorOn = Color.rgb(46, 125, 50)
         var listening = false
+        var committedType = initialType
         var acceptedSelection = initialType
         types.committedType = initialType
         types.setSelection(initialType)
@@ -56,8 +60,8 @@ object PeqFilterTypeDialog {
             val editable = canEdit()
             if (!editable) {
                 listening = false
-                acceptedSelection = initialType
-                types.setSelection(initialType)
+                acceptedSelection = committedType
+                types.setSelection(committedType)
             }
             types.isEnabled = editable
             types.monitoring = listening
@@ -84,7 +88,14 @@ object PeqFilterTypeDialog {
             render()
             if (notify) onMonitorChanged(enabled)
         }
-        root.tag = MonitorControl(::monitoring)
+        root.tag = MonitorControl(::monitoring) { committed, selected, enabled ->
+            committedType = committed
+            acceptedSelection = selected
+            listening = enabled
+            types.committedType = committed
+            types.setSelection(selected)
+            render()
+        }
         types.onTypeSelected = typeSelected@ { type ->
             if (!canEdit()) {
                 types.setSelection(acceptedSelection)
@@ -131,6 +142,12 @@ object PeqFilterTypeDialog {
     fun setMonitoring(dialog: AlertDialog, enabled: Boolean, notify: Boolean = false) {
         val control = dialog.findViewById<View>(R.id.peq_filter_dialog_root)?.tag as? MonitorControl
         control?.update?.invoke(enabled, notify)
+    }
+
+    /** Mirrors a shared card/dialog draft without firing user callbacks or saving it. */
+    fun setState(dialog: AlertDialog, committedType: PeqFilterType?, selectedType: PeqFilterType?, monitoring: Boolean) {
+        val control = dialog.findViewById<View>(R.id.peq_filter_dialog_root)?.tag as? MonitorControl
+        control?.synchronize?.invoke(committedType, selectedType, monitoring)
     }
 
     fun buttonId(type: PeqFilterType): Int = when (type) {

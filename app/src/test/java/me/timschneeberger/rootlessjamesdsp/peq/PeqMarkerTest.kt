@@ -1,6 +1,7 @@
 package me.timschneeberger.rootlessjamesdsp.peq
 
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -300,7 +301,7 @@ class PeqMarkerTest {
         assertSame(state, curve.requestedPlotState) // Merely showing the marker does not re-enable preview.
     }
 
-    @Test fun disabledPreviewFollowsOnlyTheSelectedBandAndCanBeTurnedOff() {
+    @Test fun disabledPreviewFollowsOnlyTheSelectedBandAndStatusVisibilityDoesNotDisableIt() {
         val curve = launch()
         val state = PeqState(listOf(PeqBand("first", enabled = false, gain = 6.0),
             PeqBand("second", enabled = false, gain = -3.0)))
@@ -312,12 +313,15 @@ class PeqMarkerTest {
         assertSame(state, curve.requestedPlotState)
         curve.setPreviewBand("second")
         assertEquals(listOf(false, true), curve.requestedPlotState!!.bands.map { it.enabled })
-        curve.setDisplayOptions(PeqEditorSettings(previewDisabledBands = false))
-        assertSame(state, curve.requestedPlotState)
+        curve.setPreviewStatus("second")
+        curve.setDisplayOptions(PeqEditorSettings(showMarkerPreviewStatus = false))
+        assertEquals(listOf(false, true), curve.requestedPlotState!!.bands.map { it.enabled })
+        assertFalse(curve.contentDescription.contains("预览"))
         assertEquals("未开启", draw(curve)!!.statusText)
         curve.setDisplayOptions(PeqEditorSettings())
         assertEquals(listOf(false, true), curve.requestedPlotState!!.bands.map { it.enabled })
-        curve.setPreviewBand(null)
+        assertTrue(curve.contentDescription.contains("预览"))
+        curve.setPreviewStatus(null)
         assertSame(state, curve.requestedPlotState)
     }
 
@@ -378,7 +382,7 @@ class PeqMarkerTest {
     @Test fun filterTypeLabelTracksTheCurrentBandAndCanHideWithoutAffectingOtherMarkerContent() {
         val curve = launch()
         val options = PeqEditorSettings(showMarkerFrequency = false, showMarkerGain = false,
-            showMarkerQuality = false)
+            showMarkerQuality = false, showMarkerPreviewStatus = false)
         curve.setDisplayOptions(options)
         PeqFilterType.entries.forEach { type ->
             val band = PeqBand("disabled", type = type, enabled = false, gain = 3.0)
@@ -443,7 +447,7 @@ class PeqMarkerTest {
         val curve = launch()
         curve.setDisplayOptions(PeqEditorSettings(showMarkerBandNumber = true,
             showMarkerFilterType = false, showMarkerFrequency = false,
-            showMarkerGain = false, showMarkerQuality = false))
+            showMarkerGain = false, showMarkerQuality = false, showMarkerPreviewStatus = false))
         val first = PeqBand("first", enabled = false)
         val middle = PeqBand("middle", enabled = false)
         val selected = PeqBand("selected", enabled = false, gain = 6.0)
@@ -571,17 +575,20 @@ class PeqMarkerTest {
         assertEquals(listOf("预览"), draw(curve)!!.labelLines)
     }
 
-    @Test fun explicitDraftPreviewsDisabledBandRegardlessOfTextAndOrdinaryPreviewSettings() {
+    @Test fun oldDisabledPreviewPreferenceCannotBlockOrdinaryOrDraftPreviewAndStatusSwitchOnlyHidesText() {
         val curve = launch()
         val band = PeqBand("draft", enabled = false, frequency = 1000.0, gain = 8.0)
         val state = PeqState(listOf(band, PeqBand("other", enabled = false, gain = -3.0)))
-        val options = PeqEditorSettings(previewDisabledBands = false, showMarkerPreviewStatus = false)
+        val stored = curve.context.getSharedPreferences(PeqEditorPreferences.PREFERENCES, Context.MODE_PRIVATE)
+        stored.edit().putBoolean("previewDisabledBands", false).putBoolean("showMarkerPreviewStatus", false).commit()
+        val options = PeqEditorPreferences(curve.context).load()
         val packet = PeqProtocol.payload(state, true)
         curve.setDisplayOptions(options)
         curve.setState(state, false)
         curve.showMarker(band.id)
         curve.setPreviewBand(band.id)
-        assertSame(state, curve.requestedPlotState) // Ordinary inspection obeys the setting.
+        assertEquals(listOf(true, false), curve.requestedPlotState!!.bands.map { it.enabled })
+        assertEquals(8.0, PeqResponse.responseDb(curve.requestedPlotState!!, 1000.0), 0.001)
         curve.setPreviewStatus(band.id)
         assertEquals(listOf(true, false), curve.requestedPlotState!!.bands.map { it.enabled })
         assertEquals(8.0, PeqResponse.responseDb(curve.requestedPlotState!!, 1000.0), 0.001)
@@ -594,7 +601,7 @@ class PeqMarkerTest {
         assertEquals(8.0, PeqResponse.responseDb(curve.requestedPlotState!!, 1000.0), 0.001)
         curve.showMarker("other")
         assertSame(state, curve.requestedPlotState)
-        assertFalse(curve.contentDescription.contains("预览"))
+        assertTrue(curve.contentDescription.contains("预览"))
         curve.showMarker(band.id)
         assertEquals(listOf(true, false), curve.requestedPlotState!!.bands.map { it.enabled })
         curve.setPreviewStatus(null)
@@ -613,7 +620,7 @@ class PeqMarkerTest {
         val curve = launch()
         val band = PeqBand("draft", enabled = false, frequency = 1000.0, gain = 7.0)
         val state = PeqState(listOf(band))
-        curve.setDisplayOptions(PeqEditorSettings(previewDisabledBands = false))
+        curve.setDisplayOptions(PeqEditorSettings())
         curve.setState(state, false)
         curve.showMarker(band.id)
         curve.setPreviewBand(band.id)
@@ -669,7 +676,7 @@ class PeqMarkerTest {
     @Test fun hidingGuidesNeverClearsAnExplicitDraftOrChangesAnExistingListeningSession() {
         val curve = launch()
         val state = PeqState(listOf(PeqBand("draft", enabled = false, frequency = 1000.0, gain = -5.0)))
-        val options = PeqEditorSettings(previewDisabledBands = false, showMarkerBandNumber = true)
+        val options = PeqEditorSettings(showMarkerBandNumber = true)
         val token = PeqPreviewSession.begin(state)
         try {
             val session = PeqPreviewSession.current()
@@ -699,6 +706,39 @@ class PeqMarkerTest {
             assertSame(updated, curve.requestedPlotState)
             assertSame(session, PeqPreviewSession.current())
         } finally { PeqPreviewSession.end(token) }
+    }
+
+    @Test fun ordinaryDisabledBandShowsBluePreviewByDefaultAndNeverInheritsAnotherBandsListeningColor() {
+        val curve = launch()
+        val state = PeqState(listOf(PeqBand("first", enabled = false, frequency = 1000.0, gain = 6.0),
+            PeqBand("second", enabled = false, frequency = 3000.0, gain = -3.0)))
+        val packet = PeqProtocol.payload(state, true)
+        val audioSession = PeqPreviewSession.current()
+        curve.setState(state, false)
+        curve.showMarker("first")
+        curve.setPreviewBand("first")
+        assertTrue(draw(curve)!!.labelLines.contains("峰值 • 预览"))
+        assertEquals(PeqResponseView.MarkerTextRun("预览", Color.rgb(25, 118, 210)),
+            draw(curve)!!.labelRuns.flatten().first { it.text == "预览" })
+        assertEquals(listOf(true, false), curve.requestedPlotState!!.bands.map { it.enabled })
+        curve.setPreviewStatus("first", listening = true)
+        assertTrue(draw(curve)!!.labelLines.contains("峰值 • 监听"))
+        curve.showMarker("second")
+        curve.setPreviewBand("second")
+        assertEquals(PeqResponseView.MarkerTextRun("预览", Color.rgb(25, 118, 210)),
+            draw(curve)!!.labelRuns.flatten().first { it.text == "预览" })
+        assertFalse(curve.contentDescription.contains("监听"))
+        assertEquals(listOf(false, true), curve.requestedPlotState!!.bands.map { it.enabled })
+        curve.setDisplayOptions(PeqEditorSettings(showMarkerPreviewStatus = false))
+        assertFalse(curve.contentDescription.contains("预览"))
+        assertEquals(listOf(false, true), curve.requestedPlotState!!.bands.map { it.enabled })
+        assertArrayEquals(packet, PeqProtocol.payload(curve.requestedState!!, true))
+        assertSame(audioSession, PeqPreviewSession.current())
+        curve.setPreviewStatus(null)
+        curve.hideMarker()
+        assertSame(state, curve.requestedPlotState)
+        assertFalse(curve.requestedState!!.bands.any { it.enabled })
+        assertSame(audioSession, PeqPreviewSession.current())
     }
 
     class HostActivity : FragmentActivity() {

@@ -130,10 +130,10 @@ class PeqUi5IntegrationTest {
         assertEquals(beforePrefs, prefs.all)
         assertSaved(original)
         inlineClick(R.id.peq_inline_confirm)
-        assertNull(PeqPreviewSession.current())
+        assertEquals(withFirstType(original, PeqFilterType.HIGH_PASS), PeqPreviewSession.current())
         assertSaved(withFirstType(original, PeqFilterType.HIGH_PASS))
         assertEquals(PeqBandAdapter.typeLabel(app, PeqFilterType.HIGH_PASS), title())
-        assertFalse(row().findViewById<View>(R.id.peq_inline_monitor).isSelected)
+        assertTrue(row().findViewById<View>(R.id.peq_inline_monitor).isSelected)
     }
 
     @Test fun inlineCancelDropsTheAuditionAndLeavesSavedValuesAndTitleUnchanged() {
@@ -151,7 +151,7 @@ class PeqUi5IntegrationTest {
         assertFalse(row().findViewById<View>(R.id.peq_inline_confirm).isEnabled)
     }
 
-    @Test fun leavingInlineForPreciseEditorEditModeOrActivityPauseEndsThePreview() {
+    @Test fun preciseEditorInheritsInlineListeningWhileEditModeAndActivityPauseEndThePreview() {
         val original = launch()
         fun audition() {
             choose(PeqFilterType.LOW_PASS)
@@ -160,9 +160,12 @@ class PeqUi5IntegrationTest {
         }
         audition()
         val editor = precise()
-        assertNull(PeqPreviewSession.current())
+        assertEquals(withFirstType(original, PeqFilterType.LOW_PASS), PeqPreviewSession.current())
+        assertTrue(editor.findViewById<View>(R.id.peq_band_monitor)!!.isSelected)
+        assertEquals(PeqFilterType.LOW_PASS, editor.findViewById<PeqFilterSelector>(R.id.peq_band_type)!!.selectedType)
         editor.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
         layout()
+        assertNull(PeqPreviewSession.current())
         audition()
         view<View>(R.id.peq_edit_selection).performClick()
         layout()

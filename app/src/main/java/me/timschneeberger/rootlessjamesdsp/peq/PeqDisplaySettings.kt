@@ -19,12 +19,12 @@ internal class PeqDisplaySettings(
         ui.peqShowMarkerFrequency.isChecked = initial.showMarkerFrequency
         ui.peqShowMarkerGain.isChecked = initial.showMarkerGain
         ui.peqShowMarkerQuality.isChecked = initial.showMarkerQuality
-        ui.peqPreviewDisabledBands.isChecked = initial.previewDisabledBands
         ui.peqShowMarkerFilterType.isChecked = initial.showMarkerFilterType
         ui.peqShowMarkerBandNumber.isChecked = initial.showMarkerBandNumber
         ui.peqShowInlineFilters.isChecked = initial.showInlineFilters
         ui.peqShowMarkerPreviewStatus.isChecked = initial.showMarkerPreviewStatus
         ui.peqShowMarkerGuides.isChecked = initial.showMarkerGuides
+        ui.peqAllowLockedBandReorder.isChecked = initial.allowLockedBandReorder
         textSizeControl = PeqSettingControl(ui.peqMarkerTextSizeSlider, ui.peqMarkerTextSize,
             ui.peqMarkerTextSizeBox, 8.0, 20.0, 1.0, initial.markerTextSizeSp.toDouble(), integer = true)
         ui.peqMarkerDurationSlider.apply {
@@ -53,6 +53,27 @@ internal class PeqDisplaySettings(
                 }
             }
         }
+        ui.peqShowMarkerGuides.setOnCheckedChangeListener { _, _ -> renderMarkerAvailability() }
+        renderMarkerAvailability()
+    }
+
+    private fun renderMarkerAvailability() {
+        val enabled = ui.peqShowMarkerGuides.isChecked
+        // Disable editing only: hidden marker options remain part of the dialog draft,
+        // so switching the guides back on restores the user's choices unchanged.
+        listOf(ui.peqMarkerDurationSlider, ui.peqMarkerTextSizeSlider,
+            ui.peqMarkerDurationBox, ui.peqMarkerTextSizeBox,
+            ui.peqShowMarkerFrequency, ui.peqShowMarkerFilterType, ui.peqShowMarkerBandNumber,
+            ui.peqShowMarkerPreviewStatus, ui.peqShowMarkerGain, ui.peqShowMarkerQuality)
+            .forEach { it.isEnabled = enabled }
+        listOf(ui.peqMarkerDurationLabel, ui.peqMarkerTextSizeLabel).forEach {
+            it.isEnabled = enabled
+            it.alpha = if (enabled) 1f else 0.38f
+        }
+        if (!enabled) {
+            ui.peqMarkerDuration.clearFocus()
+            ui.peqMarkerTextSize.clearFocus()
+        }
     }
 
     private fun position(seconds: Int) = if (seconds == 0) 0f else (seconds - 1).toFloat()
@@ -77,12 +98,12 @@ internal class PeqDisplaySettings(
             showMarkerFrequency = ui.peqShowMarkerFrequency.isChecked,
             showMarkerGain = ui.peqShowMarkerGain.isChecked,
             showMarkerQuality = ui.peqShowMarkerQuality.isChecked,
-            previewDisabledBands = ui.peqPreviewDisabledBands.isChecked,
             showMarkerFilterType = ui.peqShowMarkerFilterType.isChecked,
             showMarkerBandNumber = ui.peqShowMarkerBandNumber.isChecked,
             showInlineFilters = ui.peqShowInlineFilters.isChecked,
             showMarkerPreviewStatus = ui.peqShowMarkerPreviewStatus.isChecked,
-            showMarkerGuides = ui.peqShowMarkerGuides.isChecked)
+            showMarkerGuides = ui.peqShowMarkerGuides.isChecked,
+            allowLockedBandReorder = ui.peqAllowLockedBandReorder.isChecked)
     }
 
     fun save(settings: PeqEditorSettings) = preferences.save(settings)

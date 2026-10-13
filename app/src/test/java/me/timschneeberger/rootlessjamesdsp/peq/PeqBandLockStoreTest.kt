@@ -68,4 +68,50 @@ class PeqBandLockStoreTest {
             assertTrue(reloaded.isFieldLocked("source", it))
         }
     }
+
+    @Test fun unlockingAllFieldsPreservesMasterProtectionNewBadgeAndOtherCardsAfterReload() {
+        val locks = PeqBandLockStore(app)
+        locks.markNew("band")
+        locks.setBandLocked("band", true)
+        locks.setBandLocked("band-other", false)
+        PeqEditField.entries.forEach {
+            locks.setFieldLocked("band", it, true)
+            locks.setFieldLocked("band-other", it, true)
+        }
+        val otherBefore = prefs.all.filterKeys { it.startsWith("band-other.") }
+
+        locks.unlockAllFields("band")
+
+        val reloaded = PeqBandLockStore(app)
+        assertTrue(reloaded.isBandLocked("band"))
+        assertTrue(reloaded.isNew("band"))
+        PeqEditField.entries.forEach {
+            assertFalse(reloaded.isFieldLocked("band", it))
+            assertFalse(reloaded.canEdit("band", it))
+            assertTrue(reloaded.isFieldLocked("band-other", it))
+        }
+        assertEquals(otherBefore, prefs.all.filterKeys { it.startsWith("band-other.") })
+    }
+
+    @Test fun unlockingAllFieldsOfAnUnlockedUsedCardEnablesEveryFieldWithoutChangingOtherPreferences() {
+        val locks = PeqBandLockStore(app)
+        locks.markNew("band")
+        locks.markUsed("band")
+        PeqEditField.entries.forEach { locks.setFieldLocked("band", it, true) }
+        prefs.edit().putString("unrelated", "retained").commit()
+        val before = prefs.all.toMap()
+
+        locks.unlockAllFields("band")
+
+        val expected = before.toMutableMap().apply {
+            PeqEditField.entries.forEach { put("band.${it.name}", false) }
+        }
+        assertEquals(expected, prefs.all)
+        val reloaded = PeqBandLockStore(app)
+        assertFalse(reloaded.isNew("band"))
+        assertFalse(reloaded.isBandLocked("band"))
+        PeqEditField.entries.forEach { assertTrue(reloaded.canEdit("band", it)) }
+        locks.unlockAllFields("band")
+        assertEquals(expected, prefs.all)
+    }
 }

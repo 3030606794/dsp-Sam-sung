@@ -239,7 +239,7 @@ class PeqRefinementUiTest {
         paused.dismiss()
     }
 
-    @Test fun confirmingAnAuditionSavesOnlyTheSelectedTypeAndEndsItsOverride() {
+    @Test fun confirmingAnAuditionSavesOnlyTheSelectedTypeAndPreservesItsListeningState() {
         val original = original()
         prefs.edit().putBoolean(enableKey, true).commit()
         launch(original)
@@ -250,14 +250,16 @@ class PeqRefinementUiTest {
         picker.findViewById<View>(R.id.peq_filter_confirm)!!.performClick()
         idle()
         assertFalse(picker.isShowing)
-        assertNull(PeqPreviewSession.current())
+        assertEquals(withType(original, PeqFilterType.HIGH_PASS), PeqPreviewSession.current())
         assertEquals(withType(original, PeqFilterType.HIGH_PASS), repository.load())
         assertEquals(repository.load(), fragment().editorState)
         assertTrue(prefs.getBoolean(enableKey, false))
         val reopened = filterPicker()
-        assertFalse(reopened.findViewById<View>(R.id.peq_filter_monitor)!!.isSelected)
-        assertNull(PeqPreviewSession.current())
+        assertTrue(reopened.findViewById<View>(R.id.peq_filter_monitor)!!.isSelected)
+        assertEquals(withType(original, PeqFilterType.HIGH_PASS), PeqPreviewSession.current())
         reopened.findViewById<View>(R.id.peq_filter_cancel)!!.performClick()
+        idle()
+        assertNull(PeqPreviewSession.current())
     }
 
     @Test fun numberedSettingsRespectEveryIndividualParameterLockWhenSaving() {
@@ -352,7 +354,7 @@ class PeqRefinementUiTest {
         assertNotNull(PeqPreviewSession.current())
         editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         idle()
-        assertNull(PeqPreviewSession.current())
+        assertEquals(withType(original, PeqFilterType.LOW_PASS), PeqPreviewSession.current())
         assertEquals(withType(original, PeqFilterType.LOW_PASS), repository.load())
     }
 

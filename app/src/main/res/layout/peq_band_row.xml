@@ -34,7 +34,7 @@
             <TextView android:id="@+id/peq_band_number" android:layout_width="0dp"
                 android:layout_height="0dp" android:gravity="center" android:textSize="14sp" android:textStyle="bold"
                 android:includeFontPadding="false" android:drawableBottom="@drawable/peq_band_number_settings"
-                android:drawablePadding="1dp" android:drawableTint="?attr/colorOnSecondaryContainer"
+                android:drawablePadding="-1dp" android:drawableTint="?attr/colorOnSecondaryContainer"
                 android:background="@drawable/peq_band_number_background" android:textColor="?attr/colorOnSecondaryContainer"
                 android:clickable="true" android:focusable="true" android:contentDescription="@string/peq_edit_band"
                 app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="@id/peq_header_edge_1"
@@ -116,9 +116,14 @@
                 android:layout_height="match_parent" android:gravity="center_vertical" android:background="?attr/selectableItemBackground"
                 android:clickable="true" android:focusable="true" android:textAppearance="?attr/textAppearanceBodySmall" />
         </LinearLayout>
-        <LinearLayout android:id="@+id/peq_gain_controls" android:layout_width="match_parent" android:layout_height="40dp"
+        <LinearLayout android:id="@+id/peq_gain_controls" android:layout_width="match_parent" android:layout_height="34dp"
             android:paddingHorizontal="4dp" android:gravity="center_vertical" android:orientation="horizontal">
-            <TextView android:id="@+id/peq_gain_label" android:layout_width="42dp" android:layout_height="match_parent"
+            <com.google.android.material.button.MaterialButton android:id="@+id/peq_gain_lock"
+                style="@style/Widget.Material3.Button.TextButton" android:layout_width="24dp"
+                android:layout_height="match_parent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"
+                android:insetTop="0dp" android:insetBottom="0dp"
+                app:icon="@drawable/ic_peq_lock_open" app:iconSize="13dp" app:iconPadding="0dp" app:iconGravity="textStart" />
+            <TextView android:id="@+id/peq_gain_label" android:layout_width="36dp" android:layout_height="match_parent"
                 android:gravity="center" android:maxLines="1" android:text="@string/peq_gain"
                 android:autoSizeTextType="uniform" android:autoSizeMinTextSize="10sp" android:autoSizeMaxTextSize="13sp"
                 android:textAppearance="?attr/textAppearanceBodyMedium" />
@@ -141,15 +146,15 @@
                 android:layout_height="match_parent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"
                 android:insetTop="0dp" android:insetBottom="0dp"
                 android:text="+" android:textSize="20sp" android:contentDescription="@string/peq_gain_increase" />
-            <com.google.android.material.button.MaterialButton android:id="@+id/peq_gain_lock"
-                style="@style/Widget.Material3.Button.TextButton" android:layout_width="28dp"
-                android:layout_height="match_parent" android:minWidth="0dp" android:minHeight="0dp" android:padding="5dp"
-                android:insetTop="0dp" android:insetBottom="0dp"
-                app:icon="@drawable/ic_peq_lock_open" app:iconSize="18dp" app:iconPadding="0dp" app:iconGravity="textStart" />
         </LinearLayout>
-        <LinearLayout android:id="@+id/peq_q_controls" android:layout_width="match_parent" android:layout_height="40dp"
+        <LinearLayout android:id="@+id/peq_q_controls" android:layout_width="match_parent" android:layout_height="34dp"
             android:paddingHorizontal="4dp" android:gravity="center_vertical" android:orientation="horizontal">
-            <TextView android:id="@+id/peq_q_label" android:layout_width="42dp" android:layout_height="match_parent"
+            <com.google.android.material.button.MaterialButton android:id="@+id/peq_q_lock"
+                style="@style/Widget.Material3.Button.TextButton" android:layout_width="24dp"
+                android:layout_height="match_parent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"
+                android:insetTop="0dp" android:insetBottom="0dp"
+                app:icon="@drawable/ic_peq_lock_open" app:iconSize="13dp" app:iconPadding="0dp" app:iconGravity="textStart" />
+            <TextView android:id="@+id/peq_q_label" android:layout_width="36dp" android:layout_height="match_parent"
                 android:gravity="center" android:maxLines="1" android:text="@string/peq_quality"
                 android:autoSizeTextType="uniform" android:autoSizeMinTextSize="10sp" android:autoSizeMaxTextSize="13sp"
                 android:textAppearance="?attr/textAppearanceBodyMedium" />
@@ -172,15 +177,15 @@
                 android:layout_height="match_parent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"
                 android:insetTop="0dp" android:insetBottom="0dp"
                 android:text="+" android:textSize="20sp" android:contentDescription="@string/peq_quality_increase" />
-            <com.google.android.material.button.MaterialButton android:id="@+id/peq_q_lock"
-                style="@style/Widget.Material3.Button.TextButton" android:layout_width="28dp"
-                android:layout_height="match_parent" android:minWidth="0dp" android:minHeight="0dp" android:padding="5dp"
-                android:insetTop="0dp" android:insetBottom="0dp"
-                app:icon="@drawable/ic_peq_lock_open" app:iconSize="18dp" app:iconPadding="0dp" app:iconGravity="textStart" />
         </LinearLayout>
-        <LinearLayout android:id="@+id/peq_frequency_controls" android:layout_width="match_parent" android:layout_height="40dp"
+        <LinearLayout android:id="@+id/peq_frequency_controls" android:layout_width="match_parent" android:layout_height="34dp"
             android:paddingHorizontal="4dp" android:gravity="center_vertical" android:orientation="horizontal">
-            <TextView android:id="@+id/peq_frequency_label" android:layout_width="42dp" android:layout_height="match_parent"
+            <com.google.android.material.button.MaterialButton android:id="@+id/peq_frequency_lock"
+                style="@style/Widget.Material3.Button.TextButton" android:layout_width="24dp"
+                android:layout_height="match_parent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"
+                android:insetTop="0dp" android:insetBottom="0dp"
+                app:icon="@drawable/ic_peq_lock_open" app:iconSize="13dp" app:iconPadding="0dp" app:iconGravity="textStart" />
+            <TextView android:id="@+id/peq_frequency_label" android:layout_width="36dp" android:layout_height="match_parent"
                 android:gravity="center" android:maxLines="1" android:text="@string/peq_card_frequency_label"
                 android:autoSizeTextType="uniform" android:autoSizeMinTextSize="10sp" android:autoSizeMaxTextSize="13sp"
                 android:textAppearance="?attr/textAppearanceBodyMedium" />
@@ -203,11 +208,6 @@
                 android:layout_height="match_parent" android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"
                 android:insetTop="0dp" android:insetBottom="0dp"
                 android:text="+" android:textSize="20sp" android:contentDescription="@string/peq_frequency_increase" />
-            <com.google.android.material.button.MaterialButton android:id="@+id/peq_frequency_lock"
-                style="@style/Widget.Material3.Button.TextButton" android:layout_width="28dp"
-                android:layout_height="match_parent" android:minWidth="0dp" android:minHeight="0dp" android:padding="5dp"
-                android:insetTop="0dp" android:insetBottom="0dp"
-                app:icon="@drawable/ic_peq_lock_open" app:iconSize="18dp" app:iconPadding="0dp" app:iconGravity="textStart" />
         </LinearLayout>
         <me.timschneeberger.rootlessjamesdsp.peq.PeqInlineFilterRow
             android:id="@+id/peq_inline_filter" android:layout_width="match_parent"

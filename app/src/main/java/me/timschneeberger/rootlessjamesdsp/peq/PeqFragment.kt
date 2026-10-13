@@ -88,6 +88,37 @@ class PeqFragment : Fragment() {
     private var stopFilterPreview: (() -> Unit)? = null
     private var inlineFilterDraft: PeqInlineFilterDraft? = null
     private var inlinePreviewToken: PeqPreviewSession.Token? = null
+    private var inlineFilterDialog: AlertDialog? = null
+    private var inlineFilterDialogBandId: String? = null
+    private class FineFilterBridge(
+        val bandId: String,
+        val synchronize: (PeqInlineFilterDraft?) -> Unit,
+        val preview: () -> Unit
+    )
+    private var fineFilterBridge: FineFilterBridge? = null
+    private var fineFilterDialog: AlertDialog? = null
+    private var filterPreviewFromDialog = false
+    private var committingInlineFilter = false
+    private val resyncInlineFilter = Runnable {
+        if (binding != null && displaySettings.showInlineFilters)
+            bandAdapter.submitInlineFilter(true, inlineFilterDraft)
+    }
+    private var filterLockPreferences: SharedPreferences? = null
+    private val filterLockListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (binding != null) {
+            // Hidden inline rows have no adapter-owned draft, so locks must also revoke the
+            // shared audition here after a dialog hands its listening session back to the card.
+            inlineFilterDraft?.bandId?.let { if (!canEditInlineFilter(it)) stopInlineFilterPreview() }
+            syncInlineFilterDialog()
+            fineFilterBridge?.let { bridge ->
+                // External numeric locks restore the fine editor's fields above. Refresh its
+                // existing audition after that guarded sync, but never during markUsed/save.
+                val numericLockChanged = listOf(PeqEditField.GAIN, PeqEditField.QUALITY, PeqEditField.FREQUENCY)
+                    .any { key == "${bridge.bandId}.${it.name}" }
+                if (numericLockChanged && canEditInlineFilter(bridge.bandId)) bridge.preview()
+            }
+        }
+    }
     private val addButtonGestures = mutableListOf<PeqAddButtonGestures>()
     private var pendingExportFileName: String? = null
     private val importPresets = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -161,6 +192,9 @@ class PeqFragment : Fragment() {
         powerPreferences = requireContext().getSharedPreferences(Constants.PREF_GEQ, Context.MODE_PRIVATE).also {
             it.registerOnSharedPreferenceChangeListener(powerListener)
         }
+        filterLockPreferences = requireContext().getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).also {
+            it.registerOnSharedPreferenceChangeListener(filterLockListener)
+        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View {
@@ -181,7 +215,7 @@ class PeqFragment : Fragment() {
             onInteractionStarted = ::startInteraction, onEditField = { id, field -> editBand(id, field) },
             onEditType = ::showBandFilterType, onToggleSelection = ::toggleSelection,
             onStartDrag = { holder ->
-                if (!editingSelection) {
+                if (canMoveBand(holder.bindingAdapterPosition)) {
                     stopInlineFilterPreview()
                     flushPendingSave()
                     bandTouchHelper?.startDrag(holder)
@@ -194,7 +228,7 @@ class PeqFragment : Fragment() {
             override fun isLongPressDragEnabled() = false
             override fun isItemViewSwipeEnabled() = false
             override fun getMovementFlags(list: RecyclerView, holder: RecyclerView.ViewHolder): Int =
-                if (editingSelection || editorState.bands.size < 2) 0
+                if (!canMoveBand(holder.bindingAdapterPosition)) 0
                 else makeMovementFlags(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0)
             override fun onMove(list: RecyclerView, from: RecyclerView.ViewHolder, to: RecyclerView.ViewHolder) =
                 moveBand(from.bindingAdapterPosition, to.bindingAdapterPosition)
@@ -334,6 +368,7 @@ class PeqFragment : Fragment() {
         binding?.apply {
             if (editorState.bands.none { it.id == selectedBandId }) selectedBandId = editorState.bands.firstOrNull()?.id
             bandAdapter.submitState(editorState, interactingBand)
+            bandAdapter.submitReorderPolicy(displaySettings.allowLockedBandReorder)
             bandAdapter.submitInlineFilter(displaySettings.showInlineFilters, inlineFilterDraft)
             renderSelection()
             // Gesture updates must not trail the thumb behind a transition animation.
@@ -410,11 +445,16 @@ class PeqFragment : Fragment() {
         renderSelection()
     }
 
+    /** Recheck movement permission at gesture start and every drop, including stale callbacks. */
+    internal fun canMoveBand(index: Int): Boolean =
+        !editingSelection && editorState.bands.size > 1 && index in editorState.bands.indices &&
+            (displaySettings.allowLockedBandReorder ||
+                !PeqBandLockStore(requireContext()).isBandLocked(editorState.bands[index].id))
+
     /** Move intact bands by stable identity; persistence is flushed when the drag ends. */
     internal fun moveBand(from: Int, to: Int): Boolean {
-        if (editingSelection || from !in editorState.bands.indices || to !in editorState.bands.indices || from == to)
+        if (!canMoveBand(from) || to !in editorState.bands.indices || from == to)
             return false
-        if (PeqBandLockStore(requireContext()).isBandLocked(editorState.bands[from].id)) return false
         stopInlineFilterPreview()
         cancelPendingSave()
         editorState = PeqBandOrder.move(editorState, from, to)
@@ -623,32 +663,63 @@ class PeqFragment : Fragment() {
     }
 
     private fun stopInlineFilterPreview() {
+        handler.removeCallbacks(resyncInlineFilter)
         val hadInlinePreview = inlineFilterDraft != null || inlinePreviewToken != null
         inlineFilterDraft = null
+        filterPreviewFromDialog = false
         inlinePreviewToken?.let { if (PeqPreviewSession.end(it)) notifyAudioAndPreview() }
         inlinePreviewToken = null
         if (::bandAdapter.isInitialized) bandAdapter.submitInlineFilter(displaySettings.showInlineFilters, null)
+        syncInlineFilterDialog()
         if (hadInlinePreview) clearMarker() else binding?.peqCurve?.setPreviewStatus(null)
         binding?.peqCurve?.setState(editorState, animate = false)
     }
 
+    private fun dismissFineFilterDialog() {
+        val dialog = fineFilterDialog ?: return
+        stopInlineFilterPreview()
+        // Release ownership before Android dispatches the (possibly queued) dismiss callback.
+        fineFilterBridge = null
+        fineFilterDialog = null
+        dialog.dismiss()
+    }
+
     private fun onInlineFilterAction(id: String, action: PeqInlineFilterAction) {
         if (action == PeqInlineFilterAction.Cancel || action == PeqInlineFilterAction.Unavailable) {
-            if (inlineFilterDraft?.bandId == id) stopInlineFilterPreview()
+            if (inlineFilterDraft?.bandId == id) {
+                // RecyclerView may detach/rebind a card while its dialog still owns the audition.
+                // A hidden inline row is likewise not the lifetime owner of a dialog's session.
+                val anotherOwner = inlineFilterDialogBandId == id || fineFilterBridge?.bandId == id || committingInlineFilter ||
+                    (filterPreviewFromDialog && !displaySettings.showInlineFilters)
+                if (action == PeqInlineFilterAction.Unavailable && anotherOwner && canEditInlineFilter(id)) {
+                    // The adapter relinquishes its presentation copy before this callback. Restore
+                    // it after detach/bind completes so reattached cards mirror the surviving owner.
+                    if (displaySettings.showInlineFilters) {
+                        handler.removeCallbacks(resyncInlineFilter)
+                        handler.post(resyncInlineFilter)
+                    }
+                    return
+                }
+                stopInlineFilterPreview()
+            }
             return
         }
-        if (editingSelection || !PeqBandLockStore(requireContext()).canEdit(id, PeqEditField.FILTER_TYPE)) {
+        if (!canEditInlineFilter(id)) {
             stopInlineFilterPreview()
             return
         }
         flushPendingSave()
         val band = editorState.bands.firstOrNull { it.id == id } ?: return
-        stopFilterPreview?.invoke()
+        if (inlineFilterDialogBandId != id && fineFilterBridge?.bandId != id) {
+            inlineFilterDialog?.dismiss()
+            dismissFineFilterDialog()
+            stopFilterPreview?.invoke()
+        }
         if (inlineFilterDraft?.bandId != id) stopInlineFilterPreview()
+        if (inlineFilterDialogBandId == id || fineFilterBridge?.bandId == id) filterPreviewFromDialog = true
         val old = inlineFilterDraft ?: PeqInlineFilterDraft(id, band.type)
         if (action == PeqInlineFilterAction.Confirm) {
-            val next = editorState.copy(bands = editorState.bands.map { if (it.id == id) it.copy(type = old.type) else it })
-            if (save(next)) { stopInlineFilterPreview(); selectBand(id) }
+            confirmInlineFilter(old)
             return
         }
         val draft = when (action) {
@@ -656,9 +727,41 @@ class PeqFragment : Fragment() {
             is PeqInlineFilterAction.Monitor -> old.copy(monitoring = action.enabled)
             else -> return
         }
-        inlineFilterDraft = draft
+        updateInlineFilterPreview(draft)
+    }
+
+    private fun canEditInlineFilter(id: String): Boolean = !editingSelection &&
+        editorState.bands.any { it.id == id } && PeqBandLockStore(requireContext()).canEdit(id, PeqEditField.FILTER_TYPE)
+
+    private fun syncInlineFilterDialog() {
+        if (binding == null) return
+        fineFilterBridge?.let { bridge ->
+            bridge.synchronize(inlineFilterDraft?.takeIf { it.bandId == bridge.bandId })
+        }
+        val dialog = inlineFilterDialog ?: return
+        val id = inlineFilterDialogBandId ?: return
+        val committed = editorState.bands.firstOrNull { it.id == id }?.type ?: return
+        val draft = inlineFilterDraft?.takeIf { it.bandId == id }
+        PeqFilterTypeDialog.setState(dialog, committed, draft?.type ?: committed, draft?.monitoring == true)
+    }
+
+    private fun updateInlineFilterPreview(draft: PeqInlineFilterDraft) {
+        val id = draft.bandId
+        if (!canEditInlineFilter(id)) { stopInlineFilterPreview(); return }
+        fineFilterBridge?.takeIf { it.bandId == id }?.let { bridge ->
+            bridge.synchronize(draft)
+            bridge.preview()
+            return
+        }
         val next = editorState.copy(bands = editorState.bands.map { if (it.id == id) it.copy(type = draft.type) else it })
-        if (draft.monitoring) {
+        publishInlineFilterPreview(draft, next)
+    }
+
+    private fun publishInlineFilterPreview(draft: PeqInlineFilterDraft, next: PeqState) {
+        val id = draft.bandId
+        val editableType = canEditInlineFilter(id)
+        inlineFilterDraft = draft.takeIf { editableType }
+        if (draft.monitoring && editableType) {
             val token = inlinePreviewToken
             if (token == null) inlinePreviewToken = PeqPreviewSession.begin(next)
             else PeqPreviewSession.update(token, next)
@@ -667,117 +770,81 @@ class PeqFragment : Fragment() {
             inlinePreviewToken?.let { if (PeqPreviewSession.end(it)) notifyAudioAndPreview() }
             inlinePreviewToken = null
         }
-        if (draft.monitoring) {
-            binding?.peqCurve?.setState(next, animate = false)
-            selectBand(id)
-            binding?.peqCurve?.setPreviewStatus(id, listening = true)
-        } else {
-            clearMarker()
-            binding?.peqCurve?.setState(editorState, animate = false)
-        }
-        bandAdapter.submitInlineFilter(displaySettings.showInlineFilters, draft)
+        binding?.peqCurve?.setState(next, animate = false)
+        selectBand(id)
+        binding?.peqCurve?.setPreviewStatus(id, listening = draft.monitoring)
+        bandAdapter.submitInlineFilter(displaySettings.showInlineFilters, inlineFilterDraft)
+        syncInlineFilterDialog()
     }
 
-    private fun showBandFilterType(id: String) = showFilterTypePicker(id)
+    private fun confirmInlineFilter(draft: PeqInlineFilterDraft): Boolean {
+        if (!canEditInlineFilter(draft.bandId)) { stopInlineFilterPreview(); return false }
+        inlineFilterDraft = draft
+        val next = editorState.copy(bands = editorState.bands.map {
+            if (it.id == draft.bandId) it.copy(type = draft.type) else it
+        })
+        committingInlineFilter = true
+        val saved = try { save(next) } finally { committingInlineFilter = false }
+        if (saved) updateInlineFilterPreview(draft)
+        return saved
+    }
 
-    private fun showFilterTypePicker(bandId: String?, scopeIds: Set<String>? = null) {
-        if (bandId != null && (editingSelection || editorState.bands.none { it.id == bandId })) return
+    private fun showBandFilterType(id: String) {
         val locks = PeqBandLockStore(requireContext())
-        stopInlineFilterPreview()
+        if (editingSelection || editorState.bands.none { it.id == id } || locks.isBandLocked(id)) return
+        if (inlineFilterDialogBandId == id && inlineFilterDialog?.isShowing == true) return
+        inlineFilterDialog?.dismiss()
         flushPendingSave()
-        stopFilterPreview?.invoke()
-        clearMarker()
-        val ids = bandId?.let { setOf(it) } ?: scopeIds ?: requireOperationIds() ?: return
-        val allowed = unlocked(ids, PeqEditField.FILTER_TYPE)
-        if (allowed.isEmpty() && bandId == null) {
-            track(MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.peq_filter_type)
-                .setMessage(protectionHint(ids, allowed)).setPositiveButton(android.R.string.ok, null).create()).show()
-            return
+        if (fineFilterBridge?.bandId != id) {
+            dismissFineFilterDialog()
+            stopFilterPreview?.invoke()
         }
-        var selected = if (bandId != null) editorState.bands.first { it.id == bandId }.type
-            else editorState.bands.filter { it.id in allowed }.map { it.type }.distinct().singleOrNull()
-        var previewToken: PeqPreviewSession.Token? = null
-        var listening = false
-        fun draft(): PeqState {
-            val current = unlocked(ids, PeqEditField.FILTER_TYPE)
-            val type = selected ?: return editorState
-            return if (current.isEmpty()) editorState else PeqSelection.update(editorState, current) {
-                PeqBulkParameters.filterType(it, type)
-            }
-        }
-        fun updatePreview() {
-            val next = draft()
-            if (listening) {
-                val token = previewToken
-                if (token == null) previewToken = PeqPreviewSession.begin(next)
-                else PeqPreviewSession.update(token, next)
-                notifyAudioAndPreview()
-            } else {
-                previewToken?.let { if (PeqPreviewSession.end(it)) notifyAudioAndPreview() }
-                previewToken = null
-            }
-            // Monitoring owns both the temporary curve and its marker.
-            // Unconfirmed selections remain local when monitoring is off.
-            if (bandId != null) {
-                if (listening) {
-                    binding?.peqCurve?.setState(next, animate = false)
-                    selectBand(bandId)
-                    binding?.peqCurve?.setPreviewStatus(bandId, listening = true)
-                } else {
-                    clearMarker()
-                    binding?.peqCurve?.setState(editorState, animate = false)
-                }
-            }
-        }
-        fun clearPreview() {
-            listening = false
-            previewToken?.let { if (PeqPreviewSession.end(it)) notifyAudioAndPreview() }
-            previewToken = null
-            clearMarker()
-            binding?.peqCurve?.setState(editorState, animate = false)
-        }
+        if (inlineFilterDraft?.bandId != id || !canEditInlineFilter(id)) stopInlineFilterPreview()
+        val committed = editorState.bands.first { it.id == id }.type
+        val inherited = inlineFilterDraft ?: PeqInlineFilterDraft(id, committed)
+        var confirmed = false
         lateinit var dialog: AlertDialog
-        val stop: () -> Unit = { clearPreview(); PeqFilterTypeDialog.setMonitoring(dialog, false) }
-        dialog = PeqFilterTypeDialog.create(requireContext(), getString(R.string.peq_filter_type), selected,
-            onTypeSelected = { selected = it; updatePreview() },
-            onMonitorChanged = { enabled ->
-                listening = enabled && unlocked(ids, PeqEditField.FILTER_TYPE).isNotEmpty()
-                PeqFilterTypeDialog.setMonitoring(dialog, listening)
-                updatePreview()
+        val stop: () -> Unit = {
+            if (inlineFilterDialog === dialog) stopInlineFilterPreview()
+        }
+        dialog = PeqFilterTypeDialog.create(requireContext(), getString(R.string.peq_filter_type), committed,
+            onTypeSelected = { type ->
+                if (inlineFilterDialog === dialog) onInlineFilterAction(id, PeqInlineFilterAction.Select(type))
             },
-            onConfirm = {
-                selected = it
-                val current = unlocked(ids, PeqEditField.FILTER_TYPE)
-                if (current.isEmpty()) { toast(protectionHint(ids, current)); false }
-                else if (save(draft())) {
-                    if (bandId == null) { clearMarker(); toast(protectionHint(ids, current)) } else selectBand(bandId)
-                    true
-                } else false
+            onMonitorChanged = { enabled ->
+                if (inlineFilterDialog === dialog) onInlineFilterAction(id, PeqInlineFilterAction.Monitor(enabled))
+            },
+            onConfirm = { type ->
+                if (inlineFilterDialog !== dialog) false else {
+                    val draft = inlineFilterDraft ?: PeqInlineFilterDraft(id, type)
+                    confirmInlineFilter(draft.copy(type = type)).also { confirmed = it }
+                }
             }, onDismiss = {
                 dialogs.remove(dialog)
-                clearPreview()
+                if (inlineFilterDialog === dialog) {
+                    inlineFilterDialog = null
+                    inlineFilterDialogBandId = null
+                    if (!confirmed) stopInlineFilterPreview()
+                }
                 if (stopFilterPreview === stop) stopFilterPreview = null
-            }, lockedHint = when {
-                bandId == null -> protectionHint(ids, allowed)
-                locks.isBandLocked(bandId) -> getString(R.string.peq_filter_band_locked_hint)
-                else -> null
-            }, isLocked = bandId?.let { id -> { locks.isFieldLocked(id, PeqEditField.FILTER_TYPE) } },
-            canToggleLock = { bandId != null && !locks.isBandLocked(bandId) },
-            canEdit = { unlocked(ids, PeqEditField.FILTER_TYPE).isNotEmpty() },
+            }, isLocked = { locks.isFieldLocked(id, PeqEditField.FILTER_TYPE) },
+            canToggleLock = { !editingSelection && editorState.bands.any { it.id == id } && !locks.isBandLocked(id) },
+            canEdit = { canEditInlineFilter(id) },
             onToggleLock = {
-                if (bandId != null && !locks.isBandLocked(bandId)) {
-                    val locked = !locks.isFieldLocked(bandId, PeqEditField.FILTER_TYPE)
-                    locks.setFieldLocked(bandId, PeqEditField.FILTER_TYPE, locked)
-                    if (locked) {
-                        selected = editorState.bands.first { it.id == bandId }.type
-                        dialog.findViewById<PeqFilterSelector>(R.id.peq_filter_types)?.setSelection(selected)
-                        stop()
-                    }
+                if (inlineFilterDialog === dialog && !editingSelection && !locks.isBandLocked(id)) {
+                    val locked = !locks.isFieldLocked(id, PeqEditField.FILTER_TYPE)
+                    locks.setFieldLocked(id, PeqEditField.FILTER_TYPE, locked)
+                    if (locked) stopInlineFilterPreview()
                     bandAdapter.notifyDataSetChanged()
+                    syncInlineFilterDialog()
                 }
             })
+        inlineFilterDialog = dialog
+        inlineFilterDialogBandId = id
+        filterPreviewFromDialog = true
         stopFilterPreview = stop
         dialogs.add(dialog)
+        if (canEditInlineFilter(id)) updateInlineFilterPreview(inherited) else syncInlineFilterDialog()
         dialog.show()
     }
 
@@ -982,6 +1049,7 @@ class PeqFragment : Fragment() {
                         showFrequencySlider = ui.peqShowFrequencySlider.isChecked))) {
                         if (displayControls.save(display)) {
                             displaySettings = display
+                            bandAdapter.submitReorderPolicy(display.allowLockedBandReorder)
                             bandAdapter.submitInlineFilter(display.showInlineFilters, inlineFilterDraft)
                             binding?.peqCurve?.setDisplayOptions(display)
                             if (binding?.peqCurve?.isMarkerVisible == true) scheduleMarkerHide()
@@ -1003,11 +1071,17 @@ class PeqFragment : Fragment() {
         val locks = PeqBandLockStore(requireContext())
         // The number badge always opens a read-only view; field shortcuts still obey locks.
         if (editingSelection || (focusField != null && !locks.canEdit(id, focusField))) return
-        stopInlineFilterPreview()
+        if (fineFilterBridge?.bandId == id && fineFilterDialog?.isShowing == true) return
+        dismissFineFilterDialog()
         flushPendingSave()
-        stopFilterPreview?.invoke()
-        clearMarker()
+        if (inlineFilterDialogBandId != id) {
+            inlineFilterDialog?.dismiss()
+            stopFilterPreview?.invoke()
+        }
+        if (inlineFilterDraft?.bandId != id || locks.isBandLocked(id)) stopInlineFilterPreview()
+        selectBand(id)
         val band = editorState.bands.firstOrNull { it.id == id } ?: return
+        val inheritedFilter = inlineFilterDraft?.takeIf { it.bandId == id }
         val ui = PeqBandDialogBinding.inflate(layoutInflater)
         val titleUi = PeqBandDialogTitleBinding.inflate(layoutInflater)
         titleUi.peqBandDialogTitle.text = getString(R.string.peq_fine_band_title,
@@ -1017,16 +1091,17 @@ class PeqFragment : Fragment() {
         fun gainLocked() = !locks.canEdit(id, PeqEditField.GAIN)
         fun qualityLocked() = !locks.canEdit(id, PeqEditField.QUALITY)
         fun typeLocked() = !locks.canEdit(id, PeqEditField.FILTER_TYPE)
-        var selectedType = band.type
+        var selectedType = inheritedFilter?.type ?: band.type
         var changingMode = false
+        var synchronizingSharedFilter = false
         var previewDraft: () -> Unit = {}
         val monitorTextColors = ui.peqBandMonitor.textColors
         var qualitySlider: PeqFineSliderControl? = null
-        var listening = false
-        var previewToken: PeqPreviewSession.Token? = null
+        var listening = inheritedFilter?.monitoring == true
         fun clearAudioDraft() {
-            previewToken?.let { if (PeqPreviewSession.end(it)) notifyAudioAndPreview() }
-            previewToken = null
+            if (activeDialog != null && fineFilterDialog !== activeDialog) return
+            inlinePreviewToken?.let { if (PeqPreviewSession.end(it)) notifyAudioAndPreview() }
+            inlinePreviewToken = null
         }
         fun renderListening() {
             if (typeLocked()) {
@@ -1042,17 +1117,17 @@ class PeqFragment : Fragment() {
             ui.peqBandMonitor.setText(if (listening) R.string.peq_live_monitor_on else R.string.peq_live_monitor_off)
         }
         val stop: () -> Unit = {
-            listening = false
-            clearAudioDraft()
-            renderListening()
-            clearMarker()
-            binding?.peqCurve?.setState(editorState, animate = false)
+            if (activeDialog == null || fineFilterDialog === activeDialog) {
+                listening = false
+                stopInlineFilterPreview()
+                renderListening()
+            }
         }
         stopFilterPreview = stop
         val frequencyText = PeqBandAdapter.number(band.frequency, 4)
         var qualityEditor = PeqQualityEditor(band.q, frequencyText.toDouble(), band.qualityDisplay)
         ui.peqBandType.committedType = band.type
-        ui.peqBandType.setSelection(band.type)
+        ui.peqBandType.setSelection(selectedType)
         ui.peqFrequencyInput.setText(frequencyText)
         ui.peqGainInput.setText(PeqBandAdapter.number(band.gain, 4))
         val gainLimit = PeqBandAdapter.number(editorState.gainRange)
@@ -1139,20 +1214,18 @@ class PeqFragment : Fragment() {
                 q = requireNotNull(q), qualityDisplay = if (qualityLocked()) current.qualityDisplay else qualityEditor.mode)
         }
         previewDraft = preview@{
-            if (changingMode) return@preview
+            if (changingMode || synchronizingSharedFilter || fineFilterDialog !== activeDialog || activeDialog == null) return@preview
             if (locks.isBandLocked(id)) {
                 stop()
                 return@preview
             }
             renderListening()
-            if (!listening) {
-                clearAudioDraft()
-                clearMarker()
-                binding?.peqCurve?.setState(editorState, animate = false)
-                return@preview
-            }
+            if (!listening) clearAudioDraft()
             val edited = editedBand(showErrors = false) ?: run {
                 clearAudioDraft()
+                inlineFilterDraft = PeqInlineFilterDraft(id, selectedType, listening).takeIf { !typeLocked() }
+                bandAdapter.submitInlineFilter(displaySettings.showInlineFilters, inlineFilterDraft)
+                syncInlineFilterDialog()
                 clearMarker()
                 binding?.peqCurve?.setState(editorState, animate = false)
                 return@preview
@@ -1160,17 +1233,11 @@ class PeqFragment : Fragment() {
             val next = editorState.copy(bands = editorState.bands.map {
                 if (it.id == id) edited else it
             })
-            binding?.peqCurve?.setState(next, animate = false)
-            selectBand(id)
-            binding?.peqCurve?.setPreviewStatus(id, listening)
-            if (listening) {
-                val token = previewToken
-                if (token == null) previewToken = PeqPreviewSession.begin(next)
-                else PeqPreviewSession.update(token, next)
-                notifyAudioAndPreview()
-            }
+            filterPreviewFromDialog = true
+            publishInlineFilterPreview(PeqInlineFilterDraft(id, edited.type, listening), next)
         }
         ui.peqBandMonitor.setOnClickListener {
+            if (fineFilterDialog !== activeDialog) return@setOnClickListener
             if (typeLocked()) { renderListening(); return@setOnClickListener }
             listening = !listening
             renderListening()
@@ -1207,6 +1274,14 @@ class PeqFragment : Fragment() {
             })
         fun renderLocks() {
             val mainLocked = locks.isBandLocked(id)
+            val bandEnabled = editorState.bands.firstOrNull { it.id == id }?.enabled == true
+            titleUi.peqBandDialogPower.apply {
+                isEnabled = !mainLocked
+                isSelected = bandEnabled
+                iconTint = ColorStateList.valueOf(if (bandEnabled && !mainLocked)
+                    android.graphics.Color.rgb(46, 170, 83) else android.graphics.Color.GRAY)
+                contentDescription = getString(if (bandEnabled) R.string.peq_disable_band else R.string.peq_enable_band)
+            }
             titleUi.peqBandDialogLock.apply {
                 setIconResource(if (mainLocked) R.drawable.ic_peq_lock else R.drawable.ic_peq_lock_open)
                 iconTint = ColorStateList.valueOf(if (mainLocked) android.graphics.Color.rgb(211, 47, 47) else android.graphics.Color.GRAY)
@@ -1238,7 +1313,7 @@ class PeqFragment : Fragment() {
         listOf(ui.peqFrequencyLock to PeqEditField.FREQUENCY, ui.peqGainLock to PeqEditField.GAIN,
             ui.peqQualityLock to PeqEditField.QUALITY, ui.peqTypeLock to PeqEditField.FILTER_TYPE).forEach { (button, field) ->
             button.setOnClickListener {
-                if (!locks.isBandLocked(id)) {
+                if (fineFilterDialog === activeDialog && !locks.isBandLocked(id)) {
                     val locked = !locks.isFieldLocked(id, field)
                     locks.setFieldLocked(id, field, locked)
                     if (locked) {
@@ -1262,6 +1337,7 @@ class PeqFragment : Fragment() {
             }
         }
         titleUi.peqBandDialogLock.setOnClickListener {
+            if (fineFilterDialog !== activeDialog) return@setOnClickListener
             val locked = !locks.isBandLocked(id)
             locks.setBandLocked(id, locked)
             if (locked) {
@@ -1279,6 +1355,24 @@ class PeqFragment : Fragment() {
             renderLocks()
             bandAdapter.notifyDataSetChanged()
         }
+        titleUi.peqBandDialogPower.setOnClickListener {
+            if (fineFilterDialog !== activeDialog || locks.isBandLocked(id)) return@setOnClickListener
+            val current = editorState.bands.firstOrNull { it.id == id } ?: return@setOnClickListener
+            // Like the card power control, this changes only the saved bypass state.
+            // Unconfirmed filter/slider edits remain a separate visual/audio draft.
+            val previousPreview = PeqPreviewSession.current()
+            val owner = inlinePreviewToken
+            if (owner != null && previousPreview != null) PeqPreviewSession.update(owner,
+                previousPreview.copy(bands = previousPreview.bands.map {
+                    if (it.id == id) it.copy(enabled = !current.enabled) else it
+                }))
+            val saved = save(editorState.copy(bands = editorState.bands.map {
+                if (it.id == id) current.copy(enabled = !current.enabled) else it
+            }))
+            if (!saved && owner != null && previousPreview != null) PeqPreviewSession.update(owner, previousPreview)
+            renderLocks()
+            previewDraft()
+        }
         renderLocks()
         renderListening()
         val dialog = MaterialAlertDialogBuilder(requireContext()).setCustomTitle(titleUi.root)
@@ -1286,6 +1380,30 @@ class PeqFragment : Fragment() {
             .setNegativeButton(android.R.string.cancel, null)
             .setNeutralButton(R.string.peq_delete_band, null).create()
         activeDialog = dialog
+        val bridge = FineFilterBridge(id, synchronize = { draft ->
+            val current = editorState.bands.firstOrNull { it.id == id } ?: band
+            synchronizingSharedFilter = true
+            try {
+                selectedType = if (typeLocked()) current.type else draft?.type ?: current.type
+                listening = !typeLocked() && draft?.monitoring == true
+                ui.peqBandType.committedType = current.type
+                ui.peqBandType.setSelection(selectedType)
+                // An external card/popup lock has the same effect as this dialog's lock buttons.
+                // Only newly protected numeric fields are restored; other fine drafts stay local.
+                if (frequencyLocked()) ui.peqFrequencyInput.setText(PeqBandAdapter.number(current.frequency, 4))
+                if (gainLocked()) ui.peqGainInput.setText(PeqBandAdapter.number(current.gain, 4))
+                if (qualityLocked()) {
+                    qualityEditor = PeqQualityEditor(current.q,
+                        frequency()?.takeIf { PeqModel.validFrequency(it) } ?: current.frequency, current.qualityDisplay)
+                    renderQualityMode()
+                }
+                updateTypeFields()
+                renderLocks()
+            } finally { synchronizingSharedFilter = false }
+        }, preview = { previewDraft() })
+        fineFilterBridge = bridge
+        fineFilterDialog = dialog
+        filterPreviewFromDialog = true
         var confirmed = false
         dialog.setOnShowListener {
             renderLocks()
@@ -1303,23 +1421,25 @@ class PeqFragment : Fragment() {
                     ?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT) }
             }
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                if (locks.isBandLocked(id)) return@setOnClickListener
+                if (fineFilterDialog !== dialog || locks.isBandLocked(id)) return@setOnClickListener
                 val edited = editedBand() ?: return@setOnClickListener
                 if (save(editorState.copy(bands = editorState.bands.map { if (it.id == id) edited else it }))) {
                     confirmed = true
+                    // Persist first, then update the shared owner without an end/begin audio gap.
+                    previewDraft()
                     dialog.dismiss()
                 }
             }
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).apply {
                 isEnabled = !locks.isBandLocked(id) && editorState.bands.size > 1
                 setOnClickListener {
-                    deleteBands(setOf(id)) { dialog.dismiss() }
+                    if (fineFilterDialog === dialog) deleteBands(setOf(id)) { dialog.dismiss() }
                 }
             }
         }
         ui.peqBandCopy.isEnabled = !locks.isBandLocked(id) && editorState.bands.size < PeqModel.MAX_BANDS
         ui.peqBandCopy.setOnClickListener {
-            if (locks.isBandLocked(id)) return@setOnClickListener
+            if (fineFilterDialog !== dialog || locks.isBandLocked(id)) return@setOnClickListener
             val edited = editedBand() ?: return@setOnClickListener
             if (editorState.bands.size >= PeqModel.MAX_BANDS) return@setOnClickListener
             val index = editorState.bands.indexOfFirst { it.id == id }
@@ -1331,13 +1451,21 @@ class PeqFragment : Fragment() {
         track(dialog).also {
             it.setOnDismissListener {
                 dialogs.remove(it)
+                val ownsPreview = fineFilterBridge === bridge
+                if (ownsPreview) {
+                    fineFilterBridge = null
+                    fineFilterDialog = null
+                    if (!confirmed) stopInlineFilterPreview()
+                }
                 bandAdapter.notifyDataSetChanged()
-                stop()
                 if (stopFilterPreview === stop) stopFilterPreview = null
-                binding?.peqCurve?.setState(editorState, animate = false)
-                if (confirmed) selectBand(id) else clearMarker()
+                if (confirmed && ownsPreview) {
+                    inlineFilterDraft?.takeIf { it.bandId == id }?.let(::updateInlineFilterPreview)
+                        ?: selectBand(id)
+                }
             }
         }.show()
+        previewDraft()
     }
 
     private fun track(dialog: AlertDialog): AlertDialog {
@@ -1379,6 +1507,8 @@ class PeqFragment : Fragment() {
     }
 
     override fun onDestroy() {
+        filterLockPreferences?.unregisterOnSharedPreferenceChangeListener(filterLockListener)
+        filterLockPreferences = null
         powerPreferences?.unregisterOnSharedPreferenceChangeListener(powerListener)
         powerPreferences = null
         context?.unregisterLocalReceiver(receiver)

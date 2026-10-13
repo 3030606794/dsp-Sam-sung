@@ -3,9 +3,10 @@ package me.timschneeberger.rootlessjamesdsp.peq
 import java.util.Collections
 
 /**
- * A dialog's temporary audition bank, shared with the in-process audio service.
- * It never writes preferences or changes the effect/band enable switches. The dialog must end
- * its session when listening stops, it closes, or its host pauses. Process death also clears it.
+ * A temporary audition bank, shared with the in-process audio service.
+ * It never writes preferences or changes the effect/band enable switches. A card and its filter
+ * dialog can hand off the same session, including after confirmation. The host ends it when
+ * listening stops, a draft is cancelled/protected, or the host pauses. Process death also clears it.
  */
 object PeqPreviewSession {
     class Token internal constructor()

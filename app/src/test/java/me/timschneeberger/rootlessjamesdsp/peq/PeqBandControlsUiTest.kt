@@ -605,9 +605,15 @@ class PeqBandControlsUiTest {
         assertEquals(afterFrequency.gain, restored.gain, 0.0)
     }
 
-    @Test fun preciseFrequencyAndGainDraftOnlyUpdatesTheMarkerWhileMonitoringAndCancelRestoresSavedParameters() {
+    @Test fun preciseFrequencyAndGainDraftUpdatesTheMarkerButCancelRestoresSavedParameters() {
         val original = PeqState(listOf(PeqBand(frequency = 200.0), PeqBand(frequency = 1000.0, gain = -3.0)))
+        PeqEditorPreferences(application).save(PeqEditorSettings(showMarkerPreviewStatus = true))
         launch(original)
+        fun assertStatus(marker: PeqResponseView.BandMarker, listening: Boolean) {
+            val label = application.getString(if (listening) R.string.peq_marker_listening else R.string.peq_marker_preview)
+            val status = marker.labelRuns.flatten().single { it.text == label }
+            assertEquals(if (listening) Color.rgb(46, 125, 50) else Color.rgb(25, 118, 210), status.color)
+        }
         press(row(1), R.id.peq_band_number)
         idle()
         val dialog = ShadowDialog.getLatestDialog() as AlertDialog
@@ -617,8 +623,15 @@ class PeqBandControlsUiTest {
         assertFalse(monitor.isSelected)
         frequency.setText("1234.5")
         gain.setText("7.25")
-        assertEquals("Draft fields must not alter the graph while monitoring is off", original, curve().requestedState)
-        assertNull(drawMarkerOrNull())
+        val parameterDraft = original.copy(bands = original.bands.mapIndexed { index, band ->
+            if (index == 1) band.copy(frequency = 1234.5, gain = 7.25) else band
+        })
+        assertEquals("Monitoring off still previews the draft graph", parameterDraft, curve().requestedState)
+        val silentMarker = drawMarker()
+        assertEquals(original.bands[1].id, silentMarker.bandId)
+        assertEquals("1234.5 Hz", silentMarker.frequencyText)
+        assertEquals("+7.25 dB", silentMarker.gainText)
+        assertStatus(silentMarker, listening = false)
         assertNull(PeqPreviewSession.current())
         assertEquals(original, fragment().editorState)
         assertEquals(original, repository.load())
@@ -633,12 +646,16 @@ class PeqBandControlsUiTest {
         assertEquals(original.bands[1].id, marker.bandId)
         assertEquals("1234.5 Hz", marker.frequencyText)
         assertEquals("+7.25 dB", marker.gainText)
+        assertStatus(marker, listening = true)
         assertEquals(curve().requestedState, PeqPreviewSession.current())
         assertEquals(original, fragment().editorState)
         assertEquals(original, repository.load())
         val type = PeqFilterType.LOW_PASS
         val selector = dialog.findViewById<PeqFilterSelector>(R.id.peq_band_type)!!
         selector.setSelection(type, notify = true)
+        val filterDraft = parameterDraft.copy(bands = parameterDraft.bands.mapIndexed { index, band ->
+            if (index == 1) band.copy(type = type) else band
+        })
         assertEquals(type, requireNotNull(curve().requestedState).bands[1].type)
         assertEquals(7.25, drawMarker().gain, 0.0)
         assertEquals(View.VISIBLE, dialog.findViewById<View>(R.id.peq_gain_box)!!.visibility)
@@ -648,8 +665,11 @@ class PeqBandControlsUiTest {
         monitor.performClick()
         idle()
         assertFalse(monitor.isSelected)
-        assertEquals(original, curve().requestedState)
-        assertNull(drawMarkerOrNull())
+        assertEquals("Stopping audio must preserve the chosen draft curve", filterDraft, curve().requestedState)
+        val pausedMarker = drawMarker()
+        assertEquals(1234.5, pausedMarker.frequency, 0.0)
+        assertEquals(7.25, pausedMarker.gain, 0.0)
+        assertStatus(pausedMarker, listening = false)
         assertNull(PeqPreviewSession.current())
         assertEquals("1234.5", frequency.text.toString())
         assertEquals("7.25", gain.text.toString())
@@ -666,6 +686,7 @@ class PeqBandControlsUiTest {
         assertEquals(curve().requestedState, PeqPreviewSession.current())
         assertEquals("1234.5 Hz", drawMarker().frequencyText)
         assertEquals("+7.25 dB", drawMarker().gainText)
+        assertStatus(drawMarker(), listening = true)
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
         idle()
         assertFalse(dialog.isShowing)
