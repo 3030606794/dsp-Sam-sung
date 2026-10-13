@@ -4,4 +4,9 @@
     <item name="surround_driver_status" type="id" />
     <item name="surround_chart" type="id" />
     <item name="surround_presets" type="id" />
+    <item name="surround_footer" type="id" />
+    <item name="surround_reset" type="id" />
+    <item name="surround_user_presets" type="id" />
+    <item name="surround_pinned_area" type="id" />
+    <item name="surround_scroll" type="id" />
 </resources>

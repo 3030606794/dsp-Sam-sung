@@ -9,11 +9,12 @@ import me.timschneeberger.rootlessjamesdsp.R
 
 /** Adds reset without consuming ordinary slider taps, drags or scrolling gestures. */
 object SliderDoubleTapReset {
-    fun install(slider: Slider, defaultValue: Float = 0f, onCancel: () -> Unit = {}, onReset: () -> Unit) {
+    fun install(slider: Slider, defaultValue: Float = 0f, onCancel: () -> Unit = {}, resetLabel: String? = null, onReset: () -> Unit) {
         // Preference rows can rebind after the first tap changes their stored value.
         // Keep the detector alive across that bind so the second tap is still recognized.
         val binding = (slider.getTag(R.id.slider_reset_binding) as? Binding)
             ?: Binding(slider).also { slider.setTag(R.id.slider_reset_binding, it) }
+        binding.updateAccessibilityLabel(resetLabel ?: slider.context.getString(R.string.slider_reset_zero))
         binding.defaultValue = defaultValue
         binding.onCancel = onCancel
         binding.onReset = onReset
@@ -25,6 +26,15 @@ object SliderDoubleTapReset {
         var onReset: () -> Unit = {}
         var onCancel: () -> Unit = {}
         private var resetGesture = false
+        private var accessibilityLabel: String? = null
+        private var accessibilityAction = -1
+
+        fun updateAccessibilityLabel(label: String) {
+            if (accessibilityLabel == label) return
+            if (accessibilityAction != -1) ViewCompat.removeAccessibilityAction(slider, accessibilityAction)
+            accessibilityAction = ViewCompat.addAccessibilityAction(slider, label) { _, _ -> reset() }
+            accessibilityLabel = label
+        }
 
         private fun reset(): Boolean {
             if (!slider.isEnabled) return false
@@ -48,10 +58,9 @@ object SliderDoubleTapReset {
                 if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL)
                     resetGesture = false
                 if (event.actionMasked == MotionEvent.ACTION_CANCEL) onCancel()
-                // Consume the entire second tap, so ACTION_UP cannot move away from zero.
+                // Consume the entire second tap, so ACTION_UP cannot move away from the default.
                 consumed
             }
-            ViewCompat.addAccessibilityAction(slider, slider.context.getString(R.string.slider_reset_zero)) { _, _ -> reset() }
         }
     }
 }

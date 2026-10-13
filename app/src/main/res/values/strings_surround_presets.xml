@@ -1,0 +1,8 @@
+<resources>
+    <string name="surround_presets_title">环绕预设</string>
+    <string name="surround_presets_hint">收藏独立保存。应用时将四项参数载入当前预设，不会自动开启环绕。</string>
+    <string name="surround_presets_scope">当前预设 %1$d</string>
+    <string name="surround_preset_summary">低频 %1$d Hz · 高频 %2$d Hz\n衰减 %3$s dB · 延迟 %4$d µs</string>
+    <string name="surround_preset_overwrite_confirm">用当前四项环绕参数覆盖“%1$s”？预设名称保持不变。</string>
+    <string name="surround_preset_delete_confirm">删除收藏“%1$s”？当前环绕参数保持不变。</string>
+</resources>
