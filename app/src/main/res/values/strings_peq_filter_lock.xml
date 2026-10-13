@@ -3,4 +3,5 @@
     <string name="peq_bulk_unlock_filter_type">一键解锁滤波器类型</string>
     <string name="peq_bulk_filter_hint">滤波器类型：可修改 %1$d 段，锁定 %2$d 段。</string>
     <string name="peq_bulk_filter_scan_hint">滤波器类型锁定：%1$d 段</string>
+    <string name="peq_filter_band_locked_hint">此频段已锁定，请点击卡片编号进入精调，先解开整段锁。</string>
 </resources>

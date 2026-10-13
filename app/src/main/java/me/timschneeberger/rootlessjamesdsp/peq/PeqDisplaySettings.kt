@@ -23,6 +23,8 @@ internal class PeqDisplaySettings(
         ui.peqShowMarkerFilterType.isChecked = initial.showMarkerFilterType
         ui.peqShowMarkerBandNumber.isChecked = initial.showMarkerBandNumber
         ui.peqShowInlineFilters.isChecked = initial.showInlineFilters
+        ui.peqShowMarkerPreviewStatus.isChecked = initial.showMarkerPreviewStatus
+        ui.peqShowMarkerGuides.isChecked = initial.showMarkerGuides
         textSizeControl = PeqSettingControl(ui.peqMarkerTextSizeSlider, ui.peqMarkerTextSize,
             ui.peqMarkerTextSizeBox, 8.0, 20.0, 1.0, initial.markerTextSizeSp.toDouble(), integer = true)
         ui.peqMarkerDurationSlider.apply {
@@ -78,7 +80,9 @@ internal class PeqDisplaySettings(
             previewDisabledBands = ui.peqPreviewDisabledBands.isChecked,
             showMarkerFilterType = ui.peqShowMarkerFilterType.isChecked,
             showMarkerBandNumber = ui.peqShowMarkerBandNumber.isChecked,
-            showInlineFilters = ui.peqShowInlineFilters.isChecked)
+            showInlineFilters = ui.peqShowInlineFilters.isChecked,
+            showMarkerPreviewStatus = ui.peqShowMarkerPreviewStatus.isChecked,
+            showMarkerGuides = ui.peqShowMarkerGuides.isChecked)
     }
 
     fun save(settings: PeqEditorSettings) = preferences.save(settings)

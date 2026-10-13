@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.core.view.isVisible
+import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
@@ -149,6 +150,9 @@ class PeqBandAdapter(
         private val defaultGainHaloTint = binding.peqBandSlider.haloTintList
         private val defaultGainTextColors = binding.peqBandGain.textColors
         private var lastGainSign: Int? = null
+        private var lastGainDimmed: Boolean? = null
+        private val gainDisabledSurface = MaterialColors.getColor(binding.root,
+            com.google.android.material.R.attr.colorSurface)
         private var rank = 0
         private val repeaters = listOf(binding.peqBandMinus, binding.peqBandPlus,
             binding.peqQMinus, binding.peqQPlus, binding.peqFrequencyMinus, binding.peqFrequencyPlus)
@@ -219,6 +223,7 @@ class PeqBandAdapter(
             binding.peqBandMinus.isEnabled = gainEnabled && band.gain > -state.gainRange
             binding.peqBandPlus.isEnabled = gainEnabled && band.gain < state.gainRange
             binding.peqBandGain.isEnabled = gainEnabled
+            renderGainColor(band.gain, band.type.usesGain, dimmed = !gainEnabled)
             val qEnabled = canEdit(id, PeqEditField.QUALITY)
             val bounds = qualityBounds(band, state.qRange)
             binding.peqQSlider.isEnabled = qEnabled && bounds.start < bounds.endInclusive
@@ -232,9 +237,11 @@ class PeqBandAdapter(
             binding.peqFrequencyPlus.isEnabled = frequencyEnabled && band.frequency < PeqModel.MAX_FREQUENCY
             binding.peqFrequencyValue.isEnabled = frequencyEnabled
             binding.peqBandHeaderFrequency.isEnabled = frequencyEnabled
-            binding.peqBandNumber.isEnabled = canEdit(id)
-            binding.peqBandTitle.isEnabled = canEdit(id, PeqEditField.FILTER_TYPE)
+            // Opening the editor is also the read-only inspection path for a protected band.
+            binding.peqBandNumber.isEnabled = !editing
+            binding.peqBandTitle.isEnabled = !editing
             binding.peqBandDelete.isEnabled = canEdit(id)
+            binding.peqBandDelete.iconTint = ColorStateList.valueOf(if (canEdit(id)) Color.rgb(211, 47, 47) else Color.GRAY)
             binding.peqBandDragHandle.isEnabled = canEdit(id) && state.bands.size > 1
             binding.peqBandLocate.isEnabled = !editing
             binding.peqBandWarning.isEnabled = !editing
@@ -276,19 +283,22 @@ class PeqBandAdapter(
                 index + 1, number(band.frequency))
         }
 
-        private fun renderGainColor(gain: Double, usesGain: Boolean) {
+        private fun renderGainColor(gain: Double, usesGain: Boolean, dimmed: Boolean) {
             val sign = when { !usesGain -> 0; gain > 0.0 -> 1; gain < 0.0 -> -1; else -> 0 }
-            if (lastGainSign == sign) return
+            if (lastGainSign == sign && lastGainDimmed == dimmed) return
             lastGainSign = sign
+            lastGainDimmed = dimmed
             val tint = when {
                 sign > 0 -> ColorStateList.valueOf(Color.rgb(211, 47, 47))
                 sign < 0 -> ColorStateList.valueOf(Color.rgb(25, 118, 210))
                 else -> null
             }
-            binding.peqBandSlider.thumbTintList = tint ?: defaultGainThumbTint
-            binding.peqBandSlider.trackActiveTintList = tint ?: defaultGainTrackTint
-            binding.peqBandSlider.haloTintList = tint ?: defaultGainHaloTint
-            binding.peqBandGain.setTextColor(tint ?: defaultGainTextColors)
+            fun visible(colors: ColorStateList) = if (!dimmed) colors else ColorStateList.valueOf(ColorUtils.blendARGB(
+                colors.getColorForState(intArrayOf(android.R.attr.state_enabled), colors.defaultColor), gainDisabledSurface, 0.6f))
+            binding.peqBandSlider.thumbTintList = visible(tint ?: defaultGainThumbTint)
+            binding.peqBandSlider.trackActiveTintList = visible(tint ?: defaultGainTrackTint)
+            binding.peqBandSlider.haloTintList = visible(tint ?: defaultGainHaloTint)
+            binding.peqBandGain.setTextColor(visible(tint ?: defaultGainTextColors))
         }
 
         @SuppressLint("ClickableViewAccessibility")
@@ -322,8 +332,8 @@ class PeqBandAdapter(
                 else { onStartDrag(this); true }
             }
             binding.peqBandNumber.setOnClickListener {
-                if (!selectInstead(band.id) && canEdit(band.id)) {
-                    markUsed(band.id); onBandSelected(band.id); onEdit(band.id)
+                if (!selectInstead(band.id)) {
+                    onBandSelected(band.id); onEdit(band.id)
                 }
             }
             binding.peqBandDelete.setOnClickListener {
@@ -365,8 +375,8 @@ class PeqBandAdapter(
             binding.peqBandSummary.setOnClickListener { editField(PeqEditField.QUALITY) }
             binding.peqQValue.setOnClickListener { editField(PeqEditField.QUALITY) }
             binding.peqBandTitle.setOnClickListener {
-                if (!selectInstead(band.id) && canEdit(band.id, PeqEditField.FILTER_TYPE)) {
-                    markUsed(band.id); onBandSelected(band.id); onEditType(band.id)
+                if (!selectInstead(band.id)) {
+                    onBandSelected(band.id); onEditType(band.id)
                 }
             }
             binding.peqBandHeaderFrequency.setOnClickListener { editField(PeqEditField.FREQUENCY) }
@@ -391,7 +401,6 @@ class PeqBandAdapter(
             fun currentBand() = state.bands.firstOrNull { it.id == band.id }
             fun renderLabels() {
                 val current = currentBand() ?: return
-                renderGainColor(current.gain, current.type.usesGain)
                 binding.peqBandWarning.visibility = if (current.frequency == 0.0) View.VISIBLE else View.INVISIBLE
                 bindRank(current, rank)
                 binding.peqBandHeaderFrequency.text = context.getString(R.string.peq_band_header_frequency,
@@ -400,7 +409,7 @@ class PeqBandAdapter(
                 binding.peqBandSummary.text = context.getString(if (bandwidth) R.string.peq_bw_value else R.string.peq_q_value,
                     fixedNumber(displayedQuality(current), 3))
                 binding.peqBandGain.text = if (current.type.usesGain)
-                    String.format(Locale.ROOT, "%+.2f", current.gain)
+                    String.format(Locale.ROOT, "%+.2f dB", current.gain)
                 else context.getString(R.string.peq_no_gain)
                 binding.peqBandMinus.isEnabled = current.gain > -state.gainRange
                 binding.peqBandPlus.isEnabled = current.gain < state.gainRange
@@ -415,7 +424,7 @@ class PeqBandAdapter(
                 binding.peqQPlus.contentDescription = context.getString(if (bandwidth) R.string.peq_bw_increase else R.string.peq_quality_increase)
                 binding.peqQMinus.isEnabled = quality > bounds.start
                 binding.peqQPlus.isEnabled = quality < bounds.endInclusive
-                binding.peqFrequencyValue.text = number(current.frequency, 3)
+                binding.peqFrequencyValue.text = context.getString(R.string.peq_band_header_frequency, number(current.frequency, 3))
                 binding.peqFrequencyValue.contentDescription = context.getString(R.string.peq_frequency_value, number(current.frequency, 3))
                 binding.peqFrequencyMinus.isEnabled = current.frequency > PeqModel.MIN_FREQUENCY
                 binding.peqFrequencyPlus.isEnabled = current.frequency < PeqModel.MAX_FREQUENCY

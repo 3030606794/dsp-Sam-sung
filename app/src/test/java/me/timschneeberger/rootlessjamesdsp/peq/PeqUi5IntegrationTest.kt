@@ -270,18 +270,18 @@ class PeqUi5IntegrationTest {
         assertFalse(locks.isFieldLocked("first", PeqEditField.QUALITY))
     }
 
-    @Test fun preciseTitleFollowsBandNumberVisibilitySettingAndUsesCurrentRowNumber() {
+    @Test fun preciseTitleAlwaysShowsCurrentBandNumberIndependentlyOfMarkerVisibility() {
         val original = launch()
         val withoutNumber = precise(1)
-        assertEquals(app.getString(R.string.peq_edit_band),
-            withoutNumber.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)!!.text.toString())
+        assertEquals(app.getString(R.string.peq_fine_band_title, 2),
+            withoutNumber.findViewById<TextView>(R.id.peq_band_dialog_title)!!.text.toString())
         withoutNumber.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
         assertTrue(PeqEditorPreferences(app).save(PeqEditorSettings(showInlineFilters = true, showMarkerBandNumber = true)))
         controller!!.recreate()
         layout()
         val withNumber = precise(1)
-        assertEquals(app.getString(R.string.peq_edit_band_number, 2),
-            withNumber.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)!!.text.toString())
+        assertEquals(app.getString(R.string.peq_fine_band_title, 2),
+            withNumber.findViewById<TextView>(R.id.peq_band_dialog_title)!!.text.toString())
         withNumber.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
         assertSaved(original)
     }

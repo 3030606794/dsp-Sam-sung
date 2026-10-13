@@ -65,7 +65,7 @@ class PeqLockedOperationsTest {
         assertEquals(0, types.protectedCount)
     }
 
-    @Test fun allResetChangesOnlyAllowedFieldsAndCountsPartiallyProtectedCardsInBothTotals() {
+    @Test fun allResetChangesOnlyAllowedFieldsAndCountsOnlyWhollyProtectedCardsAsSkipped() {
         val original = PeqState(listOf(band("master"), band("gain"), band("quality"), band("frequency"),
             band("free"), band("unselected")), qRange = 0.25, gainRange = 12.0, gainStep = 1.5,
             qStep = 0.25, frequencyStep = 123.0, showQSlider = false, pinResponse = false)
@@ -78,7 +78,7 @@ class PeqLockedOperationsTest {
         val result = operation.reset(original, selected, PeqResetTarget.ALL)
 
         assertEquals(4, result.editableCount)
-        assertEquals(4, result.protectedCount)
+        assertEquals(1, result.protectedCount)
         assertEquals(sqrt(20.0 * 20000.0), result.state.bands[2].frequency, 1e-9)
         assertEquals(original.copy(bands = listOf(
             original.bands[0],
@@ -165,7 +165,7 @@ class PeqLockedOperationsTest {
             original.bands[3]
         )), all.state)
         assertEquals(2, all.editableCount)
-        assertEquals(2, all.protectedCount)
+        assertEquals(1, all.protectedCount)
     }
 
     @Test fun lockingEveryIndependentFieldMakesAllResetAnExactNoOpWithoutAMasterLock() {
@@ -175,5 +175,56 @@ class PeqLockedOperationsTest {
         assertEquals(original, result.state)
         assertEquals(0, result.editableCount)
         assertEquals(1, result.protectedCount)
+    }
+
+    @Test fun resetCountsPartitionOnlyExistingTargetsAndMatchTheActualReset() {
+        val original = PeqState(listOf(band("main"), band("partial"), band("all-fields"), band("free"), band("outside")))
+        val selected = setOf("main", "partial", "all-fields", "free", "missing")
+        val operation = operations(masterLocked = setOf("main"), fieldLocked = mapOf(
+            "partial" to setOf(PeqEditField.QUALITY, PeqEditField.FREQUENCY),
+            "all-fields" to PeqEditField.entries.toSet()))
+        PeqResetTarget.entries.forEach { target ->
+            val counts = operation.resetCounts(original, selected, target)
+            val actual = operation.reset(original, selected, target)
+            assertEquals(4, counts.editableCount + counts.protectedCount)
+            assertEquals(actual.editableCount, counts.editableCount)
+            assertEquals(actual.protectedCount, counts.protectedCount)
+            assertEquals(original.bands.last(), actual.state.bands.last())
+        }
+        assertEquals(PeqLockedOperations.ResetCounts(2, 2), operation.resetCounts(original, selected, PeqResetTarget.ALL))
+        assertEquals(PeqLockedOperations.ResetCounts(1, 3), operation.resetCounts(original, selected, PeqResetTarget.FREQUENCY))
+        assertEquals(PeqLockedOperations.ResetCounts(0, 0), operation.resetCounts(original, setOf("missing"), PeqResetTarget.ALL))
+    }
+
+    @Test fun redistributeChangesOnlyFrequencyForMixedModesRegardlessOfOtherFieldLocks() {
+        val original = PeqState(listOf(
+            band("free-bw", 123.456),
+            band("master", 234.567),
+            band("quality-gain-type-locked", 345.678).copy(qualityDisplay = PeqQualityDisplay.Q,
+                type = PeqFilterType.LOW_SHELF, enabled = true),
+            band("frequency-locked", 456.789),
+            band("free-q", 567.891).copy(qualityDisplay = PeqQualityDisplay.Q, type = PeqFilterType.NOTCH),
+            band("outside", 678.912)))
+        val operation = operations(masterLocked = setOf("master"), fieldLocked = mapOf(
+            "quality-gain-type-locked" to setOf(PeqEditField.QUALITY, PeqEditField.GAIN, PeqEditField.FILTER_TYPE),
+            "frequency-locked" to setOf(PeqEditField.FREQUENCY)))
+        val selected = original.bands.dropLast(1).mapTo(linkedSetOf()) { it.id }
+        val result = operation.reset(original, selected, PeqResetTarget.FREQUENCY)
+        val center = result.state.bands[2].frequency
+        assertEquals(sqrt(20.0 * 20000.0), center, 1e-9)
+        val expected = original.copy(bands = original.bands.map {
+            when (it.id) {
+                "free-bw" -> it.copy(frequency = 20.0)
+                "quality-gain-type-locked" -> it.copy(frequency = center)
+                "free-q" -> it.copy(frequency = 20000.0)
+                else -> it
+            }
+        })
+        assertEquals(expected, result.state)
+        assertEquals(3, result.editableCount)
+        assertEquals(2, result.protectedCount)
+        original.bands.zip(result.state.bands).forEach { (before, after) ->
+            assertEquals("Frequency redistribution must preserve every other field", before, after.copy(frequency = before.frequency))
+        }
     }
 }

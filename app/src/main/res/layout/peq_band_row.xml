@@ -33,6 +33,8 @@
                 app:layout_constraintGuide_percent="0.888888889" />
             <TextView android:id="@+id/peq_band_number" android:layout_width="0dp"
                 android:layout_height="0dp" android:gravity="center" android:textSize="14sp" android:textStyle="bold"
+                android:includeFontPadding="false" android:drawableBottom="@drawable/peq_band_number_settings"
+                android:drawablePadding="1dp" android:drawableTint="?attr/colorOnSecondaryContainer"
                 android:background="@drawable/peq_band_number_background" android:textColor="?attr/colorOnSecondaryContainer"
                 android:clickable="true" android:focusable="true" android:contentDescription="@string/peq_edit_band"
                 app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="@id/peq_header_edge_1"

@@ -38,8 +38,11 @@ class PeqFilterTypeDialogTest {
     private fun create(initial: PeqFilterType? = PeqFilterType.PEAK,
                        selected: (PeqFilterType) -> Unit = {}, monitor: (Boolean) -> Unit = {},
                        confirm: (PeqFilterType) -> Boolean = { true }, dismiss: () -> Unit = {},
-                       hint: String? = null): AlertDialog = PeqFilterTypeDialog.create(host.get(),
-        "滤波器类型", initial, selected, monitor, confirm, dismiss, hint).also {
+                       hint: String? = null, locked: (() -> Boolean)? = null,
+                       canToggleLock: () -> Boolean = { true }, canEdit: () -> Boolean = { true },
+                       toggleLock: () -> Unit = {}): AlertDialog = PeqFilterTypeDialog.create(host.get(),
+        "滤波器类型", initial, selected, monitor, confirm, dismiss, hint,
+        locked, canToggleLock, canEdit, toggleLock).also {
         dialog = it
         it.show()
         idle()
@@ -54,6 +57,29 @@ class PeqFilterTypeDialogTest {
         dialog.findViewById<ViewGroup>(PeqFilterTypeDialog.buttonId(type))!!
     private fun background(view: View) = (view.background as ColorDrawable).color
     private fun label(view: ViewGroup) = view.getChildAt(0) as TextView
+
+    @Test fun centeredWindowSizeAndDimFlagsAreFinalBeforeShowAndNeverJumpAfterAttachment() {
+        val picker = PeqFilterTypeDialog.create(host.get(), "滤波器类型", PeqFilterType.PEAK,
+            onTypeSelected = {}, onMonitorChanged = {}, onConfirm = { true }, onDismiss = {})
+        dialog = picker
+        fun appearance() = picker.window!!.attributes.let {
+            listOf(it.width, it.height, it.gravity, it.windowAnimations,
+                it.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        }
+        val expected = listOf(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER, 0, 0)
+        assertFalse(picker.isShowing)
+        assertEquals("The initial window must already have its final size, position and dim state", expected, appearance())
+        repeat(2) {
+            picker.show()
+            assertEquals(expected, appearance())
+            idle()
+            assertEquals("No posted OnShow update may resize the window or remove an initial dim frame", expected, appearance())
+            picker.dismiss()
+            idle()
+            assertEquals(expected, appearance())
+        }
+    }
 
     @Test fun narrowScreenShowsSevenEqualChoicesWithUnscaledLabelsAndResponseIconsInCenteredDialog() {
         val picker = create(hint = "已锁定的频段不会修改")
@@ -161,6 +187,92 @@ class PeqFilterTypeDialogTest {
         assertEquals(1, closed)
         assertFalse(picker.isShowing)
         assertFalse(create().findViewById<View>(R.id.peq_filter_monitor)!!.isSelected)
+    }
+
+    @Test fun titleLockKeepsViewingAvailableAndUnlockEnablesDraftListeningAndConfirmation() {
+        var locked = true
+        var preview = false
+        val selected = mutableListOf<PeqFilterType>()
+        val saved = mutableListOf<PeqFilterType>()
+        val picker = create(locked = { locked }, canEdit = { !locked },
+            toggleLock = { locked = !locked; preview = false }, selected = selected::add,
+            monitor = { preview = it }, confirm = { saved += it; true })
+        val title = picker.findViewById<TextView>(R.id.peq_filter_dialog_title)!!
+        val lock = picker.findViewById<MaterialButton>(R.id.peq_filter_dialog_lock)!!
+        val types = picker.findViewById<PeqFilterSelector>(R.id.peq_filter_types)!!
+        val monitor = picker.findViewById<MaterialButton>(R.id.peq_filter_monitor)!!
+        val confirm = picker.findViewById<MaterialButton>(R.id.peq_filter_confirm)!!
+        assertEquals(View.VISIBLE, lock.visibility)
+        assertEquals(android.graphics.Color.rgb(211, 47, 47), lock.iconTint!!.defaultColor)
+        assertEquals(title.paddingLeft, title.paddingRight)
+        assertEquals((title.parent as View).width / 2f, title.left + title.width / 2f, 0.5f)
+        assertFalse(types.isEnabled)
+        PeqFilterType.entries.forEach { assertFalse(button(picker, it).isEnabled) }
+        assertFalse(monitor.isEnabled)
+        assertFalse(confirm.isEnabled)
+        assertTrue(picker.findViewById<View>(R.id.peq_filter_cancel)!!.isEnabled)
+
+        lock.performClick()
+        assertFalse(locked)
+        assertEquals(android.graphics.Color.GRAY, lock.iconTint!!.defaultColor)
+        assertTrue(types.isEnabled)
+        assertTrue(monitor.isEnabled)
+        assertTrue(confirm.isEnabled)
+        button(picker, PeqFilterType.LOW_PASS).performClick()
+        monitor.performClick()
+        assertEquals(listOf(PeqFilterType.LOW_PASS), selected)
+        assertTrue(preview)
+
+        lock.performClick()
+        assertTrue(locked)
+        assertFalse(preview)
+        assertFalse(monitor.isSelected)
+        assertEquals(PeqFilterType.PEAK, types.selectedType)
+        confirm.performClick()
+        assertTrue(saved.isEmpty())
+        assertTrue(picker.isShowing)
+        lock.performClick()
+        button(picker, PeqFilterType.HIGH_PASS).performClick()
+        confirm.performClick()
+        assertEquals(listOf(PeqFilterType.HIGH_PASS), saved)
+        assertFalse(picker.isShowing)
+    }
+
+    @Test fun newlyLockedHostBlocksStaleTypeMonitorConfirmAndLockCallbacksButCancelRemainsAvailable() {
+        listOf(R.id.peq_filter_types, R.id.peq_filter_monitor, R.id.peq_filter_confirm).forEach { action ->
+            var editable = true
+            var allowLock = true
+            var callbacks = 0
+            var dismissals = 0
+            val picker = create(locked = { !editable }, canToggleLock = { allowLock }, canEdit = { editable },
+                selected = { callbacks++ }, monitor = { callbacks++ }, confirm = { callbacks++; true },
+                toggleLock = { callbacks++ }, dismiss = { dismissals++ })
+            // External lock changes can race a callback before a new view render.
+            editable = false
+            allowLock = false
+            if (action == R.id.peq_filter_types) {
+                picker.findViewById<PeqFilterSelector>(action)!!.setSelection(PeqFilterType.NOTCH, notify = true)
+            } else picker.findViewById<View>(action)!!.performClick()
+            picker.findViewById<View>(R.id.peq_filter_dialog_lock)!!.performClick()
+            PeqFilterTypeDialog.setMonitoring(picker, true, notify = true)
+            assertEquals(0, callbacks)
+            assertFalse(picker.findViewById<View>(R.id.peq_filter_dialog_lock)!!.isEnabled)
+            assertFalse(picker.findViewById<View>(R.id.peq_filter_monitor)!!.isSelected)
+            assertEquals(PeqFilterType.PEAK, picker.findViewById<PeqFilterSelector>(R.id.peq_filter_types)!!.selectedType)
+            assertTrue(picker.isShowing)
+            picker.findViewById<View>(R.id.peq_filter_cancel)!!.performClick()
+            idle()
+            assertFalse(picker.isShowing)
+            assertEquals(1, dismissals)
+        }
+    }
+
+    @Test fun callersWithoutLockSupportKeepTheTitleUnobstructed() {
+        val picker = create()
+        assertEquals(View.GONE, picker.findViewById<View>(R.id.peq_filter_dialog_lock)!!.visibility)
+        val title = picker.findViewById<TextView>(R.id.peq_filter_dialog_title)!!
+        assertEquals(0, title.paddingLeft)
+        assertEquals(0, title.paddingRight)
     }
 
     @Test fun reusableSelectorBindsSilentlyAndDisablingItBlocksEveryChild() {

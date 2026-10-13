@@ -321,7 +321,7 @@ class PeqBandControlsUiTest {
         assertEquals(original, repository.load().bands.single())
         val current = row()
         assertTrue(current.findViewById<TextView>(R.id.peq_q_value).text.endsWith("2.033"))
-        assertEquals("+12.00", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
+        assertEquals("+12.00 dB", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
         dragTo(current.findViewById(R.id.peq_q_slider),
             PeqBandAdapter.logarithmicPosition(4.321, PeqModel.MIN_Q, PeqModel.MAX_Q))
         val narrower = fragment().editorState.bands.single()
@@ -337,7 +337,7 @@ class PeqBandControlsUiTest {
         assertEquals(narrower.q, changed.q, 0.0)
         dragTo(current.findViewById(R.id.peq_band_slider), ((0.37 + 18.0) / 36.0).toFloat())
         assertEquals(0.37, repository.load().bands.single().gain, 0.0)
-        assertEquals("+0.37", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
+        assertEquals("+0.37 dB", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
         // Button steps remain independent from drag precision.
         press(current, R.id.peq_band_plus)
         assertEquals(2.37, repository.load().bands.single().gain, 1e-12)
@@ -513,7 +513,7 @@ class PeqBandControlsUiTest {
             assertEquals(2.25, repository.load().bands[index].gain, 0.0)
             dragTo(current.findViewById(R.id.peq_band_slider), ((0.37 + 18.0) / 36.0).toFloat())
             assertEquals(0.37, repository.load().bands[index].gain, 0.0)
-            assertEquals("+0.37", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
+            assertEquals("+0.37 dB", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
         }
     }
 
@@ -605,14 +605,27 @@ class PeqBandControlsUiTest {
         assertEquals(afterFrequency.gain, restored.gain, 0.0)
     }
 
-    @Test fun preciseFrequencyAndGainDraftUpdatesTheMarkerButCancelRestoresSavedParameters() {
+    @Test fun preciseFrequencyAndGainDraftOnlyUpdatesTheMarkerWhileMonitoringAndCancelRestoresSavedParameters() {
         val original = PeqState(listOf(PeqBand(frequency = 200.0), PeqBand(frequency = 1000.0, gain = -3.0)))
         launch(original)
         press(row(1), R.id.peq_band_number)
         idle()
         val dialog = ShadowDialog.getLatestDialog() as AlertDialog
-        dialog.findViewById<EditText>(R.id.peq_frequency_input)!!.setText("1234.5")
-        dialog.findViewById<EditText>(R.id.peq_gain_input)!!.setText("7.25")
+        val frequency = dialog.findViewById<EditText>(R.id.peq_frequency_input)!!
+        val gain = dialog.findViewById<EditText>(R.id.peq_gain_input)!!
+        val monitor = dialog.findViewById<View>(R.id.peq_band_monitor)!!
+        assertFalse(monitor.isSelected)
+        frequency.setText("1234.5")
+        gain.setText("7.25")
+        assertEquals("Draft fields must not alter the graph while monitoring is off", original, curve().requestedState)
+        assertNull(drawMarkerOrNull())
+        assertNull(PeqPreviewSession.current())
+        assertEquals(original, fragment().editorState)
+        assertEquals(original, repository.load())
+
+        monitor.performClick()
+        idle()
+        assertTrue(monitor.isSelected)
         val preview = requireNotNull(curve().requestedState).bands[1]
         assertEquals(1234.5, preview.frequency, 0.0)
         assertEquals(7.25, preview.gain, 0.0)
@@ -620,6 +633,7 @@ class PeqBandControlsUiTest {
         assertEquals(original.bands[1].id, marker.bandId)
         assertEquals("1234.5 Hz", marker.frequencyText)
         assertEquals("+7.25 dB", marker.gainText)
+        assertEquals(curve().requestedState, PeqPreviewSession.current())
         assertEquals(original, fragment().editorState)
         assertEquals(original, repository.load())
         val type = PeqFilterType.LOW_PASS
@@ -630,12 +644,35 @@ class PeqBandControlsUiTest {
         assertEquals(View.VISIBLE, dialog.findViewById<View>(R.id.peq_gain_box)!!.visibility)
         assertEquals(original, fragment().editorState)
         assertEquals(original, repository.load())
+
+        monitor.performClick()
+        idle()
+        assertFalse(monitor.isSelected)
+        assertEquals(original, curve().requestedState)
+        assertNull(drawMarkerOrNull())
+        assertNull(PeqPreviewSession.current())
+        assertEquals("1234.5", frequency.text.toString())
+        assertEquals("7.25", gain.text.toString())
+        assertEquals(type, selector.selectedType)
+        assertEquals(original, fragment().editorState)
+        assertEquals(original, repository.load())
+
+        monitor.performClick()
+        idle()
+        val resumed = requireNotNull(curve().requestedState).bands[1]
+        assertEquals(type, resumed.type)
+        assertEquals(1234.5, resumed.frequency, 0.0)
+        assertEquals(7.25, resumed.gain, 0.0)
+        assertEquals(curve().requestedState, PeqPreviewSession.current())
+        assertEquals("1234.5 Hz", drawMarker().frequencyText)
+        assertEquals("+7.25 dB", drawMarker().gainText)
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
         idle()
         assertFalse(dialog.isShowing)
         assertEquals(original, curve().requestedState)
         assertEquals(original, repository.load())
         assertNull(drawMarkerOrNull())
+        assertNull(PeqPreviewSession.current())
         press(row(1), R.id.peq_band_locate)
         layout()
         val restored = drawMarker()

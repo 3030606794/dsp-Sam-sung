@@ -5,6 +5,8 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
 import android.util.TypedValue
@@ -34,6 +36,10 @@ class PeqFilterSelector @JvmOverloads constructor(
         color = MaterialColors.getColor(this@PeqFilterSelector, com.google.android.material.R.attr.colorOutline)
         strokeWidth = resources.displayMetrics.density
     }
+    private val borderPaint = Paint(dividerPaint).apply { style = Paint.Style.STROKE }
+    private val roundedClip = Path()
+    private val borderBounds = RectF()
+    private val cornerRadius = dp(18).toFloat()
 
     /** Persisted type remains visible while another filter is only a draft or audition. */
     var committedType: PeqFilterType? = null
@@ -59,11 +65,11 @@ class PeqFilterSelector @JvmOverloads constructor(
         setPadding(dp(1), dp(1), dp(1), dp(1))
         background = GradientDrawable().apply {
             setColor(Color.TRANSPARENT)
-            cornerRadius = dp(18).toFloat()
-            setStroke(dp(1), MaterialColors.getColor(this@PeqFilterSelector,
-                com.google.android.material.R.attr.colorOutline))
+            cornerRadius = this@PeqFilterSelector.cornerRadius
         }
-        clipToOutline = true
+        // Explicitly clip child backgrounds and ripples; a transparent outline is not
+        // a reliable clip on every renderer, and background strokes sit behind children.
+        clipToOutline = false
         val feedback = TypedValue().also {
             context.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
         }.resourceId
@@ -155,12 +161,28 @@ class PeqFilterSelector @JvmOverloads constructor(
         }
     }
 
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        roundedClip.rewind()
+        roundedClip.addRoundRect(0f, 0f, w.toFloat(), h.toFloat(), cornerRadius, cornerRadius, Path.Direction.CW)
+        val inset = borderPaint.strokeWidth / 2f
+        borderBounds.set(inset, inset, w - inset, h - inset)
+    }
+
     override fun dispatchDraw(canvas: Canvas) {
-        super.dispatchDraw(canvas)
-        for (index in 1 until childCount) {
-            val x = getChildAt(index).left.toFloat()
-            canvas.drawLine(x, paddingTop.toFloat(), x, (height - paddingBottom).toFloat(), dividerPaint)
+        val saved = canvas.save()
+        try {
+            canvas.clipPath(roundedClip)
+            super.dispatchDraw(canvas)
+            for (index in 1 until childCount) {
+                val x = getChildAt(index).left.toFloat()
+                canvas.drawLine(x, paddingTop.toFloat(), x, (height - paddingBottom).toFloat(), dividerPaint)
+            }
+        } finally {
+            canvas.restoreToCount(saved)
         }
+        val borderRadius = (cornerRadius - borderPaint.strokeWidth / 2f).coerceAtLeast(0f)
+        canvas.drawRoundRect(borderBounds, borderRadius, borderRadius, borderPaint)
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()

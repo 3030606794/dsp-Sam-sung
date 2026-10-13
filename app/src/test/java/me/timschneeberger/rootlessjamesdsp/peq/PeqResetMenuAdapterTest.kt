@@ -25,7 +25,7 @@ class PeqResetMenuAdapterTest {
     private var bank = PeqState(listOf(PeqBand("q-first"), PeqBand("bw", qualityDisplay = PeqQualityDisplay.BW),
         PeqBand("q-last"), PeqBand("outside", qualityDisplay = PeqQualityDisplay.BW)))
     private val selected = setOf("q-first", "bw", "q-last")
-    private val labels = listOf("reset", "band", "gain", "Q", "BW", "frequency", "type", "unlock all")
+    private val labels = listOf("reset", "band", "gain", "Q", "BW", "frequency", "type", "other action")
     private val kinds = mapOf(1 to PeqBulkLockKind.BAND, 2 to PeqBulkLockKind.GAIN,
         3 to PeqBulkLockKind.Q, 4 to PeqBulkLockKind.BW, 5 to PeqBulkLockKind.FREQUENCY,
         6 to PeqBulkLockKind.FILTER_TYPE)
@@ -114,5 +114,38 @@ class PeqResetMenuAdapterTest {
         assertFalse(newQRow.findViewById<View>(R.id.peq_bulk_lock_button).isEnabled)
         assertFalse(newQRow.findViewById<View>(R.id.peq_bulk_unlock_button).isEnabled)
         assertEquals(PeqResetMenuAdapter.Counts(2, 0), adapter.counts(4))
+    }
+
+    @Test fun resetRowsShowFieldSpecificCountsAndAllCountsOnlyCompletelyBlockedCardsAsSkipped() {
+        locks.setBandLocked("q-first", true)
+        locks.setFieldLocked("bw", PeqEditField.QUALITY, true)
+        locks.setFieldLocked("bw", PeqEditField.GAIN, true)
+        PeqEditField.entries.forEach { locks.setFieldLocked("q-last", it, true) }
+        val before = bank
+        val resetTargets = mapOf(0 to PeqResetTarget.Q, 1 to PeqResetTarget.FREQUENCY,
+            2 to PeqResetTarget.GAIN, 3 to PeqResetTarget.FILTER_TYPE,
+            4 to PeqResetTarget.ALL, 5 to PeqResetTarget.FREQUENCY)
+        val adapter = PeqResetMenuAdapter(context, listOf("Q", "frequency", "gain", "type", "all", "redistribute", "band lock"),
+            mapOf(6 to PeqBulkLockKind.BAND), selected + "missing", { bank }, locks,
+            resetTargets, setOf(5)) { changes++ }
+        val expected = listOf(0 to 3, 1 to 2, 0 to 3, 1 to 2, 1 to 2, 1 to 2)
+        expected.forEachIndexed { index, (editable, protected) ->
+            assertEquals(PeqLockedOperations.ResetCounts(editable, protected), adapter.resetCounts(index))
+            val resetRow = row(adapter, index)
+            val resource = if (index == 5) R.string.peq_bulk_redistribute_counts else R.string.peq_bulk_reset_counts
+            val suffix = if (index == 4) "\n" + app.getString(R.string.peq_bulk_reset_unlocked_only) else ""
+            assertEquals(app.getString(resource, editable, protected) + suffix,
+                resetRow.findViewById<TextView>(R.id.peq_bulk_reset_counts).text.toString())
+            assertNull(resetRow.findViewById<View>(R.id.peq_bulk_lock_button))
+            assertNull(resetRow.findViewById<View>(R.id.peq_bulk_unlock_button))
+        }
+        assertNull(adapter.resetCounts(6))
+        row(adapter, 6).findViewById<View>(R.id.peq_bulk_unlock_button).performClick()
+        assertEquals(PeqLockedOperations.ResetCounts(1, 2), adapter.resetCounts(0))
+        assertEquals(PeqLockedOperations.ResetCounts(2, 1), adapter.resetCounts(4))
+        assertEquals(app.getString(R.string.peq_bulk_redistribute_counts, 2, 1),
+            row(adapter, 5).findViewById<TextView>(R.id.peq_bulk_reset_counts).text.toString())
+        assertEquals(1, changes)
+        assertEquals(before, bank)
     }
 }

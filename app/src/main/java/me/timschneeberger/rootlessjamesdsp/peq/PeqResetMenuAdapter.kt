@@ -22,7 +22,7 @@ internal enum class PeqBulkLockKind(val field: PeqEditField?, val mode: PeqQuali
     FILTER_TYPE(PeqEditField.FILTER_TYPE)
 }
 
-/** Existing item labels and indices stay stable; only the two lock buttons keep the menu open. */
+/** Action rows explain their current scope; lock buttons update that scope without closing the menu. */
 internal class PeqResetMenuAdapter(
     private val context: Context,
     private val labels: List<String>,
@@ -30,6 +30,8 @@ internal class PeqResetMenuAdapter(
     private val ids: Set<String>,
     private val readState: () -> PeqState,
     private val locks: PeqBandLockStore,
+    private val resetTargets: Map<Int, PeqResetTarget> = emptyMap(),
+    private val redistributePositions: Set<Int> = emptySet(),
     private val onLocksChanged: () -> Unit
 ) : BaseAdapter() {
     data class Counts(val canLock: Int, val canUnlock: Int)
@@ -38,8 +40,12 @@ internal class PeqResetMenuAdapter(
     override fun getItem(position: Int) = labels[position]
     override fun getItemId(position: Int) = position.toLong()
     override fun hasStableIds() = true
-    override fun getViewTypeCount() = 2
-    override fun getItemViewType(position: Int) = if (position in lockKinds) 1 else 0
+    override fun getViewTypeCount() = 3
+    override fun getItemViewType(position: Int) = when (position) {
+        in lockKinds -> 1
+        in resetTargets -> 2
+        else -> 0
+    }
 
     private fun targets(kind: PeqBulkLockKind) = readState().bands.filter {
         it.id in ids && (kind.mode == null || it.qualityDisplay == kind.mode)
@@ -52,6 +58,10 @@ internal class PeqResetMenuAdapter(
         val targets = targets(kind)
         val locked = targets.count { isLocked(it.id, kind) }
         Counts(targets.size - locked, locked)
+    }
+
+    fun resetCounts(position: Int): PeqLockedOperations.ResetCounts? = resetTargets[position]?.let {
+        PeqLockedOperations(locks::canEdit).resetCounts(readState(), ids, it)
     }
 
     private fun setLocked(kind: PeqBulkLockKind, locked: Boolean) {
@@ -73,17 +83,27 @@ internal class PeqResetMenuAdapter(
             setTextColor(MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface))
             gravity = Gravity.CENTER_VERTICAL
         }
-        if (kind == null) return title.apply {
+        if (kind == null && position !in resetTargets) return title.apply {
             minHeight = dp(48)
             setPadding(dp(20), dp(10), dp(20), dp(10))
             layoutParams = android.widget.AbsListView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT)
         }
 
-        val counts = requireNotNull(counts(position))
         val summary = TextView(context).apply {
-            id = R.id.peq_bulk_lock_counts
-            text = context.getString(R.string.peq_bulk_lock_counts, counts.canLock, counts.canUnlock)
+            if (kind != null) {
+                val counts = requireNotNull(counts(position))
+                id = R.id.peq_bulk_lock_counts
+                text = context.getString(R.string.peq_bulk_lock_counts, counts.canLock, counts.canUnlock)
+            } else {
+                val counts = requireNotNull(resetCounts(position))
+                id = R.id.peq_bulk_reset_counts
+                text = context.getString(if (position in redistributePositions)
+                    R.string.peq_bulk_redistribute_counts else R.string.peq_bulk_reset_counts,
+                    counts.editableCount, counts.protectedCount) +
+                    if (resetTargets[position] == PeqResetTarget.ALL)
+                        "\n" + context.getString(R.string.peq_bulk_reset_unlocked_only) else ""
+            }
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant))
             setPadding(0, dp(3), 0, 0)
@@ -102,8 +122,11 @@ internal class PeqResetMenuAdapter(
             layoutParams = android.widget.AbsListView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT)
             addView(text, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(lockButton(position, kind, false, counts.canUnlock > 0))
-            addView(lockButton(position, kind, true, counts.canLock > 0))
+            if (kind != null) {
+                val counts = requireNotNull(counts(position))
+                addView(lockButton(position, kind, false, counts.canUnlock > 0))
+                addView(lockButton(position, kind, true, counts.canLock > 0))
+            }
         }
     }
 

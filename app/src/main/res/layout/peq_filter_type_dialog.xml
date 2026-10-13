@@ -1,12 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/peq_filter_dialog_root"
     android:layout_width="match_parent" android:layout_height="wrap_content"
     android:orientation="vertical" android:paddingHorizontal="16dp" android:paddingVertical="16dp">
-    <TextView android:id="@+id/peq_filter_dialog_title"
-        android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:gravity="center" android:textAppearance="?attr/textAppearanceTitleLarge"
-        android:textStyle="bold" />
+    <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:minHeight="48dp">
+        <TextView android:id="@+id/peq_filter_dialog_title"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_gravity="center" android:paddingHorizontal="48dp"
+            android:gravity="center" android:textAppearance="?attr/textAppearanceTitleLarge"
+            android:textStyle="bold" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/peq_filter_dialog_lock"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="48dp" android:layout_height="48dp" android:layout_gravity="end|center_vertical"
+            android:minWidth="0dp" android:minHeight="0dp" android:padding="10dp"
+            android:insetTop="0dp" android:insetBottom="0dp" android:visibility="gone"
+            app:backgroundTint="@android:color/transparent" app:icon="@drawable/ic_peq_lock"
+            app:iconSize="28dp" app:iconPadding="0dp" app:iconGravity="textStart" />
+    </FrameLayout>
     <me.timschneeberger.rootlessjamesdsp.peq.PeqFilterSelector
         android:id="@+id/peq_filter_types"
         android:layout_width="match_parent" android:layout_height="wrap_content"

@@ -156,6 +156,9 @@
                     android:contentDescription="@string/peq_marker_text_size" android:inputType="number" />
             </com.google.android.material.textfield.TextInputLayout>
         </LinearLayout>
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_guides"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_show_marker_guides" />
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_frequency"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_show_marker_frequency" />
@@ -165,6 +168,9 @@
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_band_number"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_show_marker_band_number" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_preview_status"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_show_marker_preview_status" />
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_gain"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_show_marker_gain" />

@@ -68,7 +68,7 @@ class PeqInlineFilterUiTest {
     private fun draft(type: PeqFilterType = PeqFilterType.HIGH_PASS, monitoring: Boolean = false) =
         PeqInlineFilterDraft(state.bands.first().id, type, monitoring)
 
-    @Test fun optionalStripHasElevenStableEqualTextSlotsAndCardsUseCompactPlainNumbers() {
+    @Test fun optionalStripHasElevenStableEqualTextSlotsAndCardsKeepCompactNumbersWithUnits() {
         launch()
         assertEquals(View.GONE, row().visibility)
         show()
@@ -93,8 +93,10 @@ class PeqInlineFilterUiTest {
             assertEquals(40f, card().findViewById<View>(R.id.peq_band_header).height / density, 1f)
             val gain = card().findViewById<TextView>(R.id.peq_band_gain)
             val frequency = card().findViewById<TextView>(R.id.peq_frequency_value)
-            assertNotNull(gain.text.toString().toDoubleOrNull())
-            assertNotNull(frequency.text.toString().toDoubleOrNull())
+            assertTrue(gain.text.endsWith(" dB"))
+            assertTrue(frequency.text.endsWith(" Hz"))
+            assertNotNull(gain.text.toString().removeSuffix(" dB").toDoubleOrNull())
+            assertNotNull(frequency.text.toString().removeSuffix(" Hz").toDoubleOrNull())
             assertEquals(Color.TRANSPARENT, color(gain))
             assertTrue(gain.isClickable && frequency.isClickable)
         }
@@ -137,7 +139,7 @@ class PeqInlineFilterUiTest {
         assertTrue(locks.isFieldLocked(state.bands.first().id, PeqEditField.FILTER_TYPE))
         assertEquals(listOf(state.bands.first().id to PeqInlineFilterAction.Unavailable), actions)
         assertFalse(type(PeqFilterType.NOTCH).isEnabled)
-        assertFalse(card().findViewById<View>(R.id.peq_band_title).isEnabled)
+        assertTrue("The saved type still opens its read-only dialog", card().findViewById<View>(R.id.peq_band_title).isEnabled)
         assertTrue(cell(R.id.peq_inline_lock).isEnabled)
         assertTrue(card().findViewById<View>(R.id.peq_band_plus).isEnabled)
         type(PeqFilterType.NOTCH).performClick()

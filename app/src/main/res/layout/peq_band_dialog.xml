@@ -19,44 +19,52 @@
                 app:icon="@drawable/ic_peq_lock_open" app:iconSize="20dp" app:iconPadding="0dp" app:iconGravity="textStart" />
         </LinearLayout>
         <LinearLayout android:id="@+id/peq_frequency_row" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:minHeight="56dp" android:gravity="center_vertical">
-            <TextView android:id="@+id/peq_frequency_label" android:layout_width="40dp" android:layout_height="wrap_content"
-                android:text="频率" android:textSize="13sp" />
+            android:layout_height="wrap_content" android:orientation="vertical">
+            <TextView android:id="@+id/peq_frequency_label" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/peq_frequency" android:textSize="13sp" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:minHeight="56dp" android:gravity="center_vertical">
             <com.google.android.material.slider.Slider android:id="@+id/peq_frequency_slider"
                 android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
                 app:labelBehavior="gone" app:thumbRadius="7dp" app:haloRadius="10dp" app:trackHeight="3dp" />
             <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_frequency_box"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="92dp"
-                android:layout_height="wrap_content" app:hintEnabled="false" app:suffixText="Hz">
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="76dp"
+                android:layout_height="wrap_content" app:hintEnabled="false">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_frequency_input"
                     android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="40dp"
-                    android:paddingHorizontal="6dp" android:paddingVertical="8dp" android:textSize="13sp"
-                    android:inputType="numberDecimal" android:selectAllOnFocus="true" android:maxLines="1" />
+                    android:paddingHorizontal="4dp" android:paddingVertical="8dp" android:textSize="13sp"
+                    android:inputType="numberDecimal" android:selectAllOnFocus="true" android:maxLines="1"
+                    android:singleLine="true" android:scrollHorizontally="true" />
             </com.google.android.material.textfield.TextInputLayout>
             <com.google.android.material.button.MaterialButton android:id="@+id/peq_frequency_lock"
                 style="@style/Widget.Material3.Button.TextButton" android:layout_width="32dp" android:layout_height="40dp"
                 android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"
                 app:icon="@drawable/ic_peq_lock_open" app:iconSize="20dp" app:iconPadding="0dp" app:iconGravity="textStart" />
+            </LinearLayout>
         </LinearLayout>
         <LinearLayout android:id="@+id/peq_gain_row" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:minHeight="56dp" android:gravity="center_vertical">
-            <TextView android:id="@+id/peq_gain_label" android:layout_width="40dp" android:layout_height="wrap_content"
-                android:text="增益" android:textSize="13sp" />
+            android:layout_height="wrap_content" android:orientation="vertical">
+            <TextView android:id="@+id/peq_gain_label" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/peq_gain" android:textSize="13sp" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:minHeight="56dp" android:gravity="center_vertical">
             <com.google.android.material.slider.Slider android:id="@+id/peq_gain_slider"
                 android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
                 app:labelBehavior="gone" app:thumbRadius="7dp" app:haloRadius="10dp" app:trackHeight="3dp" />
             <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_gain_box"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="92dp"
-                android:layout_height="wrap_content" app:hintEnabled="false" app:suffixText="dB">
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="76dp"
+                android:layout_height="wrap_content" app:hintEnabled="false">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_gain_input"
                     android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="40dp"
-                    android:paddingHorizontal="6dp" android:paddingVertical="8dp" android:textSize="13sp"
-                    android:inputType="numberSigned|numberDecimal" android:selectAllOnFocus="true" android:maxLines="1" />
+                    android:paddingHorizontal="4dp" android:paddingVertical="8dp" android:textSize="13sp"
+                    android:inputType="numberSigned|numberDecimal" android:selectAllOnFocus="true" android:maxLines="1"
+                    android:singleLine="true" android:scrollHorizontally="true" />
             </com.google.android.material.textfield.TextInputLayout>
             <com.google.android.material.button.MaterialButton android:id="@+id/peq_gain_lock"
                 style="@style/Widget.Material3.Button.TextButton" android:layout_width="32dp" android:layout_height="40dp"
                 android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"
                 app:icon="@drawable/ic_peq_lock_open" app:iconSize="20dp" app:iconPadding="0dp" app:iconGravity="textStart" />
+            </LinearLayout>
         </LinearLayout>
         <com.google.android.material.button.MaterialButtonToggleGroup android:id="@+id/peq_quality_mode"
             android:layout_width="wrap_content" android:layout_height="36dp" android:layout_gravity="center"
@@ -71,24 +79,25 @@
         <LinearLayout android:id="@+id/peq_quality_row" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:minHeight="56dp" android:gravity="center_vertical">
             <TextView android:id="@+id/peq_quality_label" android:layout_width="40dp" android:layout_height="wrap_content"
-                android:text="Q" android:textSize="13sp" />
+                android:text="Q" android:textSize="13sp" android:visibility="gone" />
             <com.google.android.material.slider.Slider android:id="@+id/peq_quality_slider"
                 android:layout_width="0dp" android:layout_weight="1" android:layout_height="44dp"
                 app:labelBehavior="gone" app:thumbRadius="7dp" app:haloRadius="10dp" app:trackHeight="3dp" />
             <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_quality_box"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="92dp"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox" android:layout_width="76dp"
                 android:layout_height="wrap_content" app:hintEnabled="false">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_quality_input"
                     android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="40dp"
-                    android:paddingHorizontal="6dp" android:paddingVertical="8dp" android:textSize="13sp"
-                    android:inputType="numberDecimal" android:selectAllOnFocus="true" android:maxLines="1" />
+                    android:paddingHorizontal="4dp" android:paddingVertical="8dp" android:textSize="13sp"
+                    android:inputType="numberDecimal" android:selectAllOnFocus="true" android:maxLines="1"
+                    android:singleLine="true" android:scrollHorizontally="true" />
             </com.google.android.material.textfield.TextInputLayout>
             <com.google.android.material.button.MaterialButton android:id="@+id/peq_quality_lock"
                 style="@style/Widget.Material3.Button.TextButton" android:layout_width="32dp" android:layout_height="40dp"
                 android:minWidth="0dp" android:minHeight="0dp" android:padding="0dp"
                 app:icon="@drawable/ic_peq_lock_open" app:iconSize="20dp" app:iconPadding="0dp" app:iconGravity="textStart" />
         </LinearLayout>
-        <TextView android:id="@+id/peq_quality_range_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:paddingStart="40dp" android:paddingBottom="4dp" />
+        <TextView android:id="@+id/peq_quality_range_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:paddingBottom="4dp" />
         <com.google.android.material.button.MaterialButton android:id="@+id/peq_band_copy"
             style="@style/Widget.Material3.Button.TextButton" android:layout_width="match_parent"
             android:layout_height="36dp" android:minHeight="0dp" android:text="@string/peq_copy_band" />

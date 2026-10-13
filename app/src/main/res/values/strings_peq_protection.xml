@@ -12,7 +12,7 @@
     <string name="peq_bulk_mode_hint">可修改 %1$d 段，锁定 %2$d 段；仅修改同类频段。</string>
     <string name="peq_bulk_draft_hint">调节的项目将在确定后应用，取消不保存。</string>
     <string name="peq_bulk_applied">参数已应用，锁定项与未调节项目保持原值。</string>
-    <string name="peq_reset_protected_result">已处理 %1$d 段可修改参数；%2$d 段包含锁定参数，已保留。</string>
+    <string name="peq_reset_protected_result">已处理 %1$d 段的未锁定参数；锁定跳过 %2$d 段。</string>
     <string name="peq_bulk_lock_result">已处理 %1$d 段</string>
     <string name="peq_resize_protected">已移除 %1$d 段未锁定频段；锁定频段已保留，当前共 %2$d 段。</string>
 </resources>

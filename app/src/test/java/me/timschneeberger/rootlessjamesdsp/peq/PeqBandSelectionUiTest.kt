@@ -12,11 +12,13 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
+import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.slider.Slider
+import com.google.android.material.color.MaterialColors
 import me.timschneeberger.rootlessjamesdsp.R
 import org.junit.After
 import org.junit.Assert.*
@@ -183,6 +185,33 @@ class PeqBandSelectionUiTest {
         assertTrue(changes.isEmpty())
     }
 
+    @Test fun restoredUnitsAndSignedGainExtremesFitExistingSlotsWithoutMovingControls() {
+        launch(PeqState(listOf(PeqBand("units", gain = 11.28, frequency = 2178.0)), gainRange = 100.0))
+        for (width in listOf(320, 411)) {
+            var originalPositions: List<Rect>? = null
+            for ((gain, frequency) in listOf(11.28 to 2178.0, 100.0 to 20000.0, -100.0 to 20000.0)) {
+                state = state.copy(bands = listOf(state.bands.single().copy(gain = gain, frequency = frequency)))
+                adapter.submitState(state)
+                layout(width)
+                val card = list.findViewHolderForAdapterPosition(0)!!.itemView as MaterialCardView
+                val gainValue = card.findViewById<TextView>(R.id.peq_band_gain)
+                val frequencyValue = card.findViewById<TextView>(R.id.peq_frequency_value)
+                assertEquals(String.format(java.util.Locale.ROOT, "%+.2f dB", gain), gainValue.text.toString())
+                assertEquals("${frequency.toInt()} Hz", frequencyValue.text.toString())
+                listOf(gainValue, frequencyValue).forEach { value ->
+                    assertEquals(74f, value.width / value.resources.displayMetrics.density, 1f)
+                    assertTrue("All symbols and units must fit the original value slot: ${value.text}",
+                        value.paint.measureText(value.text.toString()) <= value.width - value.compoundPaddingLeft - value.compoundPaddingRight + 1)
+                    assertEquals(1, value.maxLines)
+                }
+                val positions = listOf(R.id.peq_band_slider, R.id.peq_band_gain, R.id.peq_band_plus,
+                    R.id.peq_frequency_slider, R.id.peq_frequency_value, R.id.peq_frequency_plus).map { bounds(card, it) }
+                if (originalPositions == null) originalPositions = positions else assertEquals(originalPositions, positions)
+                assertFalse(card.findViewById<TextView>(R.id.peq_q_value).text.contains("Q"))
+            }
+        }
+    }
+
     @Test fun selectionPayloadPreservesControlsAndRecycledCardsRestoreTheirBackground() {
         launch(PeqModel.defaultState(170).copy(showQSlider = true))
         val first = row()
@@ -296,7 +325,7 @@ class PeqBandSelectionUiTest {
         assertTrue(locks.isBandLocked("locked"))
         assertEquals(Color.rgb(211, 47, 47), lock.iconTint!!.defaultColor)
         assertFalse(card.findViewById<Slider>(R.id.peq_band_slider).isEnabled)
-        listOf(R.id.peq_band_number, R.id.peq_band_title, R.id.peq_band_gain, R.id.peq_band_plus,
+        listOf(R.id.peq_band_gain, R.id.peq_band_plus,
             R.id.peq_q_plus, R.id.peq_frequency_plus, R.id.peq_gain_lock).forEach { card.findViewById<View>(it).performClick() }
         assertTrue(edits.isEmpty()); assertTrue(types.isEmpty()); assertTrue(fields.isEmpty()); assertTrue(changes.isEmpty())
         val before = state.bands.single()
@@ -312,6 +341,84 @@ class PeqBandSelectionUiTest {
         assertEquals(listOf("locked"), types)
         tap(card, R.id.peq_band_power)
         assertEquals(before, state.bands.single())
+    }
+
+    @Test fun lockedBandNumberAndTypeOpenReadOnlyWithoutClearingNewBadgeAndSelectionModeStillOwnsTheTap() {
+        launch(PeqState(listOf(PeqBand("inspect", gain = 3.0, frequency = 1234.0))), unlock = false)
+        val locks = PeqBandLockStore(controller!!.get())
+        locks.markNew("inspect")
+        locks.setBandLocked("inspect", true)
+        PeqEditField.entries.forEach { locks.setFieldLocked("inspect", it, true) }
+        adapter.notifyDataSetChanged()
+        val card = row()
+        val original = state
+        assertTrue(card.findViewById<View>(R.id.peq_band_number).isEnabled)
+        val badge = card.findViewById<TextView>(R.id.peq_band_number)
+        assertNotNull(badge.compoundDrawables[3])
+        assertEquals(12f, badge.compoundDrawables[3].intrinsicHeight / badge.resources.displayMetrics.density, 1f)
+        tap(card, R.id.peq_band_number)
+        assertEquals(listOf("inspect"), edits)
+        assertTrue(locks.isNew("inspect"))
+        assertEquals(View.VISIBLE, card.findViewById<View>(R.id.peq_band_new).visibility)
+        assertTrue(card.findViewById<View>(R.id.peq_band_title).isEnabled)
+        tap(card, R.id.peq_band_title)
+        listOf(R.id.peq_band_plus, R.id.peq_q_plus, R.id.peq_frequency_plus)
+            .forEach { card.findViewById<View>(it).performClick() }
+        assertEquals(original, state)
+        assertTrue(changes.isEmpty())
+        assertEquals(listOf("inspect"), types)
+        assertTrue(fields.isEmpty())
+        adapter.submitSelection(true, emptySet())
+        layout()
+        tap(card, R.id.peq_band_number)
+        tap(card, R.id.peq_band_title)
+        assertEquals(listOf("inspect", "inspect"), selectedClicks)
+        assertEquals(listOf("inspect"), edits)
+        assertEquals(listOf("inspect"), types)
+        assertTrue(locks.isNew("inspect"))
+        assertTrue(locks.isBandLocked("inspect"))
+    }
+
+    @Test fun bothGainAndMasterLocksDimDirectionColorsAndMasterLockGreysDeleteUntilUnlocked() {
+        launch(PeqState(listOf(PeqBand("tint"))))
+        for (gain in listOf(4.0, -4.0, 0.0)) {
+            state = state.copy(bands = listOf(state.bands.single().copy(gain = gain)))
+            adapter.submitState(state)
+            val card = row()
+            val slider = card.findViewById<Slider>(R.id.peq_band_slider)
+            val numeric = card.findViewById<TextView>(R.id.peq_band_gain)
+            val delete = card.findViewById<MaterialButton>(R.id.peq_band_delete)
+            val surface = MaterialColors.getColor(card, com.google.android.material.R.attr.colorSurface)
+            val vividThumb = slider.thumbTintList.getColorForState(intArrayOf(android.R.attr.state_enabled), slider.thumbTintList.defaultColor)
+            val vividTrack = slider.trackActiveTintList.getColorForState(intArrayOf(android.R.attr.state_enabled), slider.trackActiveTintList.defaultColor)
+            val vividNumber = numeric.currentTextColor
+            if (gain > 0) assertEquals(Color.rgb(211, 47, 47), vividThumb)
+            if (gain < 0) assertEquals(Color.rgb(25, 118, 210), vividThumb)
+            val original = state
+            fun assertDimmed() {
+                assertFalse(slider.isEnabled)
+                assertEquals(ColorUtils.blendARGB(vividThumb, surface, 0.6f), slider.thumbTintList.defaultColor)
+                assertEquals(ColorUtils.blendARGB(vividTrack, surface, 0.6f), slider.trackActiveTintList.defaultColor)
+                assertEquals(ColorUtils.blendARGB(vividNumber, surface, 0.6f), numeric.currentTextColor)
+                card.findViewById<View>(R.id.peq_band_plus).performClick()
+                assertEquals(original, state)
+            }
+            tap(card, R.id.peq_gain_lock)
+            assertDimmed()
+            assertEquals(Color.rgb(211, 47, 47), delete.iconTint!!.defaultColor)
+            tap(card, R.id.peq_gain_lock)
+            assertEquals(vividThumb, slider.thumbTintList.getColorForState(intArrayOf(android.R.attr.state_enabled), 0))
+            assertEquals(vividNumber, numeric.currentTextColor)
+            tap(card, R.id.peq_band_lock)
+            assertDimmed()
+            assertEquals(Color.GRAY, delete.iconTint!!.defaultColor)
+            assertFalse(delete.isEnabled)
+            tap(card, R.id.peq_band_lock)
+            assertEquals(Color.rgb(211, 47, 47), delete.iconTint!!.defaultColor)
+            assertTrue(delete.isEnabled)
+            assertEquals(vividThumb, slider.thumbTintList.getColorForState(intArrayOf(android.R.attr.state_enabled), 0))
+            assertEquals(vividNumber, numeric.currentTextColor)
+        }
     }
 
     @Test fun deletingUsesItsOwnCallbackAndRespectsMasterLockAndSelectionMode() {
@@ -332,7 +439,7 @@ class PeqBandSelectionUiTest {
         assertEquals(listOf(firstId), selectedClicks)
     }
 
-    @Test fun newBadgeSurvivesLocatingAndLockingButAnyParameterEntryClearsIt() {
+    @Test fun newBadgeSurvivesLocatingLockingAndTypeViewingButParameterAdjustmentEntryClearsIt() {
         launch(PeqState(listOf(PeqBand("fresh"))))
         val locks = PeqBandLockStore(controller!!.get())
         locks.setBandLocked("fresh", true)
@@ -351,6 +458,9 @@ class PeqBandSelectionUiTest {
         assertTrue(locks.isNew("fresh"))
         assertEquals(View.VISIBLE, card.findViewById<View>(R.id.peq_band_new).visibility)
         tap(card, R.id.peq_band_title)
+        assertTrue(locks.isNew("fresh"))
+        assertEquals(View.VISIBLE, card.findViewById<View>(R.id.peq_band_new).visibility)
+        tap(card, R.id.peq_band_gain)
         assertFalse(locks.isNew("fresh"))
         assertEquals(View.INVISIBLE, card.findViewById<View>(R.id.peq_band_new).visibility)
         assertTrue(changes.isEmpty())

@@ -71,6 +71,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private var displayedRevision = -1
     private var selectedBandId: String? = null
     private var previewBandId: String? = null
+    private var previewStatusBandId: String? = null
+    private var previewStatusListening = false
     private var displayOptions = PeqEditorSettings()
     var isMarkerVisible: Boolean = false
         private set
@@ -87,6 +89,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     internal data class MarkerLine(val x1: Float, val y1: Float, val x2: Float, val y2: Float,
                                    val strokeWidth: Float)
     internal data class MarkerDot(val x: Float, val y: Float, val radius: Float)
+    internal data class MarkerTextRun(val text: String, val color: Int)
     /** Actual parameters remain available even when the marker is clamped to the visible plot. */
     internal data class BandMarker(
         val bandId: String,
@@ -111,7 +114,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val labelLines: List<String>,
         val textSizeSp: Float,
         val filterTypeText: String?,
-        val labelColors: List<Int>
+        val labelColors: List<Int>,
+        val labelRuns: List<List<MarkerTextRun>>
     )
     internal var renderedMarker: BandMarker? = null
         private set
@@ -166,6 +170,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         settings.validate()
         if (displayOptions == settings) return
         displayOptions = settings
+        if (!settings.showMarkerGuides) renderedMarker = null
         requestedState?.let { setState(it, false) }
         updateMarkerDescription()
         invalidate()
@@ -178,8 +183,24 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         requestedState?.let { setState(it, false) }
     }
 
+    /** Presentation only. The editor owns the draft lifetime and clears it explicitly. */
+    fun setPreviewStatus(bandId: String?, listening: Boolean = false) {
+        val isListening = bandId != null && listening
+        if (previewStatusBandId == bandId && previewStatusListening == isListening) return
+        if (bandId == null && previewBandId == previewStatusBandId) previewBandId = null
+        previewStatusBandId = bandId
+        previewStatusListening = isListening
+        requestedState?.let { setState(it, false) }
+        updateMarkerDescription()
+        invalidate()
+    }
+
     private fun displayState(state: PeqState): PeqState {
-        val id = previewBandId?.takeIf {
+        // An explicit filter draft must be visible even when ordinary disabled-band
+        // inspection is off. Neither option changes the real bank or starts audio.
+        // Draft lifetime belongs to the editor, not the marker's short display timeout.
+        val explicitId = previewStatusBandId?.takeIf { it == selectedBandId }
+        val id = explicitId ?: previewBandId?.takeIf {
             displayOptions.previewDisabledBands && isMarkerVisible && it == selectedBandId
         } ?: return state
         if (state.bands.none { it.id == id && !it.enabled }) return state
@@ -263,6 +284,11 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private fun markerFilterTypeText(band: PeqBand): String? =
         PeqBandAdapter.typeLabel(context, band.type).takeIf { displayOptions.showMarkerFilterType }
 
+    private fun markerPreviewStatusText(band: PeqBand): String? =
+        if (displayOptions.showMarkerPreviewStatus && previewStatusBandId == band.id)
+            context.getString(if (previewStatusListening) R.string.peq_marker_listening else R.string.peq_marker_preview)
+        else null
+
     private fun markerHeadingText(band: PeqBand): String? {
         // Derive the ordinal from the complete bank, including disabled bands, not the
         // audible/preview subset. Reordering therefore updates the label immediately.
@@ -270,7 +296,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
             ?.takeIf { it >= 0 }?.plus(1)
         val number = ordinal?.takeIf { displayOptions.showMarkerBandNumber }
             ?.let { context.getString(R.string.peq_band_ordinal, it) }
-        return listOfNotNull(markerFilterTypeText(band), number).joinToString(" • ")
+        return listOfNotNull(markerFilterTypeText(band), number, markerPreviewStatusText(band)).joinToString(" • ")
             .takeIf { it.isNotEmpty() }
     }
 
@@ -284,7 +310,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
 
     private fun updateMarkerDescription() {
         val title = context.getString(R.string.peq_response_title)
-        contentDescription = selectedBand()?.takeIf { isMarkerVisible }?.let {
+        contentDescription = selectedBand()?.takeIf { isMarkerVisible && displayOptions.showMarkerGuides }?.let {
             (listOf(title) + markerLines(it))
                 .joinToString(", ")
         } ?: title
@@ -416,7 +442,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     }
 
     private fun drawSelectedBand(canvas: Canvas) {
-        if (!isMarkerVisible) return
+        // Presentation-only visibility must not end the editor's draft or marker timer.
+        if (!isMarkerVisible || !displayOptions.showMarkerGuides) return
         val band = selectedBand() ?: return
         val radius = minOf(3f * density, graphBounds.width() / 4, graphBounds.height() / 4)
         val markerX = x(band.frequency).coerceIn(graphBounds.left + radius, graphBounds.right - radius)
@@ -433,7 +460,19 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
             gain < 0.0 -> Color.rgb(25, 118, 210)
             else -> foreground
         }
-        val labelColors = labelLines.map { if (it == gainText) gainColor else foreground }
+        val previewStatusText = markerPreviewStatusText(band)
+        val headingText = markerHeadingText(band)
+        val labelRuns = labelLines.map { text ->
+            if (previewStatusText != null && text == headingText) {
+                val prefix = text.removeSuffix(previewStatusText)
+                buildList {
+                    if (prefix.isNotEmpty()) add(MarkerTextRun(prefix, foreground))
+                    add(MarkerTextRun(previewStatusText, if (previewStatusListening)
+                        Color.rgb(46, 125, 50) else Color.rgb(25, 118, 210)))
+                }
+            } else listOf(MarkerTextRun(text, if (text == gainText) gainColor else foreground))
+        }
+        val labelColors = labelRuns.map { it.first().color }
         val horizontalCrosshair = MarkerLine(graphBounds.left, markerY, graphBounds.right, markerY, crosshairPaint.strokeWidth)
         val verticalCrosshair = MarkerLine(markerX, graphBounds.top, markerX, graphBounds.bottom, crosshairPaint.strokeWidth)
         val gainAxisMarker = MarkerDot(horizontalCrosshair.x1, horizontalCrosshair.y1, radius)
@@ -462,7 +501,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
             markerX, markerY, radius, frequencyText, gainText, qText, bwText, RectF(label), RectF(graphBounds),
             horizontalCrosshair, verticalCrosshair, gainAxisMarker, frequencyAxisMarker,
             statusText, labelLines, markerTextPaint.textSize / resources.displayMetrics.scaledDensity,
-            markerFilterTypeText(band), labelColors)
+            markerFilterTypeText(band), labelColors, labelRuns)
         canvas.save()
         canvas.clipRect(graphBounds)
         canvas.drawLine(horizontalCrosshair.x1, horizontalCrosshair.y1,
@@ -472,9 +511,13 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         canvas.restore()
         if (labelLines.isNotEmpty()) canvas.drawRoundRect(label, 3f * density, 3f * density, markerBackgroundPaint)
         val baseline = label.top + padding - metrics.ascent
-        labelLines.forEachIndexed { index, text ->
-            markerTextPaint.color = labelColors[index]
-            canvas.drawText(text, label.left + padding, baseline + lineHeight * index, markerTextPaint)
+        labelRuns.forEachIndexed { index, runs ->
+            var textX = label.left + padding
+            runs.forEach { run ->
+                markerTextPaint.color = run.color
+                canvas.drawText(run.text, textX, baseline + lineHeight * index, markerTextPaint)
+                textX += markerTextPaint.measureText(run.text)
+            }
         }
         markerTextPaint.color = foreground
         // Draw last so a tiny viewport or an edge-clamped label cannot hide the red point.

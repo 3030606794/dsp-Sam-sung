@@ -6,8 +6,12 @@
     <string name="peq_invalid_marker_duration">请输入 0（永久）或 2–10 秒</string>
     <string name="peq_marker_text_size">图形标记字号</string>
     <string name="peq_show_marker_frequency">显示标记频率</string>
+    <string name="peq_show_marker_guides">显示辅助线和标志</string>
     <string name="peq_show_marker_filter_type">显示滤波器类型</string>
     <string name="peq_show_marker_band_number">显示频段编号</string>
+    <string name="peq_show_marker_preview_status">显示预览与监听状态</string>
+    <string name="peq_marker_preview">预览</string>
+    <string name="peq_marker_listening">监听</string>
     <string name="peq_show_inline_filters">显示滤波器</string>
     <string name="peq_band_ordinal">第%1$d段</string>
     <string name="peq_show_marker_gain">显示标记增益</string>
