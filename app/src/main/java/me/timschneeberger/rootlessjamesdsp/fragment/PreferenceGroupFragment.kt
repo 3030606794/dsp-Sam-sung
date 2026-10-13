@@ -77,6 +77,12 @@ class PreferenceGroupFragment : PreferenceFragmentCompat(), KoinComponent {
         preferenceManager.sharedPreferencesMode = Context.MODE_MULTI_PROCESS
         addPreferencesFromResource(args.getInt(BUNDLE_XML_RES))
 
+        if (parentFragment is DspFragment && args.getInt(BUNDLE_XML_RES) !in listOf(
+                R.xml.dsp_ddc_preferences, R.xml.dsp_convolver_preferences, R.xml.dsp_liveprog_preferences)) {
+            (preferenceScreen.getPreference(0) as? SwitchPreferenceGroup)?.showInlineParameters(
+                args.getInt(BUNDLE_XML_RES) !in listOf(R.xml.dsp_equalizer_preferences, R.xml.dsp_graphiceq_preferences))
+        }
+
         requireContext().registerLocalReceiver(receiver, IntentFilter(Constants.ACTION_PRESET_LOADED))
 
         when(args.getInt(BUNDLE_XML_RES)) {

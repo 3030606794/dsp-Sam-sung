@@ -32,7 +32,8 @@ class FloatingToggleButton @JvmOverloads constructor(
         // The main switch sits inside the bottom bar rather than floating above it.
         stateListAnimator = null
         compatElevation = 0f
-        supportBackgroundTintList = context.getColorStateList(R.color.selector_floating_toggle_tint)
+        supportBackgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
+        rippleColor = android.graphics.Color.TRANSPARENT
         drawable.setTintList(context.getColorStateList(R.color.selector_floating_toggle_foreground_tint))
     }
 

@@ -58,6 +58,7 @@
         android:layout_height="wrap_content"
         app:layout_anchor="@id/bar"
         app:fabCustomSize="48dp"
+        app:maxImageSize="36dp"
         app:elevation="0dp"
         app:hoveredFocusedTranslationZ="0dp"
         app:pressedTranslationZ="0dp"

@@ -24,6 +24,8 @@ class SwitchPreferenceGroup @JvmOverloads constructor(context: Context, attrs: A
     context, attrs, androidx.preference.R.attr.preferenceStyle,
     androidx.preference.R.style.Preference_SwitchPreferenceCompat_Material
 ) {
+    private var inlineParameters = false
+    private var headerVisible = true
     private var expanded = false
     val isExpanded: Boolean get() = expanded
     val isChecked: Boolean get() = state
@@ -48,6 +50,9 @@ class SwitchPreferenceGroup @JvmOverloads constructor(context: Context, attrs: A
         super.onBindViewHolder(holder)
 
         itemView = holder.itemView
+        holder.itemView.visibility = if (headerVisible) View.VISIBLE else View.GONE
+        holder.itemView.minimumHeight = if (headerVisible) (48 * context.resources.displayMetrics.density).toInt() else 0
+        holder.itemView.layoutParams.height = if (headerVisible) android.view.ViewGroup.LayoutParams.WRAP_CONTENT else 0
         itemView?.background = ContextCompat.getDrawable(context, R.drawable.shape_rounded_highlight)
         itemView?.background?.alpha = 0
 
@@ -72,7 +77,7 @@ class SwitchPreferenceGroup @JvmOverloads constructor(context: Context, attrs: A
 
         holder.itemView.apply {
             setOnClickListener {
-                setExpanded(!isExpanded)
+                if (!inlineParameters) setExpanded(!isExpanded)
             }
         }
     }
@@ -92,11 +97,19 @@ class SwitchPreferenceGroup @JvmOverloads constructor(context: Context, attrs: A
     }
 
     /** Expansion is presentation only: opening or closing a card never changes sound. */
+    fun showInlineParameters(showHeader: Boolean = true) {
+        inlineParameters = true
+        headerVisible = showHeader
+        setExpanded(true)
+        notifyChanged()
+    }
+
     fun setExpanded(value: Boolean) {
-        if (isExpanded == value) return
-        expanded = value
-        setChildrenVisibility(value)
-        animateHeaderState(value)
+        val target = value || inlineParameters
+        if (isExpanded == target) return
+        expanded = target
+        setChildrenVisibility(target)
+        animateHeaderState(target)
     }
 
     private fun setValueInternal(value: Boolean, notifyChanged: Boolean) {

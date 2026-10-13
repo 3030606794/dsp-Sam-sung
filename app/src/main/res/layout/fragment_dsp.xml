@@ -80,6 +80,11 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:visibility="gone">
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="56dp" android:gravity="center_vertical" android:orientation="horizontal" android:paddingHorizontal="12dp">
+                        <TextView android:id="@+id/eq_tab" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="EQ" android:textAppearance="?attr/textAppearanceTitleMedium" android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true" />
+                        <TextView android:id="@+id/peq_tab" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="PEQ" android:textAppearance="?attr/textAppearanceTitleMedium" android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true" />
+                        <androidx.appcompat.widget.AppCompatImageButton android:id="@+id/eq_power" android:layout_width="48dp" android:layout_height="48dp" android:padding="8dp" android:background="@android:color/transparent" android:contentDescription="@string/power_button_alt" app:srcCompat="@drawable/ic_twotone_power_settings_24dp" />
+                    </LinearLayout>
                     <androidx.fragment.app.FragmentContainerView
                         android:id="@+id/card_eq"
                         android:layout_width="match_parent"

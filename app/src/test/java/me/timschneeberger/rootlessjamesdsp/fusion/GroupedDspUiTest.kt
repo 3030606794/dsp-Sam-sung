@@ -134,6 +134,63 @@ class GroupedDspUiTest {
         assertEquals(24, children.fragments.size)
     }
 
+    @Test fun eqTabsOnlyChangePresentationAndPowerControlsSelectedEngine() {
+        val host = launch()
+        val eq = app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
+        val peq = app.getSharedPreferences(Constants.PREF_GEQ, Context.MODE_PRIVATE)
+        val eqKey = app.getString(R.string.key_eq_enable)
+        val peqKey = app.getString(R.string.key_geq_enable)
+        val before = snapshot()
+        host.findViewById<View>(R.id.peq_tab).performClick()
+        idle()
+        assertEquals(before, snapshot())
+        assertEquals(View.GONE, host.findViewById<View>(R.id.card_eq).visibility)
+        assertEquals(View.VISIBLE, host.findViewById<View>(R.id.card_geq).visibility)
+        host.findViewById<View>(R.id.eq_power).performClick()
+        idle()
+        assertTrue(peq.getBoolean(peqKey, false))
+        assertFalse(eq.getBoolean(eqKey, false))
+        host.findViewById<View>(R.id.eq_tab).performClick()
+        host.findViewById<View>(R.id.eq_power).performClick()
+        idle()
+        assertTrue(peq.getBoolean(peqKey, false))
+        assertTrue(eq.getBoolean(eqKey, false))
+        host.findViewById<View>(R.id.eq_power).performClick()
+        idle()
+        assertFalse(eq.getBoolean(eqKey, true))
+        assertTrue(peq.getBoolean(peqKey, false))
+        host.findViewById<View>(R.id.peq_tab).performClick()
+        controller!!.recreate()
+        idle()
+        assertTrue(controller!!.get().findViewById<View>(R.id.peq_tab).isSelected)
+        assertTrue(controller!!.get().findViewById<View>(R.id.eq_power).isSelected)
+    }
+
+    @Test fun ordinaryEffectsShowParametersWithoutSecondExpansionAndAdvancedDspStaysFoldable() {
+        val host = launch()
+        val children = dsp(host).childFragmentManager
+        val viper = children.findFragmentById(R.id.viper_effect_bass) as ViperEffectPreferenceFragment
+        assertTrue(viper.effectHeader.isExpanded)
+        viper.effectHeader.setExpanded(false)
+        assertTrue(viper.effectHeader.isExpanded)
+        val james = children.findFragmentById(R.id.card_bass) as PreferenceFragmentCompat
+        assertTrue(james.findPreference<SwitchPreferenceGroup>(app.getString(R.string.key_bass_enable))!!.isExpanded)
+        val advanced = children.findFragmentById(R.id.card_liveprog) as PreferenceFragmentCompat
+        assertFalse(advanced.findPreference<SwitchPreferenceGroup>(app.getString(R.string.key_liveprog_enable))!!.isExpanded)
+    }
+
+    @Test fun mainPowerIconHasTransparentBackgroundAndGreenGrayStates() {
+        val host = launch()
+        val main = host.layoutInflater.inflate(R.layout.activity_dsp_main, null)
+        val power = main.findViewById<me.timschneeberger.rootlessjamesdsp.view.FloatingToggleButton>(R.id.power_toggle)
+        assertEquals(android.graphics.Color.TRANSPARENT, power.supportBackgroundTintList!!.defaultColor)
+        val colors = host.getColorStateList(R.color.selector_floating_toggle_foreground_tint)
+        power.isToggled = true
+        assertEquals(android.graphics.Color.rgb(46, 173, 85), colors.getColorForState(power.drawableState, 0))
+        power.isToggled = false
+        assertEquals(android.graphics.Color.rgb(128, 128, 128), colors.getColorForState(power.drawableState, 0))
+    }
+
     class Host : FragmentActivity() {
         override fun onCreate(state: Bundle?) {
             setTheme(R.style.Theme_RootlessJamesDSP)
