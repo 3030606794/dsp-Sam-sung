@@ -290,8 +290,6 @@ class PinnedOutputControlTest {
             super.onCreate(savedInstanceState)
             // Inflate the shipping main-page layout without starting the root audio service.
             setContentView(R.layout.fragment_dsp)
-            findViewById<View>(R.id.translation_notice).visibility = View.GONE
-            findViewById<View>(R.id.update_notice).visibility = View.GONE
             findViewById<LinearLayout>(R.id.card_container).addView(View(this),
                 LinearLayout.LayoutParams(-1, (1800 * resources.displayMetrics.density).roundToInt()))
             if (savedInstanceState == null) supportFragmentManager.beginTransaction()
