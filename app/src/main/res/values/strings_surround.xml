@@ -1,0 +1,19 @@
+<resources>
+    <string name="surround_title">环绕音效</string>
+    <string name="surround_low">低频边界</string>
+    <string name="surround_high">高频边界</string>
+    <string name="surround_attenuation">串扰衰减</string>
+    <string name="surround_delay">延迟</string>
+    <string name="surround_frequency_response">环绕处理频段</string>
+    <string name="surround_reference">参考曲线 · 48 kHz</string>
+    <string name="surround_description">扬声器串扰消除，拓宽立体声声场。适合左右扬声器距离较近的设备。</string>
+    <string name="surround_driver_required">需要安装配套环绕驱动并重启设备</string>
+    <string name="surround_driver_pending">驱动尚未连接或不支持环绕，当前未生效</string>
+    <string name="surround_reset">重置当前预设</string>
+    <string name="surround_slot">预设 %1$d</string>
+    <string name="surround_range">请输入 %1$s 至 %2$s %3$s</string>
+    <string name="surround_summary">预设 %1$d · %2$d–%3$d Hz · 点击调节</string>
+    <string name="surround_power_on">环绕已开启，点击关闭</string>
+    <string name="surround_power_off">环绕已关闭，点击开启</string>
+    <string name="surround_power_pending">环绕未生效，点击清除已保存的开启状态</string>
+</resources>

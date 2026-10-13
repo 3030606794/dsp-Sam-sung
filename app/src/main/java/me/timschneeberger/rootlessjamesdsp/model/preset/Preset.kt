@@ -67,8 +67,9 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                     META_APP_VERSION to BuildConfig.VERSION_NAME,
                     META_APP_FLAVOR to BuildConfig.FLAVOR,
                     META_LIVEPROG_INCLUDED to false.toString(),
-                    // Earlier apps do not preserve the configured Q/BW range limit.
-                    META_MIN_VERSION_CODE to "1010"
+                    // Preserve surround slots instead of silently dropping them in older apps.
+                    META_MIN_VERSION_CODE to if (ctx.getSharedPreferences(
+                        "dsp_fusion_surround", Context.MODE_PRIVATE).all.isNotEmpty()) "1013" else "1010"
                 )
 
                 currentPath(ctx)
@@ -155,9 +156,9 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                 throw Exception(ctx.getString(R.string.filelibrary_corrupted))
             }
 
-            // Missing processor namespaces must not retain PEQ/tone/ViPER settings
+            // Missing processor namespaces must not retain PEQ/tone/ViPER/surround settings
             // from the preceding device profile underneath an older preset.
-            arrayOf("dsp_fusion_viper", "dsp_fusion_tone", Constants.PREF_GEQ).forEach { namespace ->
+            arrayOf("dsp_fusion_viper", "dsp_fusion_tone", "dsp_fusion_surround", Constants.PREF_GEQ).forEach { namespace ->
                 if (files.none { it.name == "$namespace.xml" }) {
                     ctx.getSharedPreferences(namespace, Context.MODE_PRIVATE).edit().clear().commit()
                 }

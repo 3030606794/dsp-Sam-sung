@@ -114,7 +114,7 @@ patch_conf() {
   }' "$1" > "$2"
 }
 
-ui_print "DSP Fusion 0.1.0-alpha12"
+ui_print "DSP Fusion 0.1.0-alpha12-surround1"
 ui_print "One module / one effect / one application"
 [ "$API" -ge 26 ] || abort "Android 8.0 or newer is required."
 case "$ARCH" in

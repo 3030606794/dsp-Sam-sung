@@ -1,0 +1,7 @@
+<resources>
+    <item name="surround_power" type="id" />
+    <item name="surround_editor_entry" type="id" />
+    <item name="surround_driver_status" type="id" />
+    <item name="surround_chart" type="id" />
+    <item name="surround_presets" type="id" />
+</resources>

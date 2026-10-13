@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.audiofx.AudioEffect
 import android.media.audiofx.AudioEffectHidden
+import me.timschneeberger.rootlessjamesdsp.fusion.SurroundController
 import me.timschneeberger.rootlessjamesdsp.fusion.ToneController
 import me.timschneeberger.rootlessjamesdsp.fusion.ViperController
 import me.timschneeberger.rootlessjamesdsp.fusion.OutputRuntimeStatus
@@ -51,6 +52,7 @@ class JamesDspRemoteEngine(
     private var legacyCurveDisabled = false
     @Volatile private var graphicEqNeedsRetry = false
     @Volatile private var convolverFailure: String? = null
+    private var fusionCapabilities = 0
     var effect: AudioEffectHidden? = createEffect()
 
     override var enabled: Boolean
@@ -79,14 +81,19 @@ class JamesDspRemoteEngine(
     private fun createEffect(): AudioEffectHidden {
         return try {
             AudioEffectHidden(EFFECT_TYPE_CUSTOM, EFFECT_JAMESDSP, priority, sessionId).also {
+                val capabilities = it.getParameterInt(FUSION_CAPABILITIES) ?: 0
                 if (it.getParameterInt(FUSION_PROTOCOL) != REQUIRED_PROTOCOL ||
-                    ((it.getParameterInt(FUSION_CAPABILITIES) ?: 0) and 15) != 15) {
+                    (capabilities and 15) != 15) {
                     it.release()
                     throw IllegalStateException("DSP音效 驱动协议不匹配，请安装与 APK 同一版本的融合模块。")
                 }
+                fusionCapabilities = capabilities
+                SurroundController.publishCapabilities(context, capabilities)
                 ViperController.publishStatus(context, "已连接 DSP音效：参数均衡器 + JamesDSP + MSEB + ViPER")
             }
         } catch (e: Exception) {
+            fusionCapabilities = 0
+            SurroundController.publishCapabilities(context, 0)
             ViperController.publishStatus(context, "连接失败：请安装 DSP音效 融合模块并重启手机。旧 JamesDSP / ViPER 模块不能驱动本应用。")
             Timber.e("Failed to create DSP音效 effect")
             Timber.e(e)
@@ -169,12 +176,15 @@ class JamesDspRemoteEngine(
         // Avoid resetting unchanged processors when another control is adjusted.
         val viperOk = ViperController.sync(context, ::sendFusionParameter)
         val toneOk = ToneController.sync(context, ::sendFusionParameter)
+        val surroundOk = SurroundController.sync(context, fusionCapabilities, ::sendFusionParameter)
         val peqOk = syncParametricEq()
         val output = PreferenceCache.getPreferences(context, Constants.PREF_OUTPUT)
         val balance = (output.all["balance"] as? Number)?.toInt()?.coerceIn(-100, 100) ?: 0
         val balanceOk = sendFusionParameter(FUSION_BALANCE, intArrayOf(balance))
-        ViperController.publishStatus(context, convolverFailure ?: if (viperOk && toneOk && peqOk && balanceOk)
-            "参数已同步：参数均衡器 → JamesDSP → MSEB → ViPER"
+        ViperController.publishStatus(context, convolverFailure ?: if (viperOk && toneOk && peqOk && balanceOk && surroundOk)
+            "参数已同步：参数均衡器 → 环绕 → JamesDSP → MSEB → ViPER"
+        else if (!surroundOk && fusionCapabilities and SurroundController.CAPABILITY == 0)
+            "环绕需要新版驱动：请安装配套环绕模块并重启手机。"
         else "部分参数写入失败，请检查驱动版本或重新启动音效服务。")
         return peqOk
     }

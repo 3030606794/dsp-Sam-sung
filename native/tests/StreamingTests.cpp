@@ -231,12 +231,46 @@ void testAnalogAndTube() {
     std::vector<float> loud(4096,2.f);const auto limited=james.render(loud,960);
     for(float s:limited) assert(std::isfinite(s) && std::abs(s)<=.502f);
 }
+void testSurroundLimiterOrder() {
+    constexpr double pi=3.14159265358979323846;
+    for(int mode:{0,1,2}) for(int delay:{20,210}) {
+        Engine engine(true,false);
+        const std::array<int32_t,6> surround{1,1,10,16000,500,delay};
+        assert(engine.raw(196609,surround.data(),sizeof(surround))==0);
+        const std::array<float,3> limiter{-6.f,60.f,0.f};
+        assert(engine.raw(1500,limiter.data(),sizeof(limiter))==0);
+        std::vector<float> input(48000*2);
+        for(size_t frame=0;frame<input.size()/2;++frame) {
+            const auto sample=float(.9*std::sin(2*pi*1000*frame/48000));
+            input[frame*2]=sample;
+            input[frame*2+1]=mode==0?sample:(mode==1?-sample:0.f);
+        }
+        const auto limited=engine.render(input,960);
+        for(float sample:limited) assert(std::isfinite(sample)&&std::abs(sample)<=.502f);
+        assert(energy(limited)>1e-5);
+    }
+    // Test-only bypass of the James stage removes its limiter: the wrapper
+    // hard clamp is still a final boundary, not the intended level control.
+    Engine unprotected(false,false);
+    const std::array<int32_t,6> strongest{1,1,10,16000,500,20};
+    assert(unprotected.raw(196609,strongest.data(),sizeof(strongest))==0);
+    std::vector<float> input(48000*2);
+    for(size_t frame=0;frame<input.size()/2;++frame) {
+        input[frame*2]=float(.9*std::sin(2*pi*1000*frame/48000));
+        input[frame*2+1]=-input[frame*2];
+    }
+    const auto clamped=unprotected.render(input,960);
+    bool hitClamp=false;
+    for(float sample:clamped) {assert(std::isfinite(sample)&&std::abs(sample)<=1);hitClamp|=std::abs(sample)==1;}
+    assert(hitClamp);
+    std::puts("RACE runs before James limiter: full-level mono/antiphase/one-sided inputs protected; emergency clamp only without James.");
+}
 }
 void runStreamingTests() {
     std::setvbuf(stdout,nullptr,_IONBF,0);
 #ifdef DSP_FUSION_TEST_ALLOCATIONS
     testImpulseAllocationFailures();
 #endif
-    testConvolutionStreaming();testCrossfeedStreaming();testRemovedEffectsAndBalance();testAnalogAndTube();testPeqProtocolAndChainOrder();
+    testConvolutionStreaming();testCrossfeedStreaming();testRemovedEffectsAndBalance();testAnalogAndTube();testPeqProtocolAndChainOrder();testSurroundLimiterOrder();
     std::puts("Streaming, removed algorithms, balance, analog, and retained James limiter passed.");
 }

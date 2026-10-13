@@ -1,6 +1,6 @@
 id=dsp_fusion
 name=DSP音效
-version=0.1.0-alpha12
-versionCode=1012
+version=0.1.0-alpha12-surround1
+versionCode=1013
 author=DSP-mobile-version contributors
-description=Unified 170-band parametric EQ + JamesDSP + MSEB + ViPER RE. Protocol 5; alpha10 adds live host sample-rate reporting. Update driver then reboot for the new status card. Disable old JamesDSP, ViPER and AML modules before use.
+description=Samsung alpha12 with RACE surround, 8 editable presets, PEQ, JamesDSP, tone controls and ViPER. Protocol 5; capabilities 31. Update this driver and reboot to enable surround.

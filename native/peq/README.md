@@ -8,7 +8,7 @@ It has up to 170 stereo second-order sections, with double coefficients and doub
 
 ## Protocol
 
-Fusion reports protocol **5** through GET 131080 and capabilities **15** through GET 131081 (PEQ adds bit 8). Existing parameter IDs and the PEQ packet layout remain supported. Protocol 4 expanded the gain and Q ranges; protocol 5 applies gain to all seven filter types. Alpha9 requires protocol 5 to prevent old drivers from silently ignoring low-pass/high-pass/notch/band-pass gain. Update the alpha9 APK and module together and reboot; protocol-4 alpha7/alpha8 drivers are incompatible.
+Fusion reports protocol **5** through GET 131080 and capabilities **31** through GET 131081 (PEQ adds bit 8; optional RACE surround adds bit 16). Existing parameter IDs and the PEQ packet layout remain supported. Protocol 4 expanded the gain and Q ranges; protocol 5 applies gain to all seven filter types. Alpha9 requires protocol 5 to prevent old drivers from silently ignoring low-pass/high-pass/notch/band-pass gain. Update the alpha9 APK and module together and reboot; protocol-4 alpha7/alpha8 drivers are incompatible.
 
 SET **1250** accepts one native-endian int32 array:
 

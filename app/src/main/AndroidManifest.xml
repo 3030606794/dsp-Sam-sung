@@ -43,6 +43,8 @@
             android:value="${crashlyticsCollectionEnabled}" />
 
         <!-- Activities -->
+        <activity android:name=".activity.SurroundActivity"
+            android:exported="false" />
         <activity
             android:name=".activity.MainActivity"
             android:exported="true"

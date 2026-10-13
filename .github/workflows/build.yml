@@ -42,7 +42,7 @@ jobs:
           mkdir -p dist
           APK=$(find app/build/outputs/apk -name '*universal*release*.apk' -o -name '*universal*.apk' | head -n1)
           test -n "$APK"
-          cp "$APK" dist/DSP-Audio-0.1.0-alpha12.apk
+          cp "$APK" dist/DSP-Audio-0.1.0-alpha12-surround1.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs dist/*.apk > dist/APK-SIGNATURE.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -145,5 +145,5 @@ jobs:
           cp docs/COMPATIBILITY.zh-CN.md release/COMPATIBILITY.zh-CN.md
           cd release
           sha256sum *.apk *.zip > SHA256SUMS.txt
-          TAG="v0.1.0-alpha12-build.${{ github.run_number }}"
-          gh release create "$TAG" --target "$GITHUB_SHA" --draft --prerelease --title "DSP音效 0.1.0 alpha 12 · 三星音效分组版 · build ${{ github.run_number }}" --notes-file ../docs/SAMSUNG-DEFAULTS.zh-CN.md ./*
+          TAG="v0.1.0-alpha12-surround1-build.${{ github.run_number }}"
+          gh release create "$TAG" --target "$GITHUB_SHA" --draft --prerelease --title "DSP音效 alpha12 · 三星环绕音效版 · build ${{ github.run_number }}" --notes-file ../docs/SAMSUNG-DEFAULTS.zh-CN.md ./*

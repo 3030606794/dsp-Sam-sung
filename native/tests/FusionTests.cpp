@@ -85,7 +85,7 @@ int main() {
     effect_descriptor_t instanceDescriptor{};
     assert((*h)->get_descriptor(h,&instanceDescriptor)==0);
     assert(instanceDescriptor.memoryUsage==descriptor.memoryUsage);
-    assert(get(h,131080)==5 && get(h,131081)==15);
+    assert(get(h,131080)==5 && get(h,131081)==31);
     assert(get(h,20002)>0 && get(h,20001)==48000);
     assert(set(h,131072,0)==0 && set(h,131073,0)==0);
     assert(cmd(h,EFFECT_CMD_ENABLE)==0);
@@ -95,6 +95,25 @@ int main() {
     assert(input==output); // Multiple chunks, odd final frame count, exact dry bypass.
     assert(process(h,input.data(),input.data(),input.size()/2)==0);
     assert(input==output); // In-place buffers.
+
+    // Verify the complete Android parameter bridge reaches the real RACE
+    // processor; an accepted UI packet alone must not count as an audio test.
+    std::array<int32_t,6> surround{1,1,200,9000,5500,35};
+    assert(setRaw(h,196609,surround.data(),sizeof(surround))==0);
+    std::array<float,4096> surroundInput{},surroundOutput{};
+    assert(process(h,surroundInput.data(),surroundOutput.data(),2048)==0);
+    surroundInput[0]=.05f;
+    assert(process(h,surroundInput.data(),surroundOutput.data(),2048)==0);
+    double oppositeEnergy=0;
+    for(size_t i=1;i<surroundOutput.size();i+=2) oppositeEnergy+=double(surroundOutput[i])*surroundOutput[i];
+    assert(oppositeEnergy>1e-10);
+    assert(setRaw(h,196609,surround.data(),sizeof(surround)-4)==-EINVAL);
+    auto invalidSurround=surround;invalidSurround[4]=0;
+    assert(setRaw(h,196609,invalidSurround.data(),sizeof(invalidSurround))==-EINVAL);
+    surround[1]=0;assert(setRaw(h,196609,surround.data(),sizeof(surround))==0);
+    surroundInput.fill(0);assert(process(h,surroundInput.data(),surroundOutput.data(),2048)==0);
+    assert(process(h,input.data(),output.data(),input.size()/2)==0 && input==output);
+    std::puts("RACE parameter bridge passed: real cross-channel response, invalid packet rejection, exact disabled bypass.");
 
     auto c=config(44100,AUDIO_FORMAT_PCM_FLOAT,true);
     assert(cmd(h,EFFECT_CMD_SET_CONFIG,sizeof(c),&c)==0);

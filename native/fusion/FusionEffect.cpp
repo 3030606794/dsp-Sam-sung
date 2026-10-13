@@ -13,6 +13,7 @@
 #include "essential.h"
 #include "../tone/ToneProcessor.h"
 #include "../peq/PeqProcessor.h"
+#include "../surround/SurroundProcessor.h"
 
 extern "C" audio_effect_library_t JDSP_AELI;
 extern "C" audio_effect_library_t VIPER_AELI;
@@ -27,6 +28,7 @@ constexpr size_t kMaxTransfer=32*1024*1024;
 constexpr uint32_t kJamesEnable=131072, kViperEnable=131073;
 constexpr uint32_t kBalance=131074;
 constexpr uint32_t kProtocol=131080, kCapabilities=131081, kTone=196608;
+constexpr uint32_t kSurround=196609;
 // Optional protocol-5 diagnostics. Unlike James GET 20001, this is the host I/O rate.
 constexpr uint32_t kHostRate=131082, kProcessedFrames=131083;
 constexpr uint32_t kPeq=1250;
@@ -100,6 +102,7 @@ struct Fusion {
     uint32_t stringChunks=0,stringWritten=0,impulseChunks=0,impulseWritten=0;
     dspfusion::ToneProcessor tone;
     dspfusion::PeqProcessor peq;
+    dspfusion::SurroundProcessor surround;
     std::array<float,kBlockFrames*2> first{},second{};
     ~Fusion() {
         if(james) JDSP_AELI.release_effect(james);
@@ -138,6 +141,7 @@ int32_t setConfig(Fusion& f,const effect_config_t& cfg) {
     if(ret) return ret;
     f.tone.configure(in.samplingRate);
     f.peq.configure(in.samplingRate);
+    f.surround.configure(in.samplingRate);
     f.balanceSmoothing=1.f-std::exp(-1.f/(.01f*in.samplingRate));
     f.config=next;
     f.ioFormat.store(in.format | (uint32_t(out.format)<<8) | (uint32_t(out.accessMode==EFFECT_BUFFER_ACCESS_ACCUMULATE)<<16));
@@ -282,6 +286,13 @@ int32_t parameter(Fusion& f,bool set,uint32_t size,void* data,uint32_t* replySiz
                 std::memcpy(parameters.data(),values,packet->vsize);
                 if(!f.peq.setParameters(parameters.data(),packet->vsize/4)) status=-EINVAL;
             }
+        } else if(id==kSurround) {
+            std::array<int32_t,dspfusion::SurroundProcessor::kWords> parameters{};
+            if(packet->vsize!=sizeof(parameters)) status=-EINVAL;
+            else {
+                std::memcpy(parameters.data(),values,sizeof(parameters));
+                if(!f.surround.setParameters(parameters.data(),parameters.size())) status=-EINVAL;
+            }
         } else if(id==kTone) {
             std::array<int32_t,11> parameters{};
             if(packet->vsize!=sizeof(parameters)) status=-EINVAL;
@@ -308,7 +319,7 @@ int32_t parameter(Fusion& f,bool set,uint32_t size,void* data,uint32_t* replySiz
         result->status=0; result->psize=result->vsize=4;
         int32_t value=id==kHostRate?static_cast<int32_t>(f.hostRate.load()):
             (id==kProcessedFrames?static_cast<int32_t>(f.processedFrames.load()&0x7fffffffu):
-            (id==kProtocol?5:(id==kCapabilities?15:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)))));
+            (id==kProtocol?5:(id==kCapabilities?31:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)))));
         std::memcpy(result->data,&id,4); std::memcpy(result->data+4,&value,4);
         *replySize=sizeof(effect_param_t)+8; return 0;
     }
@@ -343,6 +354,9 @@ int32_t process(effect_handle_t self,audio_buffer_t* in,audio_buffer_t* out) {
         const size_t count=std::min(kBlockFrames,in->frameCount-offset);
         for(size_t i=0;i<count*2;++i) f.first[i]=readSample(in->raw,offset*2+i,inputFormat);
         f.peq.process(f.first.data(),static_cast<uint32_t>(count));
+        // RACE may boost anti-phase content. Place it before James' existing
+        // output limiter rather than relying on the final emergency hard clamp.
+        f.surround.process(f.first.data(),static_cast<uint32_t>(count));
         audio_buffer_t a{},b{}; a.frameCount=b.frameCount=count;
         a.f32=f.first.data(); b.f32=f.second.data();
         float* current=f.first.data();
@@ -376,11 +390,11 @@ int32_t commandInternal(effect_handle_t self,uint32_t code,uint32_t size,void* d
         if(packet->psize==4 && (id==kHostRate || id==kProcessedFrames))
             return parameter(f,false,size,data,replySize,reply);
     }
-    // PEQ owns its own pending-snapshot lock. Designing 170 filters must not
-    // make the existing audio-thread try_lock emit dry audio while dragging.
+    // PEQ and surround own pending-snapshot locks. Preparing new filters must
+    // not make the audio-thread try_lock emit dry audio while dragging.
     if(code==EFFECT_CMD_SET_PARAM && data && size>=sizeof(effect_param_t)+4) {
         const auto* packet=static_cast<const effect_param_t*>(data);
-        if(packet->psize==4 && valueAt<uint32_t>(packet->data)==kPeq)
+        if(packet->psize==4 && (valueAt<uint32_t>(packet->data)==kPeq || valueAt<uint32_t>(packet->data)==kSurround))
             return parameter(f,true,size,data,replySize,reply);
     }
     std::lock_guard<std::mutex> lock(f.mutex);
@@ -400,7 +414,7 @@ int32_t commandInternal(effect_handle_t self,uint32_t code,uint32_t size,void* d
             if(!replySize || !reply || *replySize<4) return -EINVAL;
             f.enabled.store(code==EFFECT_CMD_ENABLE); return statusReply(replySize,reply,0);
         case EFFECT_CMD_RESET:
-            childCommand(f.james,EFFECT_CMD_RESET); childCommand(f.viper,EFFECT_CMD_RESET); f.tone.reset();f.peq.reset();
+            childCommand(f.james,EFFECT_CMD_RESET); childCommand(f.viper,EFFECT_CMD_RESET); f.tone.reset();f.peq.reset();f.surround.reset();
             return replySize && reply ? statusReply(replySize,reply,0) : 0;
         case EFFECT_CMD_SET_PARAM: case EFFECT_CMD_GET_PARAM:
             return parameter(f,code==EFFECT_CMD_SET_PARAM,size,data,replySize,reply);

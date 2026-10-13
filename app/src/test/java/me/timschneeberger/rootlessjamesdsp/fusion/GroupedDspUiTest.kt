@@ -40,7 +40,7 @@ import org.robolectric.annotation.LooperMode
 class GroupedDspUiTest {
     private val app: Application get() = RuntimeEnvironment.getApplication()
     private var controller: ActivityController<Host>? = null
-    private val namespaces = listOf(ViperParameters.PREFS, ToneController.PREFS,
+    private val namespaces = listOf(ViperParameters.PREFS, ToneController.PREFS, SurroundController.PREFS,
         Constants.PREF_APP, Constants.PREF_COMPANDER, Constants.PREF_BASS, Constants.PREF_EQ,
         Constants.PREF_GEQ, Constants.PREF_DDC, Constants.PREF_CONVOLVER, Constants.PREF_LIVEPROG,
         Constants.PREF_TUBE, Constants.PREF_STEREOWIDE, Constants.PREF_CROSSFEED, Constants.PREF_REVERB)
@@ -71,12 +71,12 @@ class GroupedDspUiTest {
     private fun dsp(host: Host) = host.supportFragmentManager.findFragmentByTag("dsp") as DspFragment
     private fun snapshot() = namespaces.associateWith { app.getSharedPreferences(it, Context.MODE_PRIVATE).all.toMap() }
 
-    @Test fun tenCardsContainAllTwentyTwoIndependentEffects() {
+    @Test fun tenCardsContainAllTwentyThreeIndependentEffects() {
         val host = launch()
         val cards = host.findViewById<LinearLayout>(R.id.card_container)
         assertEquals(10, cards.childCount)
         (0 until cards.childCount).forEach { assertTrue(cards.getChildAt(it) is MaterialCardView) }
-        assertEquals(24, dsp(host).childFragmentManager.fragments.size)
+        assertEquals(25, dsp(host).childFragmentManager.fragments.size)
         val bass = host.findViewById<View>(R.id.viper_effect_bass)
         val dynamicBass = host.findViewById<View>(R.id.card_bass)
         assertSame(bass.parent, dynamicBass.parent)
@@ -104,7 +104,7 @@ class GroupedDspUiTest {
         idle()
         assertEquals(View.VISIBLE, controller!!.get().findViewById<View>(R.id.group_bass_content).visibility)
         assertEquals(before, snapshot())
-        assertEquals(24, dsp(controller!!.get()).childFragmentManager.fragments.size)
+        assertEquals(25, dsp(controller!!.get()).childFragmentManager.fragments.size)
     }
 
     @Test fun independentSwitchesStillPersistAndPresetReloadRebindsBothEngines() {
@@ -131,7 +131,7 @@ class GroupedDspUiTest {
         assertFalse((children.findFragmentById(R.id.card_bass) as PreferenceFragmentCompat)
             .findPreference<SwitchPreferenceGroup>(jamesKey)!!.isChecked)
         assertEquals(93, app.getSharedPreferences(ViperParameters.PREFS, Context.MODE_PRIVATE).getInt("v_bass_freq", 0))
-        assertEquals(24, children.fragments.size)
+        assertEquals(25, children.fragments.size)
     }
 
     @Test fun eqTabsOnlyChangePresentationAndPowerControlsSelectedEngine() {

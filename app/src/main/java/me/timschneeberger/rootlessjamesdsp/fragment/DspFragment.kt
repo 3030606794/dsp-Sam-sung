@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.FragmentDspBinding
+import me.timschneeberger.rootlessjamesdsp.fusion.SurroundPreferenceFragment
 import me.timschneeberger.rootlessjamesdsp.fusion.TonePreferenceFragment
 import me.timschneeberger.rootlessjamesdsp.fusion.ViperEffectPreferenceFragment
 import me.timschneeberger.rootlessjamesdsp.fusion.ViperParameters
@@ -174,6 +175,7 @@ class DspFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListen
         childFragmentManager.beginTransaction()
             .addIfMissing(R.id.card_device_profiles, DeviceProfilesCardFragment.newInstance())
             .addIfMissing(R.id.card_fusion_tone, TonePreferenceFragment())
+            .addIfMissing(R.id.card_surround, SurroundPreferenceFragment())
             .addIfMissing(R.id.card_output_control, OutputControlFragment())
             .addIfMissing(
                 R.id.card_compressor, PreferenceGroupFragment.newInstance(Constants.PREF_COMPANDER,

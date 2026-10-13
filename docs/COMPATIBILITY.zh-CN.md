@@ -1,8 +1,13 @@
-# DSP音效 0.1.0-alpha12：升级与兼容性
+# DSP音效 alpha12-surround1：升级与兼容性
+
 
 ## 安装
 
-本版 APK versionCode 1012，驱动协议仍为 5。修复 alpha11 内置可编程 DSP 中文参数解析在 Android 上闪退的问题。本轮未改原生音频实现；已安装 alpha10 或 alpha11 驱动时，只需覆盖安装 `DSP-Audio-0.1.0-alpha12.apk`。随附 alpha12 驱动与 alpha10 的音频实现一致。alpha9 驱动可处理音效，但首页采样率及处理活动查询需 alpha10 或更新驱动。包名、签名和模块 ID `dsp_fusion` 不变，无需卸载或清除数据。
+本版 APK/模块 versionCode 1013，版本 0.1.0-alpha12-surround1，保留三星 alpha12 基线。新增 R.A.C.E. 环绕处理器，协议仍为 5，能力位为 31。新环绕必须使用本次驱动并由用户重启手机；原 alpha12 驱动只有能力位 15，已有功能继续可用，环绕开关显示升级提示。包名、正式签名与模块 ID `dsp_fusion` 保持不变，覆盖安装保留数据。
+
+环绕是按照公开原理独立实现的串音抵消，适用于外接立体声扬声器，未复制中子播放器商业DSP代码。八槽的参数范围与原厂预设值从用户提供安装包静态分析确认，不能据此宣称音频输出与中子相同。低采样率时高频边界会按当前采样率限制在奈奎斯特频率以下。
+
+本次不包含播放速度或音高调节。详情见 [本轮说明](SAMSUNG-DEFAULTS.zh-CN.md)。
 
 alpha7/alpha8 协议 4、alpha6 协议 3 和更早驱动不可与本版 APK 混用。原 JamesDSP、ViPER RE/Fork/AIDL、AML 模块保持禁用。支持 Android 8+、ARM64/ARMv7，需 root；用户自行安装。
 

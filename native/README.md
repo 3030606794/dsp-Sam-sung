@@ -2,7 +2,7 @@
 
 The installed driver is **one `libdspfusion.so` and one registered Android AudioEffect**. It owns private JamesDSP and ViPER effect instances and processes:
 
-`input → 170-band PEQ → JamesDSP → independent listening controls → ViPER → unified balance → finite-output clamp → output`
+`input → 170-band PEQ → RACE surround → JamesDSP → independent listening controls → ViPER → unified balance → finite-output clamp → output`
 
 The old drivers' `AELI` symbols are renamed internally; the linker exports only the Fusion `AELI`. Do not register the original JamesDSP or ViPER UUIDs for this library.
 
@@ -11,7 +11,7 @@ The old drivers' `AELI` symbols are renamed internally; the linker exports only 
 | Implementation UUID | `30306067-9400-4d53-9000-000000000001` |
 | Type UUID | `30306067-9400-4d53-9000-000000000000` |
 | Control protocol | 5 |
-| Capabilities | 15: James = 1, ViPER = 2, listening controls = 4, PEQ = 8 |
+| Capabilities | 31: James = 1, ViPER = 2, listening controls = 4, PEQ = 8, RACE surround = 16 |
 | Channels | Stereo only |
 | External PCM formats | float, signed 16-bit, signed 32-bit, packed signed 24-bit, signed 8.24 |
 | Internal format | Interleaved stereo float; child output uses WRITE |
@@ -30,10 +30,11 @@ Use Android `EFFECT_CMD_SET_PARAM` / `EFFECT_CMD_GET_PARAM`, `effect_param_t.psi
 | 131074 | SET/GET | Unified balance, int32 −100 (left) to +100 (right), 0 centered |
 | 1250 | SET | PEQ snapshot, schema 1; see [`peq/README.md`](peq/README.md) |
 | 131080 | GET | Protocol version, int32 = 5 |
-| 131081 | GET | Capability bits, int32 = 15 |
+| 131081 | GET | Capability bits, int32 = 31 |
 | 131082 | GET | Optional host input/output sample rate in Hz; 0 until Android accepts an explicit configuration |
 | 131083 | GET | Optional processed-frame counter, lower 31 bits; advances only for successful active processing |
 | 196608 | SET | 44 bytes: int32 enable followed by ten int32 controls |
+| 196609 | SET | 24 bytes: six int32 words for optional RACE surround; see [`surround/README.md`](surround/README.md) |
 
 The ten listening controls retain the screenshot order: temperature, bass extension, bass punch, thickness, vocal presence, female vocal coloration, low sibilance, high sibilance, transients, air. Values are −100 to +100. This is an independent DSP model; it does not contain HiBy's proprietary engine or claim bit-identical MSEB output. See [`tone/README.md`](tone/README.md) and the application compatibility document for the model's scope.
 
