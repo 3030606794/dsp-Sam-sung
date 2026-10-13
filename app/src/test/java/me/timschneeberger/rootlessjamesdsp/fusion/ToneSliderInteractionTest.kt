@@ -101,7 +101,7 @@ class ToneSliderInteractionTest {
     @Test fun buttonsEditDisabledEffectByExactlyOneAndStopAtEveryRangeBoundary() {
         val fragment = launch()
         val group = fragment.findPreference<SwitchPreferenceGroup>(ToneController.ENABLED)!!
-        assertEquals("MSEB", group.title.toString())
+        assertEquals("音色调节", group.title.toString())
         assertFalse(group.isChecked)
         assertFalse(group.isExpanded)
         group.setExpanded(true)
