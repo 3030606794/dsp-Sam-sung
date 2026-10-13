@@ -233,6 +233,23 @@ class GroupedDspUiTest {
         } finally { next.pause().stop().destroy(); idle() }
     }
 
+    @Test fun powerWaveExpandsFromTouchAndClosingWaveStartsAtScreenEdges() {
+        val host = launch()
+        val canvasHost = FrameLayout(host).apply { layout(0, 0, 1000, 2000) }
+        val opening = me.timschneeberger.rootlessjamesdsp.view.PowerTransition(canvasHost, 120f, 1800f, true)
+        val closing = me.timschneeberger.rootlessjamesdsp.view.PowerTransition(canvasHost, 120f, 1800f, false)
+        assertEquals(0f, opening.radius, 0f)
+        assertEquals(closing.maximumRadius, closing.radius, 0f)
+        assertTrue(opening.maximumRadius >= kotlin.math.hypot(880f, 1800f))
+        val before = snapshot()
+        opening.start()
+        opening.cancel()
+        closing.start()
+        closing.cancel()
+        assertEquals(before, snapshot())
+        assertFalse(canvasHost.isClickable)
+    }
+
     class Host : FragmentActivity() {
         override fun onCreate(state: Bundle?) {
             setTheme(R.style.Theme_RootlessJamesDSP)
