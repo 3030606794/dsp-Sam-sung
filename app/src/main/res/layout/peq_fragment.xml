@@ -9,7 +9,8 @@
         <com.google.android.material.appbar.AppBarLayout
             android:id="@+id/peq_response_appbar" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:background="@android:color/transparent"
-            android:stateListAnimator="@null" app:elevation="0dp" app:liftOnScroll="false">
+            android:stateListAnimator="@null" app:elevation="0dp" app:liftOnScroll="false"
+            app:layout_behavior="me.timschneeberger.rootlessjamesdsp.peq.PeqResponseScrollBehavior">
             <LinearLayout android:id="@+id/peq_response_header"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:orientation="vertical">

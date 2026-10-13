@@ -40,10 +40,10 @@ class PeqRepositoryTest {
         assertEquals(original, repository.load())
     }
 
-    @Test fun all170BandsAndUiMetadataRoundTripWithoutLegacyChanges() {
+    @Test fun all130BandsAndUiMetadataRoundTripWithoutLegacyChanges() {
         val legacy = "GraphicEQ: 20 3; 1000 -2; 20000 0;"
         preferences.edit().putString("geq_nodes", legacy).putBoolean("geq_enable", false).commit()
-        val state = PeqState(List(170) { index -> PeqBand("band-$index",
+        val state = PeqState(List(130) { index -> PeqBand("band-$index",
             PeqFilterType.entries[index % 7], index % 2 == 0,
             1000.0 + index * 0.001, 23.127, 0.12345 + index * 0.01) }, 6.0, 0.25)
         assertTrue(repository.save(state))

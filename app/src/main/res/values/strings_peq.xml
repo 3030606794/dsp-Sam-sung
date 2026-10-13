@@ -28,7 +28,7 @@
     <string name="peq_copy_band">复制此频段</string>
     <string name="peq_delete_band">删除频段</string>
     <string name="peq_delete_confirm">删除第 %1$d 段？其他频段保持不变。</string>
-    <string name="peq_band_count">频段数量（1–170）</string>
+    <string name="peq_band_count">频段数量（1–130）</string>
     <string name="peq_gain_step">增益滑块步长（0.01–2 dB）</string>
     <string name="peq_gain_range">增益范围（±1–100 dB）</string>
     <string name="peq_q_step">Q 值步长（0.01–100）</string>
@@ -42,7 +42,7 @@
     <string name="peq_redistribute">按当前数量重新分布频率 20 Hz–20 kHz</string>
     <string name="peq_redistribute_title">重新分布频率？</string>
     <string name="peq_redistribute_confirm">当前范围共 %1$d 段，仅重新分布未锁定频率到 20 Hz–20 kHz。整段锁定或频率锁定的频段保持不变；其他频段也只改频率，增益、Q/BW、滤波器类型和开关状态均保持不变。</string>
-    <string name="peq_invalid_count">请输入 1 到 170 之间的整数</string>
+    <string name="peq_invalid_count">请输入 1 到 130 之间的整数</string>
     <string name="peq_invalid_frequency">频率须为 0 或 20–20000 Hz</string>
     <string name="peq_invalid_gain">增益须在 −%1$s 至 +%1$s dB 之间</string>
     <string name="peq_pin_response">固定频响图</string>

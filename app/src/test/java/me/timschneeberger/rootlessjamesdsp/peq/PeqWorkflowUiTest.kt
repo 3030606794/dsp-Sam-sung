@@ -124,8 +124,8 @@ class PeqWorkflowUiTest {
         return curve.renderedMarker
     }
 
-    @Test fun toolbarPinSwitchPersistsAndControlsNestedScrollingWith170RecycledBands() {
-        val original = PeqModel.defaultState(170)
+    @Test fun toolbarPinSwitchPersistsAndControlsNestedScrollingWith130RecycledBands() {
+        val original = PeqModel.defaultState(130)
         launch(original)
         assertTrue(menu().findItem(R.id.peq_pin_response).isChecked)
         val appbar = view<AppBarLayout>(R.id.peq_response_appbar)
@@ -141,9 +141,9 @@ class PeqWorkflowUiTest {
         nestedScrollUp()
         assertTrue("The unpinned plot must actually move out of view", appbar.top < 0)
         assertTrue(appbar.bottom <= 0)
-        row(169)
+        row(129)
         val list = view<RecyclerView>(R.id.peq_band_list)
-        assertEquals(170, list.adapter!!.itemCount)
+        assertEquals(130, list.adapter!!.itemCount)
         assertTrue("Scrolling must retain RecyclerView's bounded visible row count", list.childCount in 1..25)
         assertArrayEquals(footerBefore, IntArray(2).also { footer.getLocationInWindow(it) })
         assertEquals(original.bands, repository.load().bands)
@@ -163,12 +163,18 @@ class PeqWorkflowUiTest {
     }
 
     @Test fun locateExpandsHiddenPlotAndShowsOnlyTheRequestedBandForTwoSeconds() {
-        val original = PeqModel.defaultState(170).copy(pinResponse = false)
+        val original = PeqModel.defaultState(130).copy(pinResponse = false)
         launch(original)
         assertNull(marker())
         nestedScrollUp()
         assertTrue(view<AppBarLayout>(R.id.peq_response_appbar).top < 0)
-        row(169).findViewById<MaterialButton>(R.id.peq_band_locate).performClick()
+        val locate = row(129).findViewById<MaterialButton>(R.id.peq_band_locate)
+        val locatedAt = SystemClock.uptimeMillis()
+        locate.performClick()
+        layout()
+        assertNotNull("The marker updates immediately even when expanding would hide the +", marker())
+        val expansionDelay = ViewConfiguration.getDoubleTapTimeout().toLong()
+        advance(expansionDelay)
         layout()
         assertEquals(0, view<AppBarLayout>(R.id.peq_response_appbar).top)
         val shown = requireNotNull(marker())
@@ -179,9 +185,13 @@ class PeqWorkflowUiTest {
         assertEquals(shown.x, shown.verticalCrosshair.x1, 0f)
         assertEquals(shown.x, shown.verticalCrosshair.x2, 0f)
         assertEquals(original, repository.load())
-        advance(1999)
+        // This test covers locating through a layout transition, whose native click/draw work
+        // advances uptime. Sample either side of two seconds; the independent slider-duration
+        // test below checks the precise 1999/2000 ms boundary without this layout transition.
+        assertTrue(SystemClock.uptimeMillis() < locatedAt + 1900)
+        advance(locatedAt + 1900 - SystemClock.uptimeMillis())
         assertNotNull(marker())
-        advance(1)
+        advance(locatedAt + 2100 - SystemClock.uptimeMillis())
         assertNull(marker())
         assertFalse(view<PeqResponseView>(R.id.peq_curve).isMarkerVisible)
         assertEquals(original, repository.load())
@@ -527,8 +537,8 @@ class PeqWorkflowUiTest {
         assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
     }
 
-    @Test fun customBatchRejectsOverflowAndStopsExactlyAt170() {
-        launch(PeqModel.defaultState(160))
+    @Test fun customBatchRejectsOverflowAndStopsExactlyAt130() {
+        launch(PeqModel.defaultState(120))
         view<View>(R.id.peq_add_front).performLongClick()
         dialog().listView.performItemClick(null, 4, 4)
         val custom = dialog()
@@ -536,12 +546,12 @@ class PeqWorkflowUiTest {
         custom.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         assertTrue(custom.isShowing)
         assertNotNull(custom.findViewById<TextInputLayout>(R.id.peq_add_count_box)!!.error)
-        assertEquals(160, repository.load().bands.size)
+        assertEquals(120, repository.load().bands.size)
         custom.findViewById<EditText>(R.id.peq_add_count)!!.setText("10")
         custom.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         idle()
         assertFalse(custom.isShowing)
-        assertEquals(170, repository.load().bands.size)
+        assertEquals(130, repository.load().bands.size)
         assertTrue(view<View>(R.id.peq_add_front).isEnabled)
         assertTrue(view<View>(R.id.peq_add_back).isEnabled)
         val full = repository.load()
@@ -551,7 +561,7 @@ class PeqWorkflowUiTest {
         assertEquals(full, repository.load())
     }
 
-    @Test fun realDoubleTapsJumpToBothEndsWithoutAddingBandsAndWorkAtThe170BandLimit() {
+    @Test fun realDoubleTapsJumpToBothEndsWithoutAddingBandsAndWorkAtThe130BandLimit() {
         val original = PeqModel.defaultState(40)
         launch(original)
         fun doubleTap(id: Int) {
@@ -585,7 +595,7 @@ class PeqWorkflowUiTest {
             assertEquals(expected, repository.load())
         }
         assertJumpsWithoutChanges(original)
-        val full = PeqModel.defaultState(170)
+        val full = PeqModel.defaultState(130)
         assertTrue(repository.save(full))
         controller!!.recreate()
         layout()

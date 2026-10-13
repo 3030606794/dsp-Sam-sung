@@ -11,7 +11,7 @@ class PeqResponseTest {
         PeqBand("test", type, true, frequency, gain, q)))
 
     @Test fun neutralAndDisabledBandsHaveAnExactlyFlatResponse() {
-        assertTrue(PeqResponse.curve(PeqModel.defaultState(170)).all { it.db == 0.0 })
+        assertTrue(PeqResponse.curve(PeqModel.defaultState(130)).all { it.db == 0.0 })
         val disabled = state(PeqFilterType.LOW_PASS).let {
             it.copy(bands = it.bands.map { band -> band.copy(enabled = false) })
         }
@@ -140,10 +140,10 @@ class PeqResponseTest {
         assertThrows(IllegalArgumentException::class.java) { PeqResponse.bandwidthOctaves(0.5, -1.0) }
     }
 
-    @Test fun extreme170BandResponsesRemainFiniteWithoutProductOverflow() {
+    @Test fun extreme130BandResponsesRemainFiniteWithoutProductOverflow() {
         for (type in PeqFilterType.entries) {
             for (rate in listOf(44100.0, 48000.0, 96000.0)) {
-                val state = PeqState(List(170) { index -> PeqBand("band-$index", type, true,
+                val state = PeqState(List(130) { index -> PeqBand("band-$index", type, true,
                     if (index % 2 == 0) 20.0 else 20000.0,
                     if (index % 2 == 0) 100.0 else -100.0,
                     if (index % 2 == 0) 0.1 else 100.0) })
@@ -205,8 +205,8 @@ class PeqResponseTest {
         }
     }
 
-    @Test fun adaptive170BandCurveIsBoundedAndDoesNotDropAnyActiveCenter() {
-        val state = PeqModel.defaultState(170).let { original -> original.copy(
+    @Test fun adaptive130BandCurveIsBoundedAndDoesNotDropAnyActiveCenter() {
+        val state = PeqModel.defaultState(130).let { original -> original.copy(
             bands = original.bands.mapIndexed { index, band -> band.copy(q = 100.0,
                 gain = if (index % 2 == 0) 100.0 else -100.0,
                 type = PeqFilterType.entries[index % 7]) }) }

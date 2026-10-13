@@ -20,13 +20,13 @@ class PeqProtocolTest {
 
     @Test fun packetPreservesEveryFilterAndFixedPointUnit() {
         val types = PeqFilterType.entries
-        val bands = List(170) { index -> PeqBand("band-$index", types[index % types.size],
+        val bands = List(130) { index -> PeqBand("band-$index", types[index % types.size],
             index % 2 == 0, 1234.567, -12.345, 1.234) }
         val payload = PeqProtocol.payload(PeqState(bands), true)
         assertEquals(1250, PeqProtocol.PARAMETER)
-        assertEquals(853, payload.size)
-        assertArrayEquals(intArrayOf(1, 1, 170), payload.take(3).toIntArray())
-        repeat(170) { index ->
+        assertEquals(653, payload.size)
+        assertArrayEquals(intArrayOf(1, 1, 130), payload.take(3).toIntArray())
+        repeat(130) { index ->
             assertArrayEquals(intArrayOf(index % 7, if (index % 2 == 0) 1 else 0,
                 1234567, -12345, 1234), payload.copyOfRange(3 + 5 * index, 8 + 5 * index))
         }

@@ -476,7 +476,7 @@ class PeqUi8InteractionTest {
         val beforeLocks = lockPrefs.all.toMap()
         val plus = card().findViewById<View>(R.id.peq_band_locate)
         tap(plus)
-        assertFalse(graph.isMarkerVisible)
+        assertTrue("The first release locates immediately, without waiting for the double-tap window", graph.isMarkerVisible)
         assertEquals(2, repository.load().bands.size)
         awaitSingle()
         assertTrue(graph.isMarkerVisible)

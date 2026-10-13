@@ -81,8 +81,8 @@ class PeqPresetIntegrationTest {
         assertEquals("1010", export().second[Preset.META_MIN_VERSION_CODE])
     }
 
-    @Test fun profileArchiveRestoresAll170BandsDisplayPinStepsAndUnchangedLegacyNodes() {
-        val original = PeqModel.defaultState(170).let { state -> state.copy(
+    @Test fun profileArchiveRestoresAll130BandsDisplayPinStepsAndUnchangedLegacyNodes() {
+        val original = PeqModel.defaultState(130).let { state -> state.copy(
             bands = state.bands.mapIndexed { index, band -> band.copy(
                 type = PeqFilterType.entries[index % 7], enabled = index % 2 == 0,
                 gain = if (index % 2 == 0) 100.0 else -100.0, q = 100.0) },

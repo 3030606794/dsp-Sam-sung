@@ -64,7 +64,7 @@ class PeqPresetStoreTest {
     }
 
     @Test fun twentyEntriesRoundTripAsOneBundleAndSingleExportsHaveNoLocalIds() {
-        val bank = PeqModel.defaultState(170).copy(qStep = 37.125, frequencyStep = 123.5)
+        val bank = PeqModel.defaultState(130).copy(qStep = 37.125, frequencyStep = 123.5)
         val saved = (1..20).map { store.save("预设 $it", if (it == 1) bank else state) }
         val bundle = store.exportJson()
         assertEquals(saved.map { it.name }, PeqPresetCodec.decode(bundle).map { it.name })
@@ -137,7 +137,7 @@ class PeqPresetStoreTest {
         val operations = listOf<() -> Unit>(
             { failing.save("新预设", state) },
             { failing.rename(original[0].id, "新名称") },
-            { failing.overwrite(original[0].id, PeqModel.defaultState(170)) },
+            { failing.overwrite(original[0].id, PeqModel.defaultState(130)) },
             { failing.delete(original[0].id) },
             { failing.importJson(portable("导入预设")) }
         )

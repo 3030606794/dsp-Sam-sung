@@ -50,7 +50,7 @@ class PeqModelTest {
     @Test fun addingAtEitherEndKeepsExistingBandObjectsAndEveryEditorSetting() {
         val original = customBank()
         PeqResizeEdge.entries.forEach { edge ->
-            val expanded = PeqModel.resize(original, 170, edge, redistribute = false)
+            val expanded = PeqModel.resize(original, 130, edge, redistribute = false)
             val retained = if (edge == PeqResizeEdge.FRONT) expanded.bands.takeLast(original.bands.size)
                 else expanded.bands.take(original.bands.size)
             assertEquals(original.bands, retained)
@@ -58,12 +58,12 @@ class PeqModelTest {
             assertEquals(original, expanded.copy(bands = original.bands))
             val added = if (edge == PeqResizeEdge.FRONT) expanded.bands.dropLast(original.bands.size)
                 else expanded.bands.drop(original.bands.size)
-            assertEquals(170 - original.bands.size, added.size)
+            assertEquals(130 - original.bands.size, added.size)
             added.forEach { band ->
                 assertEquals(PeqBand(id = band.id, frequency = 0.0, gain = 0.0, q = 0.5), band)
                 assertFalse(original.bands.any { it.id == band.id })
             }
-            assertEquals(170, expanded.bands.map { it.id }.toSet().size)
+            assertEquals(130, expanded.bands.map { it.id }.toSet().size)
             assertEquals(expanded, PeqModel.validate(expanded))
         }
     }
@@ -86,7 +86,7 @@ class PeqModelTest {
     @Test fun explicitRedistributionAfterFrontOrBackResizeChangesOnlyFrequencies() {
         val original = customBank()
         PeqResizeEdge.entries.forEach { edge ->
-            for (count in listOf(0, 1, 3, original.bands.size, 170)) {
+            for (count in listOf(0, 1, 3, original.bands.size, 130)) {
                 val result = PeqModel.resize(original, count, edge, redistribute = true)
                 assertEquals(original, result.copy(bands = original.bands))
                 assertEquals(PeqModel.defaultState(count).bands.map { it.frequency }, result.bands.map { it.frequency })
@@ -115,11 +115,11 @@ class PeqModelTest {
                 PeqModel.resize(original, original.bands.size, edge, redistribute = true))
             assertSame(empty, PeqModel.resize(empty, 0, edge, redistribute = false))
             assertEquals(empty, PeqModel.resize(empty, 0, edge, redistribute = true))
-            val maximum = PeqModel.resize(empty, 170, edge, redistribute = false)
+            val maximum = PeqModel.resize(empty, 130, edge, redistribute = false)
             assertTrue(maximum.bands.all { it.frequency == 0.0 && it.gain == 0.0 && it.q == 0.5 })
-            assertSame(maximum, PeqModel.resize(maximum, 170, edge, redistribute = false))
+            assertSame(maximum, PeqModel.resize(maximum, 130, edge, redistribute = false))
             assertEquals(empty, PeqModel.resize(maximum, 0, edge, redistribute = false))
-            listOf(-1, 171).forEach { count ->
+            listOf(-1, 131).forEach { count ->
                 listOf(false, true).forEach { redistribute ->
                     assertThrows(IllegalArgumentException::class.java) {
                         PeqModel.resize(original, count, edge, redistribute)
@@ -136,10 +136,10 @@ class PeqModelTest {
     @Test fun resizingRedistributesFrequencyButKeepsOtherExistingParameters() {
         val original = PeqState(listOf(PeqBand("custom", PeqFilterType.HIGH_SHELF,
             false, 1234.567, 23.75, 12.34)), gainRange = 6.0, gainStep = 0.25)
-        val expanded = PeqModel.resize(original, 170)
-        assertEquals(170, expanded.bands.size)
+        val expanded = PeqModel.resize(original, 130)
+        assertEquals(130, expanded.bands.size)
         assertEquals(original.bands.single().copy(frequency = 20.0), expanded.bands.first())
-        assertEquals(170, expanded.bands.map { it.id }.toSet().size)
+        assertEquals(130, expanded.bands.map { it.id }.toSet().size)
         assertTrue(expanded.bands.drop(1).all { it.type == PeqFilterType.PEAK && it.gain == 0.0 })
         assertEquals(original.copy(bands = listOf(original.bands.single().copy(frequency = sqrt(400000.0)))),
             PeqModel.resize(expanded, 1))
@@ -150,7 +150,7 @@ class PeqModelTest {
     @Test fun displayRangeAndStepDoNotModifyPreviouslySavedGains() {
         val state = PeqState(listOf(PeqBand(gain = 23.127)), gainRange = 6.0, gainStep = 1.0)
         assertEquals(23.127, PeqModel.validate(state).bands.single().gain, 0.0)
-        assertEquals(23.127, PeqModel.resize(state, 170).bands.first().gain, 0.0)
+        assertEquals(23.127, PeqModel.resize(state, 130).bands.first().gain, 0.0)
     }
 
     @Test fun invalidAndNonFiniteParametersAreRejectedInsteadOfClipped() {
@@ -161,7 +161,7 @@ class PeqModelTest {
             valid.copy(id = " ")).forEach { bad ->
             assertThrows(IllegalArgumentException::class.java) { PeqModel.validate(PeqState(listOf(bad))) }
         }
-        assertThrows(IllegalArgumentException::class.java) { PeqModel.resize(PeqModel.defaultState(), 171) }
+        assertThrows(IllegalArgumentException::class.java) { PeqModel.resize(PeqModel.defaultState(), 131) }
         assertThrows(IllegalArgumentException::class.java) { PeqModel.validate(PeqState(listOf(valid, valid))) }
         assertThrows(IllegalArgumentException::class.java) {
             PeqModel.validate(PeqState(listOf(valid), gainRange = Double.NaN))
@@ -183,11 +183,11 @@ class PeqModelTest {
         assertTrue(state.showFrequencySlider)
         assertTrue(state.bands.all { it.enabled && it.gain == 0.0 && it.type == PeqFilterType.PEAK })
         PeqModel.validate(state)
-        PeqModel.validate(PeqModel.defaultState(170))
+        PeqModel.validate(PeqModel.defaultState(130))
     }
 
     @Test fun everyBandCountUsesAnEvenLogarithmicFrequencyDistribution() {
-        for (count in listOf(2, 10, 35, 65, 170)) {
+        for (count in listOf(2, 10, 35, 65, 130)) {
             val state = PeqModel.defaultState(count)
             assertEquals(20.0, state.bands.first().frequency, 0.0)
             assertEquals(20000.0, state.bands.last().frequency, 0.0)
@@ -201,10 +201,10 @@ class PeqModelTest {
     }
 
     @Test fun explicitRedistributionOnlyChangesFrequencyAndSameCountDoesNothing() {
-        val state = PeqState(List(170) { index -> PeqBand("custom-$index",
+        val state = PeqState(List(130) { index -> PeqBand("custom-$index",
             PeqFilterType.entries[index % 7], index % 2 == 0, 1234.567,
             99.125, 100.0, PeqQualityDisplay.BW) }, 100.0, 1.5, true, true)
-        assertSame(state, PeqModel.resize(state, 170))
+        assertSame(state, PeqModel.resize(state, 130))
         val next = PeqModel.redistribute(state)
         assertEquals(state, next.copy(bands = next.bands.map { it.copy(frequency = 1234.567) }))
         assertEquals(20.0, next.bands.first().frequency, 0.0)
@@ -218,7 +218,7 @@ class PeqModelTest {
             PeqBand("default-${index + 1}", frequency = frequency, gain = index.toDouble()) })
         assertTrue(PeqModel.isOldGeneratedDistribution(old))
         assertTrue(PeqModel.isOldGeneratedDistribution(old.copy(bands = old.bands.take(4))))
-        val expanded = old.copy(bands = old.bands + PeqModel.defaultState(170).bands.drop(10))
+        val expanded = old.copy(bands = old.bands + PeqModel.defaultState(130).bands.drop(10))
         assertTrue(PeqModel.isOldGeneratedDistribution(expanded))
         assertFalse(PeqModel.isOldGeneratedDistribution(expanded.copy(bands = expanded.bands.mapIndexed { index, band ->
             if (index == 128) band.copy(frequency = band.frequency + 0.001) else band })))

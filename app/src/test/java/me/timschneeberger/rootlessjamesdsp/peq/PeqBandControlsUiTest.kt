@@ -348,14 +348,14 @@ class PeqBandControlsUiTest {
     }
 
     @Test fun reusedRowsRestoreQualityModeAndBandwidthPlusAlwaysMovesTowardWiderFilters() {
-        val bands = PeqModel.defaultState(170).bands.mapIndexed { index, band ->
-            band.copy(q = 10.0, qualityDisplay = if (index == 0 || index == 169) PeqQualityDisplay.BW else PeqQualityDisplay.Q,
-                type = if (index == 169) PeqFilterType.BAND_PASS else PeqFilterType.PEAK)
+        val bands = PeqModel.defaultState(130).bands.mapIndexed { index, band ->
+            band.copy(q = 10.0, qualityDisplay = if (index == 0 || index == 129) PeqQualityDisplay.BW else PeqQualityDisplay.Q,
+                type = if (index == 129) PeqFilterType.BAND_PASS else PeqFilterType.PEAK)
         }
         launch(PeqState(bands, qStep = 0.01, showQSlider = true))
         assertTrue(row().findViewById<TextView>(R.id.peq_q_label).text.startsWith("BW"))
         assertTrue(row(80).findViewById<TextView>(R.id.peq_q_label).text.startsWith("Q"))
-        val last = row(169)
+        val last = row(129)
         assertTrue(last.findViewById<TextView>(R.id.peq_q_label).text.startsWith("BW"))
         val before = PeqBandAdapter.displayedQuality(repository.load().bands.last())
         press(last, R.id.peq_q_plus)

@@ -4,43 +4,111 @@ import android.content.Context
 import android.content.SharedPreferences
 import kotlinx.serialization.json.*
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
+import java.security.MessageDigest
 
 data class PeqLoadResult(
     val state: PeqState,
     val hasSavedState: Boolean,
     val corrupt: Boolean,
     val error: String? = null,
-    val oldGeneratedDistribution: Boolean = false
+    val oldGeneratedDistribution: Boolean = false,
+    val originalBandCount: Int? = null,
+    val bandLimitBackupSaved: Boolean = true
 )
 
+internal data class PeqDecodedState(val state: PeqState, val originalBandCount: Int)
+
 /** Stored with existing graphic EQ presets, without replacing its legacy nodes or enable key. */
-class PeqRepository(private val preferences: SharedPreferences) {
+class PeqRepository(
+    private val preferences: SharedPreferences,
+    private val recoveryPreferences: SharedPreferences? = null
+) {
+    private var lastVerifiedCurrentJson: String? = null
+
     @Suppress("DEPRECATION")
-    constructor(context: Context) : this(context.getSharedPreferences(Constants.PREF_GEQ, Context.MODE_MULTI_PROCESS))
+    constructor(context: Context) : this(
+        context.getSharedPreferences(Constants.PREF_GEQ, Context.MODE_MULTI_PROCESS),
+        context.getSharedPreferences(BAND_LIMIT_BACKUP_PREFERENCES, Context.MODE_PRIVATE))
 
     fun hasSavedState(): Boolean = preferences.contains(KEY_STATE)
 
     fun load(): PeqState = loadResult().state
 
-    fun loadResult(): PeqLoadResult {
-        if (!hasSavedState()) return PeqLoadResult(PeqModel.defaultState(), false, false)
-        return try {
-            val encoded = requireNotNull(preferences.getString(KEY_STATE, null)) { "Missing PEQ state" }
-            val state = importJson(encoded)
-            PeqLoadResult(state, true, false, oldGeneratedDistribution = PeqModel.isOldGeneratedDistribution(state))
+    fun loadResult(): PeqLoadResult = synchronized(storageLock) {
+        if (!hasSavedState()) return@synchronized PeqLoadResult(PeqModel.defaultState(), false, false)
+        val encoded: String
+        val decoded: PeqDecodedState
+        try {
+            encoded = requireNotNull(preferences.getString(KEY_STATE, null)) { "Missing PEQ state" }
+            decoded = decodeLocal(encoded)
         } catch (failure: RuntimeException) {
-            // Keep the original payload available for diagnosis or manual recovery.
-            PeqLoadResult(PeqModel.defaultState(), true, true, failure.message ?: "Invalid PEQ state")
+            // Keep invalid data available for diagnosis or manual recovery.
+            return@synchronized PeqLoadResult(PeqModel.defaultState(), true, true, failure.message ?: "Invalid PEQ state")
+        }
+        val state = decoded.state
+        val reduced = decoded.originalBandCount > PeqModel.MAX_BANDS
+        if (!reduced) lastVerifiedCurrentJson = encoded
+        var pendingCount: Int? = if (reduced) decoded.originalBandCount else null
+        val persisted = try {
+            pendingCount = if (reduced) decoded.originalBandCount else
+                preferences.getInt(KEY_LIMIT_PENDING, 0).takeIf { it > PeqModel.MAX_BANDS }
+            if (reduced) {
+                // Recovery is outside device/global preset namespaces and must reach disk first.
+                persistBandLimitBackup(encoded) && preferences.edit()
+                        .putString(KEY_STATE, encode(state))
+                        .putInt(KEY_LIMIT_PENDING, decoded.originalBandCount)
+                        .commit()
+            } else if (pendingCount != null) {
+                // A failed commit still updates SharedPreferences in memory. Retry the pending
+                // migration before claiming that its backup has reached persistent storage.
+                preferences.edit().putInt(KEY_LIMIT_PENDING, pendingCount!!).commit()
+            } else true
+        } catch (_: RuntimeException) { false }
+        // Storage failure must not turn a valid legacy bank into an apparent corrupt/default bank.
+        return@synchronized PeqLoadResult(state, true, false, oldGeneratedDistribution = PeqModel.isOldGeneratedDistribution(state),
+            originalBandCount = pendingCount, bandLimitBackupSaved = persisted)
+    }
+
+    fun save(state: PeqState): Boolean = synchronized(storageLock) {
+        val encoded = exportJson(state)
+        val edit = preferences.edit()
+        // A write can arrive before the UI reads the old bank. Back it up before replacement too.
+        val old = runCatching { preferences.getString(KEY_STATE, null) }.getOrNull()
+        val oldCount = old?.takeUnless { it == lastVerifiedCurrentJson }
+            ?.let { runCatching { decodeLocal(it).originalBandCount }.getOrNull() }
+        if (old != null && oldCount != null && oldCount > PeqModel.MAX_BANDS) {
+            if (!runCatching { persistBandLimitBackup(old) }.getOrDefault(false)) return@synchronized false
+            edit.putInt(KEY_LIMIT_PENDING, oldCount)
+        }
+        return@synchronized edit.putString(KEY_STATE, encoded).commit().also { saved ->
+            if (saved) lastVerifiedCurrentJson = encoded
         }
     }
 
-    fun save(state: PeqState): Boolean = preferences.edit().putString(KEY_STATE, exportJson(state)).commit()
+    fun acknowledgeBandLimitMigration(): Boolean = synchronized(storageLock) {
+        preferences.edit().remove(KEY_LIMIT_PENDING).commit()
+    }
+
+    private fun persistBandLimitBackup(encoded: String): Boolean {
+        // Injected repositories also need an independent recovery store before trimming data.
+        val recovery = recoveryPreferences ?: return false
+        val hash = MessageDigest.getInstance("SHA-256").digest(encoded.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        return recovery.edit().putString("$KEY_LIMIT_BACKUP.$hash", encoded)
+            .putString(KEY_LIMIT_BACKUP, encoded).commit()
+    }
 
     fun importJson(json: String): PeqState = decode(json)
     fun exportJson(state: PeqState): String = encode(state)
 
     companion object {
+        // Loads can migrate data, so serialize their read/backup/write with saves across instances.
+        private val storageLock = Any()
         const val KEY_STATE = "fusion_peq_state"
+        const val BAND_LIMIT_BACKUP_PREFERENCES = "fusion_peq_band_limit_recovery"
+        const val KEY_LIMIT_BACKUP = "fusion_peq_state_before_130"
+        private const val KEY_LIMIT_PENDING = "fusion_peq_limit_130_pending_count"
+        internal const val LEGACY_MAX_BANDS = 170
         // Schema 2 gives low/high-pass, notch and band-pass gain an audible meaning.
         const val SCHEMA = 2
         const val MAX_JSON_LENGTH = 256 * 1024
@@ -71,7 +139,11 @@ class PeqRepository(private val preferences: SharedPreferences) {
             }.toString()
         }
 
-        fun decode(json: String): PeqState {
+        fun decode(json: String): PeqState = decodeDocument(json, allowLegacyCount = false).state
+
+        internal fun decodeLocal(json: String): PeqDecodedState = decodeDocument(json, allowLegacyCount = true)
+
+        private fun decodeDocument(json: String, allowLegacyCount: Boolean): PeqDecodedState {
             require(json.length <= MAX_JSON_LENGTH) { "PEQ JSON is too large" }
             val root = Json.parseToJsonElement(json) as? JsonObject
                 ?: throw IllegalArgumentException("PEQ JSON must be an object")
@@ -79,8 +151,10 @@ class PeqRepository(private val preferences: SharedPreferences) {
             require(schema == 1.0 || schema == SCHEMA.toDouble()) { "Unsupported PEQ schema" }
             val bands = root["bands"] as? JsonArray
                 ?: throw IllegalArgumentException("bands must be an array")
-            require(bands.size <= PeqModel.MAX_BANDS) { "At most 170 bands are supported" }
-            return PeqModel.validate(PeqState(
+            require(bands.size <= if (allowLegacyCount) LEGACY_MAX_BANDS else PeqModel.MAX_BANDS) {
+                "最多支持 ${PeqModel.MAX_BANDS} 个频段"
+            }
+            val decoded = PeqState(
                 bands = bands.map { element ->
                     val band = element as? JsonObject
                         ?: throw IllegalArgumentException("Each band must be an object")
@@ -110,7 +184,10 @@ class PeqRepository(private val preferences: SharedPreferences) {
                 showQSlider = root.optionalBoolean("showQSlider", false),
                 showFrequencySlider = root.optionalBoolean("showFrequencySlider", false),
                 pinResponse = root.optionalBoolean("pinResponse", true)
-            ))
+            )
+            // Validate the complete legacy bank, including discarded tail IDs and parameters.
+            require(decoded.bands.map { it.id }.toSet().size == decoded.bands.size) { "Band ids must be unique" }
+            return PeqDecodedState(PeqModel.validate(decoded.copy(bands = decoded.bands.take(PeqModel.MAX_BANDS))), bands.size)
         }
 
         private fun JsonObject.text(key: String): String {

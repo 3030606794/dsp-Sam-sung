@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_band_limit_migrated">原有 %1$d 段已保留前 %2$d 段，完整原始参数已备份。</string>
+    <string name="peq_band_limit_backup_failed">旧频段已按当前上限显示，但备份保存失败，请稍后重试。</string>
+</resources>

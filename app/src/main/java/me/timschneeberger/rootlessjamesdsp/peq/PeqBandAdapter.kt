@@ -213,12 +213,20 @@ class PeqBandAdapter(
         private val locateGestures = PeqBandLockGestures(binding.peqBandLocate,
             onSingle = { lockTarget()?.let(onLocate) },
             onDouble = { lockTarget()?.takeIf { canEdit(it) }?.let(onDuplicate) },
-            doubleTapActionLabel = binding.root.context.getString(R.string.peq_duplicate_current_band))
+            doubleTapActionLabel = binding.root.context.getString(R.string.peq_duplicate_current_band),
+            immediateSingle = true,
+            captureDoubleAction = {
+                val id = lockTarget()
+                val action: () -> Unit = {
+                    if (id != null && lockTarget() == id && canEdit(id)) onDuplicate(id)
+                }
+                action
+            })
 
-        fun cancelRepeats() {
+        fun cancelRepeats(preserveLocate: Boolean = false) {
             repeaters.forEach { it.cancel() }
             lockGestures.cancel()
-            locateGestures.cancel()
+            if (!preserveLocate) locateGestures.cancel()
         }
         fun stopInline() { boundId?.let(::invalidateInlineDraft) }
 
@@ -407,7 +415,9 @@ class PeqBandAdapter(
 
         @SuppressLint("ClickableViewAccessibility")
         fun bind(band: PeqBand, index: Int) {
-            cancelRepeats()
+            // Locating immediately updates the graph and can refresh this same row.
+            // Keep its second-tap candidate, but never carry it to another identity.
+            cancelRepeats(preserveLocate = boundId == band.id)
             if (boundId != band.id) {
                 stopInline()
                 SliderDoubleTapReset.clear(binding.peqBandSlider)

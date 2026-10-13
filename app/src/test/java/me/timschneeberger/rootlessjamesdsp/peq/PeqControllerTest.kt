@@ -43,16 +43,16 @@ class PeqControllerTest {
         val curve = "GraphicEQ: 100 -3; 1000 6; 12000 -2;"
         prefs.edit().putString(nodesKey, curve).putString("fusion_peq_mode", "legacy")
             .putBoolean(enableKey, true).commit()
-        val state = PeqModel.defaultState(170).let {
+        val state = PeqModel.defaultState(130).let {
             it.copy(bands = it.bands.mapIndexed { i, band -> band.copy(
-                gain = if (i == 169) 100.0 else 0.0, q = 100.0) })
+                gain = if (i == 129) 100.0 else 0.0, q = 100.0) })
         }
         assertTrue(PeqRepository(app).save(state))
         val active = packet()
         assertEquals(1, active[1])
-        assertEquals(170, active[2])
-        assertEquals(100000, active[3 + 169 * 5 + 3])
-        assertEquals(100000, active[3 + 169 * 5 + 4])
+        assertEquals(130, active[2])
+        assertEquals(100000, active[3 + 129 * 5 + 3])
+        assertEquals(100000, active[3 + 129 * 5 + 4])
         assertEquals(curve, prefs.getString(nodesKey, null))
         assertEquals(state, PeqRepository(app).load())
     }

@@ -310,7 +310,7 @@ class PeqBandSelectionUiTest {
     }
 
     @Test fun selectionPayloadPreservesControlsAndRecycledCardsRestoreTheirBackground() {
-        launch(PeqModel.defaultState(170).copy(showQSlider = true))
+        launch(PeqModel.defaultState(130).copy(showQSlider = true))
         val first = row()
         val normalBackground = first.cardBackgroundColor.defaultColor
         val normalStroke = first.strokeColorStateList?.defaultColor
@@ -335,12 +335,12 @@ class PeqBandSelectionUiTest {
         assertEquals(0, fullChanges)
         changedPositions.clear()
         adapter.submitSelection(true, setOf(state.bands.first().id, state.bands.last().id))
-        assertEquals(listOf(169), changedPositions)
-        assertTrue(row(169).isSelected)
-        assertFalse(row(168).isSelected)
-        assertEquals(normalBackground, row(168).cardBackgroundColor.defaultColor)
-        assertEquals(normalStroke, row(168).strokeColorStateList?.defaultColor)
-        assertEquals(normalWidth, row(168).strokeWidth)
+        assertEquals(listOf(129), changedPositions)
+        assertTrue(row(129).isSelected)
+        assertFalse(row(128).isSelected)
+        assertEquals(normalBackground, row(128).cardBackgroundColor.defaultColor)
+        assertEquals(normalStroke, row(128).strokeColorStateList?.defaultColor)
+        assertEquals(normalWidth, row(128).strokeWidth)
         assertTrue(row(0).isSelected)
         adapter.submitSelection(false, setOf(state.bands.first().id))
         val restored = row(0)

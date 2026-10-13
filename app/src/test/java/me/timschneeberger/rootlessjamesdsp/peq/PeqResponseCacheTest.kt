@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** Incremental previews must retain the full adaptive grid and its unclipped mathematical sum. */
 class PeqResponseCacheTest {
-    private fun bank(count: Int = 170): PeqState = PeqModel.defaultState(count).let { state ->
+    private fun bank(count: Int = 130): PeqState = PeqModel.defaultState(count).let { state ->
         state.copy(bands = state.bands.mapIndexed { index, band -> band.copy(
             gain = if (index % 2 == 0) 0.5 else -0.5, q = 3.0 + index % 7) })
     }
@@ -32,12 +32,12 @@ class PeqResponseCacheTest {
         }
     }
 
-    @Test fun oneEditedBandAmong170MatchesFullCurveWithDeterministicallyFewerEvaluations() {
+    @Test fun oneEditedBandAmong130MatchesFullCurveWithDeterministicallyFewerEvaluations() {
         val cache = PeqResponse.PreviewCache()
         val initial = bank()
         val before = requireNotNull(cache.curve(initial, points = 1024))
         assertMatchesFull(initial, before, 1024)
-        assertEquals(before.size.toLong() * 170, cache.lastFilterEvaluations)
+        assertEquals(before.size.toLong() * 130, cache.lastFilterEvaluations)
         val next = edited(initial, 85) { it.copy(frequency = it.frequency + 11.25, q = 7.321, gain = 0.37) }
         val after = requireNotNull(cache.curve(next, points = 1024))
         assertMatchesFull(next, after, 1024)
@@ -45,11 +45,11 @@ class PeqResponseCacheTest {
         val retained = after.count { it.frequency in previousFrequencies }
         val new = after.size - retained
         val completeWork = after.size.toLong() * activeBands(next, 48000.0)
-        val expectedWork = retained.toLong() * 2 + new.toLong() * 170
+        val expectedWork = retained.toLong() * 2 + new.toLong() * 130
         assertEquals(expectedWork, cache.lastFilterEvaluations)
         assertTrue("Incremental work ${cache.lastFilterEvaluations} vs complete $completeWork",
             cache.lastFilterEvaluations < completeWork / 10)
-        println("170-band preview: ${cache.lastFilterEvaluations} filter evaluations vs $completeWork full; ${after.size} adaptive points")
+        println("130-band preview: ${cache.lastFilterEvaluations} filter evaluations vs $completeWork full; ${after.size} adaptive points")
     }
 
     @Test fun allFilterTypesAndExtremeParametersMatchAcrossNyquistBoundaries() {

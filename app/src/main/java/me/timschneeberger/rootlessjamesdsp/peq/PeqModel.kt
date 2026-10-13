@@ -40,7 +40,7 @@ data class PeqState(
 )
 
 object PeqModel {
-    const val MAX_BANDS = 170
+    const val MAX_BANDS = 130
     const val MIN_FREQUENCY = 20.0
     const val MAX_FREQUENCY = 20000.0
     const val MAX_GAIN = 100.0
@@ -78,7 +78,7 @@ object PeqModel {
     }
 
     fun validate(state: PeqState): PeqState {
-        require(state.bands.size <= MAX_BANDS) { "At most 170 bands are supported" }
+        require(state.bands.size <= MAX_BANDS) { "At most $MAX_BANDS bands are supported" }
         require(state.gainRange.isFinite() && state.gainRange in 1.0..100.0) { "Gain range must be between 1 and 100 dB" }
         require(state.gainStep.isFinite() && state.gainStep in 0.01..2.0) { "Gain step must be between 0.01 and 2 dB" }
         require(state.qStep.isFinite() && state.qStep in 0.01..100.0) { "Q/BW step must be between 0.01 and 100" }
@@ -90,7 +90,7 @@ object PeqModel {
     }
 
     fun defaultState(count: Int = 4): PeqState {
-        require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
+        require(count in 0..MAX_BANDS) { "Band count must be between 0 and $MAX_BANDS" }
         return PeqState(List(count) { index ->
             PeqBand(id = "default-${index + 1}", frequency = distributedFrequency(index, count))
         })
@@ -99,7 +99,7 @@ object PeqModel {
     /** Count changes redistribute frequencies; all retained bands keep their other parameters. */
     fun resize(state: PeqState, count: Int): PeqState {
         validate(state)
-        require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
+        require(count in 0..MAX_BANDS) { "Band count must be between 0 and $MAX_BANDS" }
         if (count == state.bands.size) return state
         val retained = state.bands.take(count)
         val bands = retained + List((count - retained.size).coerceAtLeast(0)) { PeqBand() }
@@ -112,7 +112,7 @@ object PeqModel {
     /** Change one end of the bank, retaining every surviving band's identity and parameters. */
     fun resize(state: PeqState, count: Int, edge: PeqResizeEdge, redistribute: Boolean): PeqState {
         validate(state)
-        require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
+        require(count in 0..MAX_BANDS) { "Band count must be between 0 and $MAX_BANDS" }
         val difference = count - state.bands.size
         val resized = if (difference == 0) state else state.copy(bands = when {
             difference > 0 -> {

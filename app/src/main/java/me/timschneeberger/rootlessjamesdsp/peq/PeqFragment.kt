@@ -9,12 +9,15 @@ import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
@@ -25,6 +28,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.core.view.MenuHost
 import androidx.core.view.MenuProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.OneShotPreDrawListener
+import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
@@ -73,6 +79,9 @@ class PeqFragment : Fragment() {
     private var selectionBackCallback: OnBackPressedCallback? = null
     private val actionTextColors = mutableMapOf<Int, ColorStateList>()
     private var appliedPinResponse: Boolean? = null
+    private var pendingLocateExpansion: Runnable? = null
+    private var pendingLocatePreDraw: OneShotPreDrawListener? = null
+    private var stoppingEditorScroll = false
     private var trackingSlider = false
     private var displaySettings = PeqEditorSettings()
     private val handler = Handler(Looper.getMainLooper())
@@ -240,6 +249,11 @@ class PeqFragment : Fragment() {
         ui.peqBandList.layoutManager = LinearLayoutManager(requireContext())
         ui.peqBandList.adapter = bandAdapter
         ui.peqBandList.itemAnimator = null
+        ui.peqBandList.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                if (newState != RecyclerView.SCROLL_STATE_IDLE) cancelPendingLocateExpansion()
+            }
+        })
         bandTouchHelper = ItemTouchHelper(object : ItemTouchHelper.Callback() {
             override fun isLongPressDragEnabled() = false
             override fun isItemViewSwipeEnabled() = false
@@ -289,6 +303,7 @@ class PeqFragment : Fragment() {
         }
         ui.peqSelectionNone.setOnClickListener { selectedIds = emptySet(); renderSelection() }
         ui.peqPresets.setOnClickListener {
+            stopEditorScroll()
             stopInlineFilterPreview()
             flushPendingSave()
             if (presetDialogs == null) presetDialogs = PeqPresetsDialog(requireContext(), layoutInflater,
@@ -302,9 +317,9 @@ class PeqFragment : Fragment() {
                 },
                 applyState = { state ->
                     flushPendingSave()
-                    binding?.peqBandList?.stopScroll()
+                    stopEditorScroll()
                     clearMarker()
-                    save(state)
+                    save(state).also { if (it) resetPresetScroll() }
                 }, onImportRequested = {
                     importPresets.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
                 }, onExportRequested = ::exportPresetJson,
@@ -359,6 +374,7 @@ class PeqFragment : Fragment() {
     }
 
     private fun reload() {
+        stopEditorScroll()
         stopInlineFilterPreview()
         cancelPendingSave()
         clearMarker()
@@ -374,6 +390,14 @@ class PeqFragment : Fragment() {
         editorState = loaded.state
         lastSavedState = editorState
         render(false)
+        loaded.originalBandCount?.let { originalCount ->
+            val message = if (loaded.bandLimitBackupSaved)
+                getString(R.string.peq_band_limit_migrated, originalCount, PeqModel.MAX_BANDS)
+            else getString(R.string.peq_band_limit_backup_failed)
+            // Only the visible editor acknowledges the message; background audio loads cannot.
+            presetMessage(message)
+            if (loaded.bandLimitBackupSaved) repository.acknowledgeBandLimitMigration()
+        }
         if (loaded.corrupt) binding?.root?.post {
             binding?.root?.let { Snackbar.make(it, R.string.peq_corrupt_profile, Snackbar.LENGTH_LONG).show() }
         }
@@ -401,6 +425,11 @@ class PeqFragment : Fragment() {
             if (appliedPinResponse != editorState.pinResponse) {
                 val wasApplied = appliedPinResponse != null
                 appliedPinResponse = editorState.pinResponse
+                stopEditorScroll()
+                responseScrollBehavior()?.setPinned(editorState.pinResponse)
+                // A pinned graph is outside the list's scroll session. Re-enabling starts a
+                // fresh session instead of inheriting a parent's previous touch/fling state.
+                peqBandList.isNestedScrollingEnabled = !editorState.pinResponse
                 (peqResponseHeader.layoutParams as AppBarLayout.LayoutParams).apply {
                     scrollFlags = if (editorState.pinResponse) 0 else AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL
                 }
@@ -410,6 +439,43 @@ class PeqFragment : Fragment() {
                 (requireActivity() as MenuHost).invalidateMenu()
             }
         }
+    }
+
+    private fun responseScrollBehavior(): PeqResponseScrollBehavior? =
+        (binding?.peqResponseAppbar?.layoutParams as? CoordinatorLayout.LayoutParams)?.behavior
+            as? PeqResponseScrollBehavior
+
+    private fun cancelPendingLocateExpansion() {
+        pendingLocateExpansion?.let(handler::removeCallbacks)
+        pendingLocateExpansion = null
+        pendingLocatePreDraw?.removeListener()
+        pendingLocatePreDraw = null
+    }
+
+    /** End both list and parent scroll owners before changing pin state or replacing a bank. */
+    private fun stopEditorScroll(cancelTouches: Boolean = true) {
+        cancelPendingLocateExpansion()
+        val ui = binding ?: return
+        if (stoppingEditorScroll) return
+        stoppingEditorScroll = true
+        try {
+            responseScrollBehavior()?.stopMotion()
+            ui.peqBandList.stopScroll()
+            ui.peqBandList.stopNestedScroll(ViewCompat.TYPE_TOUCH)
+            ui.peqBandList.stopNestedScroll(ViewCompat.TYPE_NON_TOUCH)
+            if (cancelTouches) {
+                val now = SystemClock.uptimeMillis()
+                val event = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+                try { ui.peqBandList.dispatchTouchEvent(event) } finally { event.recycle() }
+                ui.peqBandList.parent?.requestDisallowInterceptTouchEvent(false)
+            }
+        } finally { stoppingEditorScroll = false }
+    }
+
+    private fun resetPresetScroll() {
+        val ui = binding ?: return
+        ui.peqResponseAppbar.setExpanded(true, false)
+        (ui.peqBandList.layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(0, 0)
     }
 
     private fun renderPower() {
@@ -453,9 +519,37 @@ class PeqFragment : Fragment() {
     }
 
     private fun locateBand(id: String) {
-        binding?.peqBandList?.stopScroll()
-        binding?.peqResponseAppbar?.setExpanded(true, false)
+        val ui = binding ?: return
+        stopEditorScroll(cancelTouches = false)
         selectBand(id)
+        val expansion = -ui.peqResponseAppbar.top
+        if (editorState.pinResponse || expansion <= 0) return
+        val index = editorState.bands.indexOfFirst { it.id == id }
+        val button = ui.peqBandList.findViewHolderForAdapterPosition(index)?.itemView
+            ?.findViewById<View>(R.id.peq_band_locate)
+        val buttonLocation = IntArray(2).also { button?.getLocationInWindow(it) }
+        val listLocation = IntArray(2).also { ui.peqBandList.getLocationInWindow(it) }
+        val scrollRoom = ui.peqBandList.computeVerticalScrollRange() -
+            ui.peqBandList.computeVerticalScrollExtent() - ui.peqBandList.computeVerticalScrollOffset()
+        val canKeepButtonVisible = button != null &&
+            buttonLocation[1] >= listLocation[1] + expansion && scrollRoom >= expansion
+        if (canKeepButtonVisible) {
+            // Compensate the list before drawing so the original + remains under the finger.
+            val oldTop = ui.peqBandList.top
+            pendingLocatePreDraw = OneShotPreDrawListener.add(ui.peqScrollContainer) {
+                pendingLocatePreDraw = null
+                if (binding === ui) ui.peqBandList.scrollBy(0, ui.peqBandList.top - oldTop)
+            }
+            ui.peqResponseAppbar.setExpanded(true, false)
+        } else {
+            // Only the layout movement waits: the marker above was updated on the first UP.
+            // Expanding immediately here would cover the + and steal the second copy tap.
+            pendingLocateExpansion = Runnable {
+                pendingLocateExpansion = null
+                if (binding === ui && editorState.bands.any { it.id == id })
+                    ui.peqResponseAppbar.setExpanded(true, false)
+            }.also { handler.postDelayed(it, ViewConfiguration.getDoubleTapTimeout().toLong()) }
+        }
     }
 
     private fun toggleSelection(id: String) {
@@ -536,6 +630,7 @@ class PeqFragment : Fragment() {
     }
 
     private fun duplicateBand(id: String) {
+        cancelPendingLocateExpansion()
         if (editingSelection || PeqBandLockStore(requireContext()).isBandLocked(id)) return
         flushPendingSave()
         val index = editorState.bands.indexOfFirst { it.id == id }
@@ -961,7 +1056,7 @@ class PeqFragment : Fragment() {
     private fun jumpToEdge(edge: PeqResizeEdge) {
         val ui = binding ?: return
         if (editorState.bands.isEmpty()) { toast(getString(R.string.peq_jump_empty)); return }
-        ui.peqBandList.stopScroll()
+        stopEditorScroll()
         if (edge == PeqResizeEdge.FRONT) ui.peqResponseAppbar.setExpanded(true, false)
         else if (!editorState.pinResponse) ui.peqResponseAppbar.setExpanded(false, false)
         ui.peqBandList.scrollToPosition(if (edge == PeqResizeEdge.FRONT) 0 else editorState.bands.lastIndex)
@@ -1037,6 +1132,7 @@ class PeqFragment : Fragment() {
 
     fun showSystemPresets() {
         if (loadingSystemPresets || binding == null) return
+        stopEditorScroll()
         stopInlineFilterPreview()
         flushPendingSave()
         systemPresetDialogs?.let { it.show(); return }
@@ -1049,12 +1145,12 @@ class PeqFragment : Fragment() {
                 systemPresetDialogs = PeqSystemPresetsDialog(requireContext(), presets) { preset ->
                     stopInlineFilterPreview()
                     flushPendingSave()
-                    binding?.peqBandList?.stopScroll()
+                    stopEditorScroll()
                     clearMarker()
                     val applied = save(preset.applyTo(editorState), systemPreset = true)
                     if (applied) {
                         finishSelection()
-                        binding?.peqBandList?.scrollToPosition(0)
+                        resetPresetScroll()
                         toast(getString(R.string.peq_system_presets_applied, preset.name, preset.bands.size))
                     }
                     applied
@@ -1145,7 +1241,7 @@ class PeqFragment : Fragment() {
         val ui = PeqSettingsDialogBinding.inflate(layoutInflater)
         val displayControls = PeqDisplaySettings(ui, PeqEditorPreferences(requireContext()))
         val countControl = PeqSettingControl(ui.peqBandCountSlider, ui.peqBandCount, ui.peqCountBox,
-            1.0, 170.0, 1.0, editorState.bands.size.coerceAtLeast(1).toDouble(), integer = true)
+            1.0, PeqModel.MAX_BANDS.toDouble(), 1.0, editorState.bands.size.coerceAtLeast(1).toDouble(), integer = true)
         val gainStepControl = PeqSettingControl(ui.peqGainStepSlider, ui.peqGainStep, ui.peqGainStepBox,
             0.01, 2.0, 0.01, editorState.gainStep)
         val gainRangeControl = PeqSettingControl(ui.peqGainRangeSlider, ui.peqGainRange, ui.peqGainRangeBox,
@@ -1658,6 +1754,7 @@ class PeqFragment : Fragment() {
     }
 
     override fun onPause() {
+        stopEditorScroll()
         stopInlineFilterPreview()
         stopFilterPreview?.invoke()
         fineLockGestures.forEach { it.cancel() }
@@ -1669,6 +1766,7 @@ class PeqFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        stopEditorScroll()
         stopInlineFilterPreview()
         fineLockGestures.forEach { it.cancel() }
         fineLockGestures.clear()

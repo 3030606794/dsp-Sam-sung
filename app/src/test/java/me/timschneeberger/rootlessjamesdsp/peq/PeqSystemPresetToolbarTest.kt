@@ -67,7 +67,12 @@ class PeqSystemPresetToolbarTest {
                 }
             } finally { bitmap.recycle() }
 
-            assertEquals(64, header.height)
+            assertEquals("Header fits native text height plus the requested bottom gap",
+                toolbar.height + summaryRow.height + 7, header.height)
+            assertEquals("Summary row leaves exactly 7 dp below it", 7,
+                header.height - bounds(header, summaryRow).bottom)
+            assertNull("System presets has no pressed background", binding.peqSystemPresets.background)
+            assertNull("System presets has no ripple overlay", binding.peqSystemPresets.foreground)
             assertEquals(width / 2f, bounds(header, title).exactCenterX(), 1f)
             assertEquals(width / 2f, bounds(header, summaryRow).exactCenterX(), 1f)
             assertEquals(13f, summary.textSize, 0.1f)

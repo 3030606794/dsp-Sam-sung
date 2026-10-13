@@ -172,18 +172,18 @@ class PeqEditorUiTest {
         assertEquals(listOf(1000.0, 1000.0, 1000.0), repository.load().bands.map { it.frequency })
     }
 
-    @Test fun curveStaysPinnedAnd170BandsAreRecycledWithValuesSurvivingRotation() {
-        val base = PeqModel.defaultState(170)
+    @Test fun curveStaysPinnedAnd130BandsAreRecycledWithValuesSurvivingRotation() {
+        val base = PeqModel.defaultState(130)
         repository.save(base.copy(bands = base.bands.mapIndexed { i, band ->
-            if (i == 169) band.copy(gain = 3.25) else band
+            if (i == 129) band.copy(gain = 3.25) else band
         }, gainStep = 0.25, gainRange = 6.0))
         launch()
         val curve = view<PeqResponseView>(R.id.peq_curve)
         val before = IntArray(2).also { curve.getLocationInWindow(it) }
         val list = view<RecyclerView>(R.id.peq_band_list)
-        assertEquals(170, list.adapter!!.itemCount)
+        assertEquals(130, list.adapter!!.itemCount)
         assertTrue("Only visible bands should be inflated", list.childCount in 1..25)
-        val last = row(169)
+        val last = row(129)
         val after = IntArray(2).also { curve.getLocationInWindow(it) }
         assertArrayEquals(before, after)
         assertEquals(3.25f, last.findViewById<Slider>(R.id.peq_band_slider).value, 0f)
@@ -191,7 +191,7 @@ class PeqEditorUiTest {
         assertEquals(3.5, repository.load().bands.last().gain, 0.0)
         controller!!.recreate()
         layout()
-        assertEquals(3.5f, row(169).findViewById<Slider>(R.id.peq_band_slider).value, 0f)
+        assertEquals(3.5f, row(129).findViewById<Slider>(R.id.peq_band_slider).value, 0f)
         assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
     }
 
@@ -221,7 +221,7 @@ class PeqEditorUiTest {
         repository.save(original)
         launch()
         val settings = settings()
-        settings.findViewById<EditText>(R.id.peq_band_count)!!.setText("171")
+        settings.findViewById<EditText>(R.id.peq_band_count)!!.setText("131")
         settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         assertTrue(settings.isShowing)
         assertNotNull(settings.findViewById<TextInputLayout>(R.id.peq_count_box)!!.error)
@@ -276,7 +276,7 @@ class PeqEditorUiTest {
         val settings = settings()
         data class Setting(val input: Int, val slider: Int, val minimum: Double, val maximum: Double)
         val controls = listOf(
-            Setting(R.id.peq_band_count, R.id.peq_band_count_slider, 1.0, 170.0),
+            Setting(R.id.peq_band_count, R.id.peq_band_count_slider, 1.0, 130.0),
             Setting(R.id.peq_gain_step, R.id.peq_gain_step_slider, 0.01, 2.0),
             Setting(R.id.peq_gain_range, R.id.peq_gain_range_slider, 1.0, 100.0),
             Setting(R.id.peq_q_step, R.id.peq_q_step_slider, 0.01, 100.0),
@@ -320,7 +320,7 @@ class PeqEditorUiTest {
         launch()
         val settings = settings()
         val cases = listOf(
-            Triple(R.id.peq_band_count, R.id.peq_count_box, listOf("0", "171", "1.5", "")),
+            Triple(R.id.peq_band_count, R.id.peq_count_box, listOf("0", "131", "1.5", "")),
             Triple(R.id.peq_gain_step, R.id.peq_gain_step_box, listOf("0.009", "2.01", "")),
             Triple(R.id.peq_gain_range, R.id.peq_gain_range_box, listOf("0.99", "100.01", "")),
             Triple(R.id.peq_q_step, R.id.peq_q_step_box, listOf("0.009", "100.01", "")),
