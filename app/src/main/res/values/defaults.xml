@@ -37,10 +37,10 @@
     <bool name="default_audioformat_optimization_benchmark" translatable="false">false</bool>
 
     <!-- Device profiles -->
-    <bool name="default_device_profiles_enable" translatable="false">false</bool>
+    <bool name="default_device_profiles_enable" translatable="false">true</bool>
 
     <!-- Appearance -->
-    <string name="default_appearance_theme_mode" translatable="false">0</string>
+    <string name="default_appearance_theme_mode" translatable="false">1</string>
     <bool name="default_appearance_pure_black" translatable="false">false</bool>
     <string name="default_appearance_app_theme" translatable="false">DEFAULT</string>
     <bool name="default_appearance_nav_hide" translatable="false">false</bool>
