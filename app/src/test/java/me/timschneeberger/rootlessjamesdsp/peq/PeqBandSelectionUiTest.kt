@@ -164,7 +164,7 @@ class PeqBandSelectionUiTest {
             layout(width)
             val card = list.findViewHolderForAdapterPosition(0)!!.itemView as MaterialCardView
             val density = card.resources.displayMetrics.density
-            assertTrue("Three rows and header stay compact at width $width", card.height / density in 180f..205f)
+            assertTrue("Three rows and header stay compact at width $width", card.height / density in 155f..173f)
             rows.forEach { ids ->
                 val rectangles = ids.map { bounds(card, it) }
                 rectangles.zipWithNext().forEach { (left, right) -> assertTrue(left.right <= right.left) }
@@ -428,7 +428,8 @@ class PeqBandSelectionUiTest {
         assertFalse(reordered.findViewById<Slider>(R.id.peq_frequency_slider).isEnabled)
         val reloaded = PeqBandLockStore(controller!!.get())
         assertFalse(reloaded.isBandLocked("one"))
-        PeqEditField.entries.forEach { assertTrue(reloaded.isFieldLocked("one", it)) }
+        listOf(PeqEditField.GAIN, PeqEditField.QUALITY, PeqEditField.FREQUENCY)
+            .forEach { assertTrue(reloaded.isFieldLocked("one", it)) }
         assertFalse(reloaded.isFieldLocked("two", PeqEditField.GAIN))
         tap(reordered, R.id.peq_gain_lock)
         tap(reordered, R.id.peq_band_plus)

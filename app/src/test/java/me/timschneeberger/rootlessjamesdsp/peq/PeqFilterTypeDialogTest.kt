@@ -2,6 +2,7 @@ package me.timschneeberger.rootlessjamesdsp.peq
 
 import android.app.Application
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Looper
 import android.view.Gravity
@@ -105,8 +106,8 @@ class PeqFilterTypeDialogTest {
         assertFalse(monitor.isSelected)
         monitor.performClick()
         assertTrue(monitor.isSelected)
-        assertNotEquals(offColor, background(peak))
-        assertTrue(ColorUtils.calculateContrast(label(peak).currentTextColor, background(peak)) >= 4.5)
+        assertEquals("Committed filter stays purple while listening", offColor, background(peak))
+        assertEquals(android.graphics.Color.rgb(46, 125, 50), monitor.backgroundTintList!!.defaultColor)
         button(picker, PeqFilterType.HIGH_PASS).performClick()
         assertEquals(listOf(PeqFilterType.HIGH_PASS), selected)
         assertEquals(listOf(true), monitoring)
@@ -114,11 +115,20 @@ class PeqFilterTypeDialogTest {
         assertFalse(confirmed)
         val active = button(picker, PeqFilterType.HIGH_PASS)
         val green = background(active)
+        assertEquals(android.graphics.Color.rgb(46, 125, 50), green)
+        assertTrue(ColorUtils.calculateContrast(label(active).currentTextColor, green) >= 4.5)
+        assertEquals(offColor, background(peak))
         PeqFilterTypeDialog.setMonitoring(picker, false)
         assertFalse(monitor.isSelected)
-        assertNotEquals(green, background(active))
+        assertTrue(active.background is GradientDrawable)
+        assertEquals(android.graphics.Color.TRANSPARENT, monitor.backgroundTintList!!.defaultColor)
         assertEquals(listOf(true), monitoring)
+        assertEquals(offColor, background(peak))
+        val types = picker.findViewById<PeqFilterSelector>(R.id.peq_filter_types)!!
+        assertEquals(PeqFilterType.PEAK, types.committedType)
+        types.committedType = PeqFilterType.HIGH_PASS
         assertEquals(offColor, background(active))
+        assertEquals(android.graphics.Color.TRANSPARENT, background(peak))
     }
 
     @Test fun mixedTypeWaitsForSelectionAndConfirmationFailureKeepsDraftVisible() {

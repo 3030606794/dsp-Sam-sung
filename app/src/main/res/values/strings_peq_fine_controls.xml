@@ -1,0 +1,6 @@
+<resources>
+    <string name="peq_edit_band_number">精调频段 • 第%1$d段</string>
+    <string name="peq_deleted_band_number">已删除 %1$d 号频段卡</string>
+    <string name="peq_deleted_band_count">已删除 %1$d 个频段卡</string>
+    <string name="peq_delete_skipped_locked">已跳过 %1$d 个锁定频段</string>
+</resources>

@@ -11,7 +11,9 @@ data class PeqEditorSettings(
     val showMarkerGain: Boolean = true,
     val showMarkerQuality: Boolean = true,
     val previewDisabledBands: Boolean = true,
-    val showMarkerFilterType: Boolean = true
+    val showMarkerFilterType: Boolean = true,
+    val showMarkerBandNumber: Boolean = false,
+    val showInlineFilters: Boolean = false
 ) {
     fun validate(): PeqEditorSettings {
         require(markerDurationSeconds == 0 || markerDurationSeconds in 2..10)
@@ -36,7 +38,9 @@ class PeqEditorPreferences(context: Context) {
             showMarkerGain = boolean("showMarkerGain", true),
             showMarkerQuality = boolean("showMarkerQuality", true),
             previewDisabledBands = boolean("previewDisabledBands", true),
-            showMarkerFilterType = boolean("showMarkerFilterType", true))
+            showMarkerFilterType = boolean("showMarkerFilterType", true),
+            showMarkerBandNumber = boolean("showMarkerBandNumber", false),
+            showInlineFilters = boolean("showInlineFilters", false))
     }
 
     fun save(settings: PeqEditorSettings): Boolean {
@@ -49,7 +53,9 @@ class PeqEditorPreferences(context: Context) {
             .putBoolean("showMarkerGain", settings.showMarkerGain)
             .putBoolean("showMarkerQuality", settings.showMarkerQuality)
             .putBoolean("previewDisabledBands", settings.previewDisabledBands)
-            .putBoolean("showMarkerFilterType", settings.showMarkerFilterType).commit()
+            .putBoolean("showMarkerFilterType", settings.showMarkerFilterType)
+            .putBoolean("showMarkerBandNumber", settings.showMarkerBandNumber)
+            .putBoolean("showInlineFilters", settings.showInlineFilters).commit()
     }
 
     companion object { const val PREFERENCES = "peq_editor_display" }

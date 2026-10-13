@@ -34,6 +34,8 @@
             android:text="@string/peq_filter_type" android:textAppearance="?attr/textAppearanceTitleSmall" />
         <me.timschneeberger.rootlessjamesdsp.peq.PeqFilterSelector android:id="@+id/peq_batch_filter"
             android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" />
+        <TextView android:id="@+id/peq_batch_filter_hint" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="6dp" android:textAppearance="?attr/textAppearanceBodySmall" />
         <TextView android:id="@+id/peq_batch_scan" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp" android:textAppearance="?attr/textAppearanceBodySmall" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp"

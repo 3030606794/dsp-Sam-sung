@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Looper
 import android.view.View
 import android.widget.EditText
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.textfield.TextInputLayout
@@ -178,10 +179,12 @@ class PeqBatchParametersUiTest {
         draft(dialog)
         locks.setBandLocked("q-open", true)
         locks.setFieldLocked("bw-open", PeqEditField.QUALITY, true)
+        locks.setFieldLocked("bw-open", PeqEditField.FILTER_TYPE, true)
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         idle()
         val expected = original.copy(bands = original.bands.map {
-            if (it.id == "q-open" || it.id == "band-locked") it else it.copy(type = PeqFilterType.HIGH_PASS)
+            if (it.id == "q-open" || it.id == "bw-open" || it.id == "band-locked") it
+            else it.copy(type = PeqFilterType.HIGH_PASS)
         })
         assertEquals(expected, repository.load())
         assertFalse(dialog.isShowing)
@@ -198,6 +201,63 @@ class PeqBatchParametersUiTest {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         idle()
         assertEquals(original.copy(bands = original.bands.map { it.copy(q = 1.25) }), repository.load())
+    }
+
+    @Test fun typeLockedCardsKeepTheirTypeWhileTheirUnlockedQAndBwRemainEditable() {
+        val original = launch()
+        locks.setFieldLocked("q-open", PeqEditField.FILTER_TYPE, true)
+        locks.setFieldLocked("bw-open", PeqEditField.FILTER_TYPE, true)
+        val dialog = open()
+        assertEquals(app.getString(R.string.peq_bulk_filter_hint, 2, 3),
+            dialog.findViewById<TextView>(R.id.peq_batch_filter_hint)!!.text.toString())
+        draft(dialog)
+        assertEquals(original, repository.load())
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertEquals(original.copy(bands = original.bands.map { band -> when (band.id) {
+            "q-open" -> band.copy(q = 1.25)
+            "bw-open" -> band.copy(q = PeqResponse.qFromBandwidth(0.5, band.frequency))
+            "band-locked" -> band
+            else -> band.copy(type = PeqFilterType.HIGH_PASS)
+        } }), repository.load())
+    }
+
+    @Test fun lockingEveryFilterTypeDisablesTheSelectorWithoutBlockingQuality() {
+        val original = launch()
+        original.bands.forEach { locks.setFieldLocked(it.id, PeqEditField.FILTER_TYPE, true) }
+        val dialog = open()
+        val selector = dialog.findViewById<PeqFilterSelector>(R.id.peq_batch_filter)!!
+        assertFalse(selector.isEnabled)
+        assertTrue(dialog.findViewById<EditText>(R.id.peq_batch_q_input)!!.isEnabled)
+        assertTrue(dialog.findViewById<EditText>(R.id.peq_batch_bw_input)!!.isEnabled)
+        assertEquals(app.getString(R.string.peq_bulk_filter_hint, 0, 5),
+            dialog.findViewById<TextView>(R.id.peq_batch_filter_hint)!!.text.toString())
+        assertTrue(dialog.findViewById<TextView>(R.id.peq_batch_scan)!!.text.toString()
+            .contains(app.getString(R.string.peq_bulk_filter_scan_hint, 5)))
+        selector.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.HIGH_PASS)).performClick()
+        dialog.findViewById<EditText>(R.id.peq_batch_q_input)!!.setText("1.25")
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertEquals(original.copy(bands = original.bands.map {
+            if (it.id == "q-open") it.copy(q = 1.25) else it
+        }), repository.load())
+    }
+
+    @Test fun originalTypeMarkerUsesOnlyEditableTypesAndDoesNotFollowAnUnconfirmedDraft() {
+        val original = original().copy(bands = original().bands.map {
+            if (it.id == "q-open") it.copy(type = PeqFilterType.LOW_PASS) else it
+        })
+        launch(original)
+        locks.setFieldLocked("q-open", PeqEditField.FILTER_TYPE, true)
+        val dialog = open()
+        val selector = dialog.findViewById<PeqFilterSelector>(R.id.peq_batch_filter)!!
+        assertEquals(PeqFilterType.PEAK, selector.committedType)
+        selector.setSelection(PeqFilterType.HIGH_PASS, notify = true)
+        assertEquals(PeqFilterType.PEAK, selector.committedType)
+        assertEquals(PeqFilterType.HIGH_PASS, selector.selectedType)
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        idle()
+        assertEquals(original, repository.load())
     }
 
     class HostActivity : AppCompatActivity() {

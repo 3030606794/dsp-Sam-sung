@@ -135,6 +135,24 @@ class PeqBulkParametersTest {
         }
     }
 
+    @Test fun independentTypeLocksPreserveTypesWhileAllowingEachCardsOwnQualityMode() {
+        val typeLocks = setOf("q-low", "bw-mid")
+        val changed = PeqBulkParameters.applyDraft(mixedState, allIds(mixedState),
+            canEdit = { id, field -> id != "bw-high" && (field != PeqEditField.FILTER_TYPE || id !in typeLocks) },
+            q = 1.5, bw = 0.5, type = PeqFilterType.LOW_PASS)
+        assertEquals(mixedState.copy(bands = listOf(
+            mixedState.bands[0].copy(q = 1.5),
+            mixedState.bands[1].copy(q = PeqResponse.qFromBandwidth(0.5, mixedState.bands[1].frequency)),
+            mixedState.bands[2],
+            mixedState.bands[3].copy(q = 1.5, type = PeqFilterType.LOW_PASS)
+        )), changed)
+    }
+
+    @Test fun typeOnlyDraftWithAllTypeFieldsLockedHasNoEditableTargets() {
+        assertSame(mixedState, PeqBulkParameters.applyDraft(mixedState, allIds(mixedState),
+            canEdit = { _, field -> field != PeqEditField.FILTER_TYPE }, type = PeqFilterType.LOW_PASS))
+    }
+
     @Test fun draftWithNoMatchingOrEditableTargetsDoesNothing() {
         assertSame(mixedState, PeqBulkParameters.applyDraft(mixedState, emptySet(), allowAll,
             q = 1.5, bw = 0.5, type = PeqFilterType.HIGH_PASS))

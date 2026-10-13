@@ -39,7 +39,8 @@ class PeqDisplaySettingsTest {
         val locks = PeqBandLockStore(app)
         locks.setBandLocked("default-1", false)
         val before = audio.all.toMap()
-        val custom = PeqEditorSettings(true, 0, 20, false, true, false, false, false)
+        val custom = PeqEditorSettings(true, 0, 20, false, true, false, false, false,
+            showMarkerBandNumber = true, showInlineFilters = true)
         assertTrue(prefs.save(custom))
         assertEquals(custom, PeqEditorPreferences(app).load())
         assertEquals(before, audio.all)
@@ -97,7 +98,8 @@ class PeqDisplaySettingsTest {
 
     @Test fun malformedStoredUiValuesUseSafeDefaultsWithoutChangingTheSource() {
         stored.edit().putString("markerDurationSeconds", "bad").putInt("markerTextSizeSp", 500)
-            .putInt("confirmDelete", 5).putBoolean("showMarkerFrequency", false).commit()
+            .putInt("confirmDelete", 5).putBoolean("showMarkerFrequency", false)
+            .putString("showMarkerBandNumber", "true").putInt("showInlineFilters", 1).commit()
         val before = stored.all.toMap()
         assertEquals(PeqEditorSettings(showMarkerFrequency = false), prefs.load())
         assertEquals(before, stored.all)
@@ -116,5 +118,47 @@ class PeqDisplaySettingsTest {
         assertFalse(prefs.load().showMarkerFrequency)
         assertEquals(13, prefs.load().markerTextSizeSp)
         assertFalse(controls().first.peqShowMarkerFilterType.isChecked)
+    }
+
+    @Test fun bandNumbersAndInlineFiltersDefaultOffForFreshAndExistingPreferences() {
+        val (fresh, freshSettings) = controls()
+        assertFalse(fresh.peqShowMarkerBandNumber.isChecked)
+        assertFalse(fresh.peqShowInlineFilters.isChecked)
+        assertEquals(PeqEditorSettings(), freshSettings.validatedSettings())
+        assertTrue(stored.all.isEmpty())
+
+        stored.edit().putBoolean("showMarkerFilterType", false).putInt("markerTextSizeSp", 13).commit()
+        val before = stored.all.toMap()
+        val (existing, existingSettings) = controls()
+        assertFalse(existing.peqShowMarkerBandNumber.isChecked)
+        assertFalse(existing.peqShowInlineFilters.isChecked)
+        assertFalse(existingSettings.validatedSettings()!!.showMarkerBandNumber)
+        assertFalse(existingSettings.validatedSettings()!!.showInlineFilters)
+        assertEquals(before, stored.all)
+    }
+
+    @Test fun bandNumberAndInlineFilterDraftsPersistOnlyOnConfirmationAndReopenIndependently() {
+        val original = PeqEditorSettings(showMarkerFilterType = false, showMarkerQuality = false)
+        assertTrue(prefs.save(original))
+        val (discardedUi, discardedSettings) = controls()
+        discardedUi.peqShowMarkerBandNumber.performClick()
+        discardedUi.peqShowInlineFilters.performClick()
+        assertEquals(original.copy(showMarkerBandNumber = true, showInlineFilters = true),
+            discardedSettings.validatedSettings())
+        assertEquals(original, prefs.load())
+        val (confirmedUi, confirmedSettings) = controls()
+        assertFalse(confirmedUi.peqShowMarkerBandNumber.isChecked)
+        assertFalse(confirmedUi.peqShowInlineFilters.isChecked)
+        confirmedUi.peqShowMarkerBandNumber.performClick()
+        assertTrue(confirmedSettings.validateAndSave())
+        assertEquals(original.copy(showMarkerBandNumber = true), prefs.load())
+
+        val (reopenedUi, reopenedSettings) = controls()
+        assertTrue(reopenedUi.peqShowMarkerBandNumber.isChecked)
+        assertFalse(reopenedUi.peqShowInlineFilters.isChecked)
+        reopenedUi.peqShowInlineFilters.performClick()
+        assertTrue(reopenedSettings.validateAndSave())
+        assertEquals(original.copy(showMarkerBandNumber = true, showInlineFilters = true), prefs.load())
+        assertTrue(controls().first.peqShowInlineFilters.isChecked)
     }
 }

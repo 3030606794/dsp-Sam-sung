@@ -15,7 +15,7 @@
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="72dp"
+            android:layout_height="64dp"
             app:titleCentered="true" app:subtitleCentered="true"
             app:subtitleTextAppearance="@style/PeqToolbarSubtitle" />
     </com.google.android.material.appbar.AppBarLayout>

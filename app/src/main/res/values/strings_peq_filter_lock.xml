@@ -1,0 +1,6 @@
+<resources>
+    <string name="peq_bulk_lock_filter_type">一键锁住滤波器类型</string>
+    <string name="peq_bulk_unlock_filter_type">一键解锁滤波器类型</string>
+    <string name="peq_bulk_filter_hint">滤波器类型：可修改 %1$d 段，锁定 %2$d 段。</string>
+    <string name="peq_bulk_filter_scan_hint">滤波器类型锁定：%1$d 段</string>
+</resources>

@@ -292,7 +292,7 @@ class PeqWorkflowUiTest {
         val original = PeqState(listOf(PeqBand(frequency = 1234.0, q = 2.0)), gainRange = 50.0)
         launch(original)
         val first = edit()
-        assertTrue(first.findViewById<TextInputLayout>(R.id.peq_gain_box)!!.hint.toString().contains("50"))
+        assertTrue(first.findViewById<View>(R.id.peq_gain_label)!!.contentDescription.toString().contains("50"))
         listOf("50.01", "-50.01", "100", "-100").forEach { value ->
             first.findViewById<EditText>(R.id.peq_gain_input)!!.setText(value)
             first.getButton(AlertDialog.BUTTON_POSITIVE).performClick()

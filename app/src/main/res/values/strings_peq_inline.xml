@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_inline_monitor">监听</string>
+    <string name="peq_inline_confirm">确认</string>
+    <item type="id" name="peq_inline_choices" />
+    <item type="id" name="peq_inline_monitor" />
+    <item type="id" name="peq_inline_lock" />
+    <item type="id" name="peq_inline_cancel" />
+    <item type="id" name="peq_inline_confirm" />
+</resources>

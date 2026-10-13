@@ -3,6 +3,8 @@ package me.timschneeberger.rootlessjamesdsp.peq
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
 import android.util.TypedValue
@@ -28,6 +30,14 @@ class PeqFilterSelector @JvmOverloads constructor(
     private val selectedBackground = MaterialColors.getColor(this, com.google.android.material.R.attr.colorPrimaryContainer)
     private val selectedText = MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnPrimaryContainer)
     private val monitorBackground = Color.rgb(46, 125, 50)
+    private val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = MaterialColors.getColor(this@PeqFilterSelector, com.google.android.material.R.attr.colorOutline)
+        strokeWidth = resources.displayMetrics.density
+    }
+
+    /** Persisted type remains visible while another filter is only a draft or audition. */
+    var committedType: PeqFilterType? = null
+        set(value) { field = value; render() }
 
     var selectedType: PeqFilterType?
         get() = selection
@@ -121,19 +131,35 @@ class PeqFilterSelector @JvmOverloads constructor(
     private fun render() {
         options.forEach { (type, option) ->
             val selected = selection == type
+            val committed = committedType == type
+            val audition = selected && !committed && monitoring
             option.view.isSelected = selected
-            option.view.setBackgroundColor(when {
-                !selected -> Color.TRANSPARENT
-                monitoring -> monitorBackground
-                else -> selectedBackground
-            })
+            val color = when {
+                committed -> selectedBackground
+                audition -> monitorBackground
+                else -> Color.TRANSPARENT
+            }
+            if (selected && !committed && !monitoring) {
+                option.view.background = GradientDrawable().apply {
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(2), selectedText)
+                }
+            } else option.view.setBackgroundColor(color)
             val foreground = when {
-                !selected -> normalText
-                monitoring -> Color.WHITE
-                else -> selectedText
+                committed -> selectedText
+                audition -> Color.WHITE
+                else -> normalText
             }
             option.label.setTextColor(foreground)
             option.icon.imageTintList = ColorStateList.valueOf(foreground)
+        }
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        for (index in 1 until childCount) {
+            val x = getChildAt(index).left.toFloat()
+            canvas.drawLine(x, paddingTop.toFloat(), x, (height - paddingBottom).toFloat(), dividerPaint)
         }
     }
 

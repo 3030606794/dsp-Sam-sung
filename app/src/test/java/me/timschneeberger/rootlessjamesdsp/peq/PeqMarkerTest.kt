@@ -3,9 +3,11 @@ package me.timschneeberger.rootlessjamesdsp.peq
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import androidx.fragment.app.FragmentActivity
+import com.google.android.material.color.MaterialColors
 import me.timschneeberger.rootlessjamesdsp.R
 import org.junit.After
 import org.junit.Assert.*
@@ -400,6 +402,96 @@ class PeqMarkerTest {
             assertFalse(curve.requestedState!!.bands.single().enabled)
             curve.setDisplayOptions(options)
         }
+    }
+
+    @Test fun bandNumberCanJoinEveryFilterTypeOrAppearAloneWithoutChangingTheAudioBank() {
+        val curve = launch()
+        val options = PeqEditorSettings(showMarkerFrequency = false, showMarkerGain = false,
+            showMarkerQuality = false)
+        curve.setDisplayOptions(options)
+        PeqFilterType.entries.forEach { type ->
+            val selected = PeqBand("selected", type = type, frequency = 1500.0, gain = 4.0)
+            val state = PeqState(listOf(PeqBand("disabled-first", enabled = false), selected))
+            val payload = PeqProtocol.payload(state, true)
+            curve.setState(state, false)
+            curve.showMarker(selected.id)
+            val typeLabel = PeqBandAdapter.typeLabel(curve.context, type)
+            assertEquals(listOf(typeLabel), draw(curve)!!.labelLines)
+            assertFalse(curve.contentDescription.contains("第2段"))
+
+            curve.setDisplayOptions(options.copy(showMarkerBandNumber = true))
+            val numbered = draw(curve)!!
+            assertEquals(listOf("$typeLabel • 第2段"), numbered.labelLines)
+            assertEquals(typeLabel, numbered.filterTypeText)
+            assertTrue(curve.contentDescription.contains("$typeLabel • 第2段"))
+
+            curve.setDisplayOptions(options.copy(showMarkerBandNumber = true, showMarkerFilterType = false))
+            val numberOnly = draw(curve)!!
+            assertEquals(listOf("第2段"), numberOnly.labelLines)
+            assertNull(numberOnly.filterTypeText)
+            assertTrue(curve.contentDescription.contains("第2段"))
+            assertFalse(curve.contentDescription.contains(typeLabel))
+            assertEquals(numbered.x, numberOnly.x, 0f)
+            assertEquals(numbered.y, numberOnly.y, 0f)
+            assertSame(state, curve.requestedState)
+            assertArrayEquals(payload, PeqProtocol.payload(requireNotNull(curve.requestedState), true))
+            curve.setDisplayOptions(options)
+        }
+    }
+
+    @Test fun markerBandNumberTracksFullBankOrderAndDeletionDuringDisabledBandPreview() {
+        val curve = launch()
+        curve.setDisplayOptions(PeqEditorSettings(showMarkerBandNumber = true,
+            showMarkerFilterType = false, showMarkerFrequency = false,
+            showMarkerGain = false, showMarkerQuality = false))
+        val first = PeqBand("first", enabled = false)
+        val middle = PeqBand("middle", enabled = false)
+        val selected = PeqBand("selected", enabled = false, gain = 6.0)
+        curve.setState(PeqState(listOf(first, middle, selected)), false)
+        curve.showMarker(selected.id)
+        curve.setPreviewBand(selected.id)
+        assertEquals(listOf("未开启", "第3段"), draw(curve)!!.labelLines)
+        assertEquals(listOf(false, false, true), curve.requestedPlotState!!.bands.map { it.enabled })
+
+        curve.setState(PeqState(listOf(middle, selected, first)), false)
+        assertEquals(listOf("未开启", "第2段"), draw(curve)!!.labelLines)
+        assertEquals(selected.id, draw(curve)!!.bandId)
+        assertEquals(listOf(false, true, false), curve.requestedPlotState!!.bands.map { it.enabled })
+        curve.setState(PeqState(listOf(first, middle)), false)
+        val fallback = draw(curve)!!
+        assertEquals(first.id, fallback.bandId)
+        assertEquals(listOf("未开启", "第1段"), fallback.labelLines)
+        assertFalse(curve.requestedPlotState!!.bands.any { it.enabled })
+        curve.setState(PeqState(emptyList()), false)
+        assertNull(draw(curve))
+        assertEquals(curve.context.getString(R.string.peq_response_title), curve.contentDescription)
+    }
+
+    @Test fun onlyMarkerGainLineUsesPositiveRedNegativeBlueAndZeroThemeTextColor() {
+        val curve = launch()
+        val normal = MaterialColors.getColor(curve, com.google.android.material.R.attr.colorOnSurface)
+        curve.setDisplayOptions(PeqEditorSettings(showMarkerBandNumber = true))
+        val initial = PeqBand("selected", enabled = false, frequency = 1250.0, q = 2.5)
+        // Reuse one view across sign changes to catch Paint color leaking into other lines.
+        for ((gain, color) in listOf(6.0 to Color.rgb(211, 47, 47),
+                -4.0 to Color.rgb(25, 118, 210), 0.0 to normal, 2.0 to Color.rgb(211, 47, 47))) {
+            val band = initial.copy(gain = gain)
+            curve.setState(PeqState(listOf(band)), false)
+            curve.showMarker(band.id)
+            val marker = draw(curve)!!
+            val gainLine = marker.labelLines.indexOf(marker.gainText)
+            assertTrue(gainLine >= 0)
+            assertEquals(marker.labelLines.size, marker.labelColors.size)
+            marker.labelColors.forEachIndexed { index, actual ->
+                assertEquals(if (index == gainLine) color else normal, actual)
+            }
+            assertEquals(band, curve.requestedState!!.bands.single())
+        }
+        curve.setDisplayOptions(PeqEditorSettings(showMarkerBandNumber = true, showMarkerGain = false))
+        val hiddenGain = draw(curve)!!
+        assertTrue(hiddenGain.gainText.isEmpty())
+        assertTrue(hiddenGain.labelColors.isNotEmpty())
+        assertTrue(hiddenGain.labelColors.all { it == normal })
     }
 
     class HostActivity : FragmentActivity() {

@@ -110,7 +110,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val statusText: String?,
         val labelLines: List<String>,
         val textSizeSp: Float,
-        val filterTypeText: String?
+        val filterTypeText: String?,
+        val labelColors: List<Int>
     )
     internal var renderedMarker: BandMarker? = null
         private set
@@ -262,9 +263,20 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private fun markerFilterTypeText(band: PeqBand): String? =
         PeqBandAdapter.typeLabel(context, band.type).takeIf { displayOptions.showMarkerFilterType }
 
+    private fun markerHeadingText(band: PeqBand): String? {
+        // Derive the ordinal from the complete bank, including disabled bands, not the
+        // audible/preview subset. Reordering therefore updates the label immediately.
+        val ordinal = requestedState?.bands?.indexOfFirst { it.id == band.id }
+            ?.takeIf { it >= 0 }?.plus(1)
+        val number = ordinal?.takeIf { displayOptions.showMarkerBandNumber }
+            ?.let { context.getString(R.string.peq_band_ordinal, it) }
+        return listOfNotNull(markerFilterTypeText(band), number).joinToString(" • ")
+            .takeIf { it.isNotEmpty() }
+    }
+
     private fun markerLines(band: PeqBand): List<String> = listOfNotNull(
         markerStatusText(band),
-        markerFilterTypeText(band),
+        markerHeadingText(band),
         markerFrequencyText(band).takeIf { displayOptions.showMarkerFrequency },
         markerGainText(band).takeIf { displayOptions.showMarkerGain },
         markerQText(band).takeIf { displayOptions.showMarkerQuality },
@@ -416,6 +428,12 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val bwText = markerBwText(band).takeIf { displayOptions.showMarkerQuality }
         val statusText = markerStatusText(band)
         val labelLines = markerLines(band)
+        val gainColor = when {
+            gain > 0.0 -> Color.rgb(211, 47, 47)
+            gain < 0.0 -> Color.rgb(25, 118, 210)
+            else -> foreground
+        }
+        val labelColors = labelLines.map { if (it == gainText) gainColor else foreground }
         val horizontalCrosshair = MarkerLine(graphBounds.left, markerY, graphBounds.right, markerY, crosshairPaint.strokeWidth)
         val verticalCrosshair = MarkerLine(markerX, graphBounds.top, markerX, graphBounds.bottom, crosshairPaint.strokeWidth)
         val gainAxisMarker = MarkerDot(horizontalCrosshair.x1, horizontalCrosshair.y1, radius)
@@ -444,7 +462,7 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
             markerX, markerY, radius, frequencyText, gainText, qText, bwText, RectF(label), RectF(graphBounds),
             horizontalCrosshair, verticalCrosshair, gainAxisMarker, frequencyAxisMarker,
             statusText, labelLines, markerTextPaint.textSize / resources.displayMetrics.scaledDensity,
-            markerFilterTypeText(band))
+            markerFilterTypeText(band), labelColors)
         canvas.save()
         canvas.clipRect(graphBounds)
         canvas.drawLine(horizontalCrosshair.x1, horizontalCrosshair.y1,
@@ -455,8 +473,10 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         if (labelLines.isNotEmpty()) canvas.drawRoundRect(label, 3f * density, 3f * density, markerBackgroundPaint)
         val baseline = label.top + padding - metrics.ascent
         labelLines.forEachIndexed { index, text ->
+            markerTextPaint.color = labelColors[index]
             canvas.drawText(text, label.left + padding, baseline + lineHeight * index, markerTextPaint)
         }
+        markerTextPaint.color = foreground
         // Draw last so a tiny viewport or an edge-clamped label cannot hide the red point.
         for (dot in listOf(gainAxisMarker, frequencyAxisMarker)) {
             canvas.drawCircle(dot.x, dot.y, dot.radius + density, markerHaloPaint)

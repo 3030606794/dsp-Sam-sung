@@ -182,11 +182,14 @@ class PeqBandControlsUiTest {
         val frequency = current.findViewById<Slider>(R.id.peq_frequency_slider)
         val defaultThumb = gain.thumbTintList
         val defaultTrack = gain.trackActiveTintList
+        val gainText = current.findViewById<TextView>(R.id.peq_band_gain)
+        val defaultTextColors = gainText.textColors
         val originalQ = q.thumbTintList
         val originalFrequency = frequency.thumbTintList
         fun assertColor(positive: Boolean) {
             val color = gain.thumbTintList.defaultColor
             assertEquals(color, gain.trackActiveTintList.defaultColor)
+            assertEquals(color, gainText.currentTextColor)
             assertTrue(if (positive) Color.red(color) > Color.blue(color) else Color.blue(color) > Color.red(color))
             assertEquals(originalQ, q.thumbTintList)
             assertEquals(originalFrequency, frequency.thumbTintList)
@@ -208,6 +211,25 @@ class PeqBandControlsUiTest {
         assertEquals(0.0, repository.load().bands.single().gain, 0.0)
         assertEquals(defaultThumb, gain.thumbTintList)
         assertEquals(defaultTrack, gain.trackActiveTintList)
+        assertEquals(defaultTextColors, gainText.textColors)
+    }
+
+    @Test fun recycledGainNumbersUseExactSignColorsAndRestoreOriginalThemeAtZeroForEveryFilter() {
+        launch(PeqState(listOf(PeqBand("color"))))
+        val adapter = PeqBandAdapter(onBandChanged = { true }, onEdit = {})
+        val holder = adapter.onCreateViewHolder(FrameLayout(controller!!.get()), 0)
+        val number = holder.itemView.findViewById<TextView>(R.id.peq_band_gain)
+        val defaultTextColors = number.textColors
+        PeqFilterType.entries.forEach { type ->
+            listOf(2.5, -2.5, 0.0).forEach { gain ->
+                val band = PeqBand("color", type = type, gain = gain)
+                adapter.submitState(PeqState(listOf(band)))
+                adapter.onBindViewHolder(holder, 0)
+                if (gain == 0.0 || !type.usesGain) assertEquals(defaultTextColors, number.textColors)
+                else assertEquals(if (gain > 0.0) Color.rgb(211, 47, 47) else Color.rgb(25, 118, 210),
+                    number.currentTextColor)
+            }
+        }
     }
 
     @Test fun choosingBandwidthPersistsBothModeAndTheActualRowSliderWithoutChangingQ() {
@@ -299,7 +321,7 @@ class PeqBandControlsUiTest {
         assertEquals(original, repository.load().bands.single())
         val current = row()
         assertTrue(current.findViewById<TextView>(R.id.peq_q_value).text.endsWith("2.033"))
-        assertEquals("+12.00 dB", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
+        assertEquals("+12.00", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
         dragTo(current.findViewById(R.id.peq_q_slider),
             PeqBandAdapter.logarithmicPosition(4.321, PeqModel.MIN_Q, PeqModel.MAX_Q))
         val narrower = fragment().editorState.bands.single()
@@ -315,7 +337,7 @@ class PeqBandControlsUiTest {
         assertEquals(narrower.q, changed.q, 0.0)
         dragTo(current.findViewById(R.id.peq_band_slider), ((0.37 + 18.0) / 36.0).toFloat())
         assertEquals(0.37, repository.load().bands.single().gain, 0.0)
-        assertEquals("+0.37 dB", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
+        assertEquals("+0.37", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
         // Button steps remain independent from drag precision.
         press(current, R.id.peq_band_plus)
         assertEquals(2.37, repository.load().bands.single().gain, 1e-12)
@@ -491,7 +513,7 @@ class PeqBandControlsUiTest {
             assertEquals(2.25, repository.load().bands[index].gain, 0.0)
             dragTo(current.findViewById(R.id.peq_band_slider), ((0.37 + 18.0) / 36.0).toFloat())
             assertEquals(0.37, repository.load().bands[index].gain, 0.0)
-            assertEquals("+0.37 dB", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
+            assertEquals("+0.37", current.findViewById<TextView>(R.id.peq_band_gain).text.toString())
         }
     }
 

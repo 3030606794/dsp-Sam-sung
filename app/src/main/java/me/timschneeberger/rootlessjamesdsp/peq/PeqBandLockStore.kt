@@ -7,6 +7,7 @@ class PeqBandLockStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
     fun isBandLocked(id: String) = preferences.getBoolean("$id.band", true)
+    // New fields default to unlocked without rewriting older saved locks or audio parameters.
     fun isFieldLocked(id: String, field: PeqEditField) = preferences.getBoolean("$id.${field.name}", false)
     fun canEdit(id: String, field: PeqEditField? = null) =
         !isBandLocked(id) && (field == null || !isFieldLocked(id, field))

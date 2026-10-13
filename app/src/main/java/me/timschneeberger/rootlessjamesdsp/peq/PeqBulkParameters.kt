@@ -34,7 +34,8 @@ object PeqBulkParameters {
             }
         }
         if (type != null) {
-            val eligible = next.bands.filter { it.id in ids && canEdit(it.id, null) }.mapTo(hashSetOf()) { it.id }
+            val eligible = next.bands.filter { it.id in ids && canEdit(it.id, PeqEditField.FILTER_TYPE) }
+                .mapTo(hashSetOf()) { it.id }
             if (eligible.isNotEmpty()) next = PeqSelection.update(next, eligible) { filterType(it, type) }
         }
         return next

@@ -42,9 +42,13 @@ object PeqBatchParametersDialog {
         ui.peqBatchQHint.text = hint(PeqQualityDisplay.Q, qBands.size)
         ui.peqBatchBwHint.text = if (bwBands.isNotEmpty() && !validBw) context.getString(R.string.peq_bulk_bw_no_range)
             else hint(PeqQualityDisplay.BW, bwBands.size)
-        val filterTargets = original.bands.filter { it.id in ids && canEdit(it.id, null) }
-        ui.peqBatchFilter.setSelection(filterTargets.map { it.type }.distinct().singleOrNull())
+        val filterTargets = original.bands.filter { it.id in ids && canEdit(it.id, PeqEditField.FILTER_TYPE) }
+        val originalFilterType = filterTargets.map { it.type }.distinct().singleOrNull()
+        ui.peqBatchFilter.committedType = originalFilterType
+        ui.peqBatchFilter.setSelection(originalFilterType)
         ui.peqBatchFilter.isEnabled = filterTargets.isNotEmpty()
+        ui.peqBatchFilterHint.text = context.getString(R.string.peq_bulk_filter_hint, filterTargets.size,
+            original.bands.count { it.id in ids } - filterTargets.size)
         ui.peqBatchScan.text = scan()
         var qChanged = false
         var bwChanged = false

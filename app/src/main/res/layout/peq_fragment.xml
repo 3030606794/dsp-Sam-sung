@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:paddingTop="2dp">
+    android:orientation="vertical">
     <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:id="@+id/peq_scroll_container" android:layout_width="match_parent"
         android:layout_height="0dp" android:layout_weight="1">
@@ -26,16 +26,19 @@
                     android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="8dp">
                     <com.google.android.material.button.MaterialButton android:id="@+id/peq_add_front"
                         style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp" android:layout_weight="1"
-                        android:layout_height="48dp" android:minWidth="0dp" android:paddingHorizontal="2dp"
+                        android:layout_height="36dp" android:minHeight="0dp" android:minWidth="0dp" android:paddingHorizontal="2dp"
+                        android:insetTop="0dp" android:insetBottom="0dp"
                         android:textSize="11sp" android:text="@string/peq_add_front" android:maxLines="1" />
                     <com.google.android.material.button.MaterialButton android:id="@+id/peq_edit_selection"
                         style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp"
-                        android:layout_weight="1" android:layout_height="48dp" android:minWidth="0dp"
+                        android:layout_weight="1" android:layout_height="36dp" android:minHeight="0dp" android:minWidth="0dp"
+                        android:insetTop="0dp" android:insetBottom="0dp"
                         android:paddingHorizontal="2dp" android:textSize="12sp" android:maxLines="1"
                         android:text="@string/peq_edit_selection" />
                     <com.google.android.material.button.MaterialButton android:id="@+id/peq_add_back"
                         style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp" android:layout_weight="1"
-                        android:layout_height="48dp" android:minWidth="0dp" android:paddingHorizontal="2dp"
+                        android:layout_height="36dp" android:minHeight="0dp" android:minWidth="0dp" android:paddingHorizontal="2dp"
+                        android:insetTop="0dp" android:insetBottom="0dp"
                         android:textSize="11sp" android:text="@string/peq_add_back" android:maxLines="1" />
                 </LinearLayout>
             </LinearLayout>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="peq_parameters">参数设置</string>
+    <string name="peq_parameters">一键设置</string>
     <string name="peq_bulk_q">Q 值</string>
     <string name="peq_bulk_bw">BW 值</string>
     <string name="peq_bulk_quality_title">设置所有频段的 %1$s</string>

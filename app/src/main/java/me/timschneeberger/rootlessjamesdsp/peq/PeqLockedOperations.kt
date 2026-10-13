@@ -12,8 +12,8 @@ class PeqLockedOperations(private val canEdit: (String, PeqEditField?) -> Boolea
             PeqResetTarget.Q -> listOf(PeqEditField.QUALITY)
             PeqResetTarget.FREQUENCY -> listOf(PeqEditField.FREQUENCY)
             PeqResetTarget.GAIN -> listOf(PeqEditField.GAIN)
-            PeqResetTarget.FILTER_TYPE -> listOf(null)
-            PeqResetTarget.ALL -> listOf(PeqEditField.QUALITY, PeqEditField.FREQUENCY, PeqEditField.GAIN, null)
+            PeqResetTarget.FILTER_TYPE -> listOf(PeqEditField.FILTER_TYPE)
+            PeqResetTarget.ALL -> PeqEditField.entries
         }
         val frequencies = if (PeqEditField.FREQUENCY in fields) {
             val unlocked = eligible(state, ids, PeqEditField.FREQUENCY)
@@ -30,7 +30,7 @@ class PeqLockedOperations(private val canEdit: (String, PeqEditField?) -> Boolea
                 q = if (PeqEditField.QUALITY in allowed) PeqModel.DEFAULT_Q.coerceAtMost(state.qRange) else band.q,
                 gain = if (PeqEditField.GAIN in allowed) 0.0 else band.gain,
                 frequency = if (PeqEditField.FREQUENCY in allowed) frequencies.getValue(band.id) else band.frequency,
-                type = if (null in allowed) PeqFilterType.PEAK else band.type
+                type = if (PeqEditField.FILTER_TYPE in allowed) PeqFilterType.PEAK else band.type
             )
         })
         return ResetResult(PeqModel.validate(next), editable, protected)

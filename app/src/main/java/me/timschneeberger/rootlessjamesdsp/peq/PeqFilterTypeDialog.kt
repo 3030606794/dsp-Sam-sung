@@ -41,11 +41,13 @@ object PeqFilterTypeDialog {
         val monitorOff = MaterialColors.getColor(root, com.google.android.material.R.attr.colorOnSurfaceVariant)
         val monitorOn = Color.rgb(46, 125, 50)
         var listening = false
+        types.committedType = initialType
         types.setSelection(initialType)
         fun render() {
             types.monitoring = listening
             monitor.isSelected = listening
-            monitor.setTextColor(if (listening) monitorOn else monitorOff)
+            monitor.backgroundTintList = android.content.res.ColorStateList.valueOf(if (listening) monitorOn else Color.TRANSPARENT)
+            monitor.setTextColor(if (listening) Color.WHITE else monitorOff)
             monitor.contentDescription = context.getString(if (listening)
                 R.string.peq_live_monitor_on else R.string.peq_live_monitor_off)
             confirm.isEnabled = types.selectedType != null

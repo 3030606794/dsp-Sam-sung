@@ -281,7 +281,7 @@ class PeqRefinementUiTest {
         editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         idle()
         assertFalse(editor.isShowing)
-        assertEquals(withType(original, PeqFilterType.LOW_SHELF), repository.load())
+        assertEquals(original, repository.load())
         assertNull(PeqPreviewSession.current())
     }
 

@@ -117,6 +117,9 @@
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_frequency_slider"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_show_frequency_slider" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_inline_filters"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_show_inline_filters" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="8dp" android:labelFor="@id/peq_marker_duration"
             android:text="@string/peq_marker_duration" android:textAppearance="?attr/textAppearanceBodyMedium" />
@@ -159,6 +162,9 @@
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_filter_type"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_show_marker_filter_type" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_band_number"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_show_marker_band_number" />
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_gain"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_show_marker_gain" />

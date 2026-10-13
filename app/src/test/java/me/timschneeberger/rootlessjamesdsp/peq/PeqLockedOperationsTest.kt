@@ -143,4 +143,37 @@ class PeqLockedOperationsTest {
             assertEquals(0, result.protectedCount)
         }
     }
+
+    @Test fun independentFilterLockProtectsTypeResetAndOnlyItsTypeDuringAnAllReset() {
+        val original = PeqState(listOf(band("type"), band("master"), band("free"), band("unselected")))
+        val ids = setOf("type", "master", "free")
+        val operation = operations(masterLocked = setOf("master"),
+            fieldLocked = mapOf("type" to setOf(PeqEditField.FILTER_TYPE)))
+        assertEquals(setOf("free"), operation.eligible(original, ids, PeqEditField.FILTER_TYPE))
+        val types = operation.reset(original, ids, PeqResetTarget.FILTER_TYPE)
+        assertEquals(original.copy(bands = original.bands.map {
+            if (it.id == "free") it.copy(type = PeqFilterType.PEAK) else it
+        }), types.state)
+        assertEquals(1, types.editableCount)
+        assertEquals(2, types.protectedCount)
+
+        val all = operation.reset(original, ids, PeqResetTarget.ALL)
+        assertEquals(original.copy(bands = listOf(
+            original.bands[0].copy(gain = 0.0, q = PeqModel.DEFAULT_Q, frequency = 20.0),
+            original.bands[1],
+            original.bands[2].copy(type = PeqFilterType.PEAK, gain = 0.0, q = PeqModel.DEFAULT_Q, frequency = 20000.0),
+            original.bands[3]
+        )), all.state)
+        assertEquals(2, all.editableCount)
+        assertEquals(2, all.protectedCount)
+    }
+
+    @Test fun lockingEveryIndependentFieldMakesAllResetAnExactNoOpWithoutAMasterLock() {
+        val original = PeqState(listOf(band("all-fields")))
+        val operation = operations(fieldLocked = mapOf("all-fields" to PeqEditField.entries.toSet()))
+        val result = operation.reset(original, setOf("all-fields"), PeqResetTarget.ALL)
+        assertEquals(original, result.state)
+        assertEquals(0, result.editableCount)
+        assertEquals(1, result.protectedCount)
+    }
 }

@@ -184,7 +184,9 @@ class PeqProtectionUiTest {
         click(R.id.peq_edit_selection)
         assertNoDialog()
         assertSaved(original.copy(bands = listOf(original.bands.first())))
-        assertEquals(app.getString(R.string.peq_bulk_lock_hint, 1, 1), ShadowToast.getTextOfLatestToast())
+        val deletionMessage = ShadowToast.getTextOfLatestToast().toString()
+        assertTrue(deletionMessage.contains(app.getString(R.string.peq_deleted_band_number, 2)))
+        assertTrue(deletionMessage.contains(app.getString(R.string.peq_delete_skipped_locked, 1)))
         assertTrue(locks.isBandLocked("first"))
     }
 
@@ -255,7 +257,8 @@ class PeqProtectionUiTest {
         edit(0, 1, 2)
         click(R.id.peq_parameters)
         val quality = dialog()
-        val scan = app.getString(R.string.peq_bulk_scan_hint, 3, 1, 1, 0, 1, 0)
+        val scan = app.getString(R.string.peq_bulk_scan_hint, 3, 1, 1, 0, 1, 0) + "\n" +
+            app.getString(R.string.peq_bulk_filter_scan_hint, 0)
         assertEquals(scan, quality.findViewById<TextView>(R.id.peq_batch_scan)!!.text.toString())
         val input = quality.findViewById<EditText>(R.id.peq_batch_q_input)!!
         assertEquals(app.getString(R.string.peq_bulk_mode_hint, 1, 1),
@@ -326,6 +329,76 @@ class PeqProtectionUiTest {
         assertTrue(locks.isBandLocked("first"))
         assertTrue(locks.isFieldLocked("second", PeqEditField.QUALITY))
         assertNull(PeqPreviewSession.current())
+    }
+
+    @Test fun batchFilterLockAndUnlockRespectSelectionAndNeverReleaseTheMasterOrOtherFieldLocks() {
+        val original = initial()
+        locks.setFieldLocked("first", PeqEditField.GAIN, true)
+        locks.setFieldLocked("second", PeqEditField.QUALITY, true)
+        launch(original, unlocked = setOf("second", "third"))
+        edit(0, 1)
+        resetAction(R.string.peq_bulk_lock_filter_type)
+        assertTrue(locks.isFieldLocked("first", PeqEditField.FILTER_TYPE))
+        assertTrue(locks.isFieldLocked("second", PeqEditField.FILTER_TYPE))
+        assertFalse(locks.isFieldLocked("third", PeqEditField.FILTER_TYPE))
+        assertTrue(locks.isBandLocked("first"))
+        assertTrue(locks.isFieldLocked("first", PeqEditField.GAIN))
+        assertTrue(locks.isFieldLocked("second", PeqEditField.QUALITY))
+        resetAction(R.string.peq_reset_filter_type)
+        assertSaved(original)
+        assertEquals(app.getString(R.string.peq_reset_protected_result, 0, 2), ShadowToast.getTextOfLatestToast())
+
+        resetAction(R.string.peq_bulk_unlock_filter_type)
+        assertFalse(locks.isFieldLocked("first", PeqEditField.FILTER_TYPE))
+        assertFalse(locks.isFieldLocked("second", PeqEditField.FILTER_TYPE))
+        assertTrue(locks.isBandLocked("first"))
+        assertTrue(locks.isFieldLocked("first", PeqEditField.GAIN))
+        assertTrue(locks.isFieldLocked("second", PeqEditField.QUALITY))
+        resetAction(R.string.peq_reset_filter_type)
+        assertSaved(original.copy(bands = original.bands.map {
+            if (it.id == "second") it.copy(type = PeqFilterType.PEAK) else it
+        }))
+        assertEquals(app.getString(R.string.peq_reset_protected_result, 1, 1), ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test fun menuLockButtonsStayOpenAndRefreshModeCountsScanAndOnlyTheSelectedLocks() {
+        val original = initial()
+        locks.setFieldLocked("first", PeqEditField.QUALITY, true)
+        locks.setFieldLocked("third", PeqEditField.QUALITY, true)
+        launch(original, unlocked = original.bands.map { it.id }.toSet())
+        edit(0, 1)
+        click(R.id.peq_reset)
+        val menu = dialog()
+        val adapter = menu.listView.adapter
+        fun lockRow(label: Int): View {
+            val index = (0 until adapter.count).first { adapter.getItem(it).toString() == app.getString(label) }
+            return adapter.getView(index, null, menu.listView)
+        }
+        fun counts(label: Int) = lockRow(label).findViewById<TextView>(R.id.peq_bulk_lock_counts).text.toString()
+        assertEquals(app.getString(R.string.peq_bulk_lock_counts, 0, 1), counts(R.string.peq_bulk_lock_q))
+        assertEquals(app.getString(R.string.peq_bulk_lock_counts, 1, 0), counts(R.string.peq_bulk_lock_bw))
+        lockRow(R.string.peq_bulk_lock_q).findViewById<View>(R.id.peq_bulk_unlock_button).performClick()
+        layout()
+        assertTrue(menu.isShowing)
+        assertFalse(locks.isFieldLocked("first", PeqEditField.QUALITY))
+        assertFalse(locks.isFieldLocked("second", PeqEditField.QUALITY))
+        assertTrue(locks.isFieldLocked("third", PeqEditField.QUALITY))
+        assertEquals(app.getString(R.string.peq_bulk_lock_counts, 1, 0), counts(R.string.peq_bulk_lock_q))
+        lockRow(R.string.peq_bulk_lock_bw).findViewById<View>(R.id.peq_bulk_lock_button).performClick()
+        layout()
+        assertTrue(menu.isShowing)
+        assertTrue(locks.isFieldLocked("second", PeqEditField.QUALITY))
+        assertFalse(locks.isFieldLocked("first", PeqEditField.QUALITY))
+        assertEquals(app.getString(R.string.peq_bulk_lock_counts, 0, 1), counts(R.string.peq_bulk_lock_bw))
+        val scan = app.getString(R.string.peq_bulk_scan_hint, 2, 0, 0, 0, 1, 0) + "\n" +
+            app.getString(R.string.peq_bulk_filter_scan_hint, 0)
+        assertEquals(scan, menu.findViewById<TextView>(R.id.peq_bulk_lock_scan)!!.text.toString())
+        assertSaved(original)
+        menu.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        layout()
+        click(R.id.peq_selection_done)
+        assertTrue(row(0).findViewById<View>(R.id.peq_q_slider).isEnabled)
+        assertFalse(row(1).findViewById<View>(R.id.peq_q_slider).isEnabled)
     }
 
     class HostActivity : AppCompatActivity() {
