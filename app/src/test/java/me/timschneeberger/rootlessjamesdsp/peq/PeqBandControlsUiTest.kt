@@ -19,7 +19,6 @@ import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
-import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import org.junit.After
@@ -119,7 +118,7 @@ class PeqBandControlsUiTest {
         val adapter = PeqBandAdapter(onBandChanged = { mutations++; true }, onEdit = { fullEdits++ },
             onEditField = { id, field -> fields.add(id to field) }, onEditType = { types.add(it) })
         fragment().requireView().findViewById<RecyclerView>(R.id.peq_band_list).adapter = adapter
-        val headerHeights = mutableMapOf<Pair<Boolean, Boolean>, Int>()
+        val cardHeights = mutableMapOf<Pair<Boolean, Boolean>, Int>()
         for ((showQ, showFrequency) in listOf(false to false, true to false, false to true, true to true)) {
             state = state.copy(showQSlider = showQ, showFrequencySlider = showFrequency)
             adapter.submitState(state)
@@ -139,7 +138,8 @@ class PeqBandControlsUiTest {
                 current.findViewById<View>(R.id.peq_frequency_controls).visibility)
             val quality = current.findViewById<TextView>(if (showQ) R.id.peq_q_value else R.id.peq_band_summary)
             assertTrue(quality.isShown)
-            assertTrue(quality.text.startsWith("BW"))
+            assertTrue(if (showQ) current.findViewById<TextView>(R.id.peq_q_label).text.startsWith("BW")
+                else quality.text.startsWith("BW"))
             val frequency = current.findViewById<TextView>(if (showFrequency) R.id.peq_frequency_value else R.id.peq_band_header_frequency)
             assertTrue(frequency.isShown)
             assertTrue(frequency.text.contains("1234.567"))
@@ -157,10 +157,10 @@ class PeqBandControlsUiTest {
             assertEquals(listOf("adaptive"), types)
             assertEquals(0, fullEdits)
             assertEquals(0, mutations)
-            headerHeights[showQ to showFrequency] = current.findViewById<View>(R.id.peq_band_header).height
+            cardHeights[showQ to showFrequency] = current.height
         }
-        assertTrue("Hiding the second header row must reclaim height",
-            headerHeights.getValue(true to true) < headerHeights.getValue(false to false))
+        assertTrue("Hiding slider rows must reclaim height while retaining compact summaries",
+            cardHeights.getValue(false to false) < cardHeights.getValue(true to true))
         // Reusing the same holder after both hidden and visible states restores the missing values.
         state = state.copy(showQSlider = false, showFrequencySlider = false,
             bands = listOf(state.bands.single().copy(type = PeqFilterType.LOW_PASS, qualityDisplay = PeqQualityDisplay.Q)))
@@ -222,7 +222,7 @@ class PeqBandControlsUiTest {
         assertFalse(dialog.isShowing)
         assertEquals(original.q, repository.load().bands.single().q, 0.0)
         val current = row()
-        assertTrue(current.findViewById<TextView>(R.id.peq_q_value).text.startsWith("BW"))
+        assertTrue(current.findViewById<TextView>(R.id.peq_q_label).text.startsWith("BW"))
         val bw = PeqResponse.bandwidthOctaves(original.q, original.frequency)
         val bounds = PeqBandAdapter.qualityBounds(repository.load().bands.single())
         assertEquals(PeqBandAdapter.logarithmicPosition(bw, bounds.start, bounds.endInclusive),
@@ -234,7 +234,7 @@ class PeqBandControlsUiTest {
         controller!!.recreate()
         layout()
         assertEquals(wider, repository.load().bands.single())
-        assertTrue(row().findViewById<TextView>(R.id.peq_q_value).text.startsWith("BW"))
+        assertTrue(row().findViewById<TextView>(R.id.peq_q_label).text.startsWith("BW"))
     }
 
     @Test fun plusMinusUseConfiguredStepsAndStopAtRealParameterLimits() {
@@ -331,15 +331,15 @@ class PeqBandControlsUiTest {
                 type = if (index == 169) PeqFilterType.BAND_PASS else PeqFilterType.PEAK)
         }
         launch(PeqState(bands, qStep = 0.01, showQSlider = true))
-        assertTrue(row().findViewById<TextView>(R.id.peq_q_value).text.startsWith("BW"))
-        assertTrue(row(80).findViewById<TextView>(R.id.peq_q_value).text.startsWith("Q"))
+        assertTrue(row().findViewById<TextView>(R.id.peq_q_label).text.startsWith("BW"))
+        assertTrue(row(80).findViewById<TextView>(R.id.peq_q_label).text.startsWith("Q"))
         val last = row(169)
-        assertTrue(last.findViewById<TextView>(R.id.peq_q_value).text.startsWith("BW"))
+        assertTrue(last.findViewById<TextView>(R.id.peq_q_label).text.startsWith("BW"))
         val before = PeqBandAdapter.displayedQuality(repository.load().bands.last())
         press(last, R.id.peq_q_plus)
         assertEquals(before + 0.01, PeqBandAdapter.displayedQuality(repository.load().bands.last()), 1e-12)
         assertEquals(bands.first(), repository.load().bands.first())
-        assertTrue(row().findViewById<TextView>(R.id.peq_q_value).text.startsWith("BW"))
+        assertTrue(row().findViewById<TextView>(R.id.peq_q_label).text.startsWith("BW"))
     }
 
     @Test fun bandwidthLimitsAndHugeStepsStayFiniteAndCanReachBothEnds() {
@@ -376,7 +376,7 @@ class PeqBandControlsUiTest {
         assertTrue(qRow.findViewById<TextView>(R.id.peq_q_value).text.endsWith("20.123"))
         val bwRow = row(1)
         assertEquals(0f, bwRow.findViewById<Slider>(R.id.peq_q_slider).value, 0f)
-        assertTrue(bwRow.findViewById<TextView>(R.id.peq_q_value).text.startsWith("BW"))
+        assertTrue(bwRow.findViewById<TextView>(R.id.peq_q_label).text.startsWith("BW"))
         assertEquals(original, repository.load())
         press(row(0), R.id.peq_q_minus)
         assertEquals(3.25, repository.load().bands[0].q, 0.0)
@@ -601,9 +601,8 @@ class PeqBandControlsUiTest {
         assertEquals(original, fragment().editorState)
         assertEquals(original, repository.load())
         val type = PeqFilterType.LOW_PASS
-        val selector = dialog.findViewById<MaterialAutoCompleteTextView>(R.id.peq_band_type)!!
-        selector.setText(PeqBandAdapter.typeLabel(application, type), false)
-        selector.onItemClickListener!!.onItemClick(null, null, type.ordinal, type.ordinal.toLong())
+        val selector = dialog.findViewById<PeqFilterSelector>(R.id.peq_band_type)!!
+        selector.setSelection(type, notify = true)
         assertEquals(type, requireNotNull(curve().requestedState).bands[1].type)
         assertEquals(7.25, drawMarker().gain, 0.0)
         assertEquals(View.VISIBLE, dialog.findViewById<View>(R.id.peq_gain_box)!!.visibility)

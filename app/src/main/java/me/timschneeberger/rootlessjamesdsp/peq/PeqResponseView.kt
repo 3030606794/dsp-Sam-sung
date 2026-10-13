@@ -109,7 +109,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         val frequencyAxisMarker: MarkerDot,
         val statusText: String?,
         val labelLines: List<String>,
-        val textSizeSp: Float
+        val textSizeSp: Float,
+        val filterTypeText: String?
     )
     internal var renderedMarker: BandMarker? = null
         private set
@@ -258,8 +259,12 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
     private fun markerStatusText(band: PeqBand): String? = if (!band.enabled)
         context.getString(R.string.peq_marker_disabled) else null
 
+    private fun markerFilterTypeText(band: PeqBand): String? =
+        PeqBandAdapter.typeLabel(context, band.type).takeIf { displayOptions.showMarkerFilterType }
+
     private fun markerLines(band: PeqBand): List<String> = listOfNotNull(
         markerStatusText(band),
+        markerFilterTypeText(band),
         markerFrequencyText(band).takeIf { displayOptions.showMarkerFrequency },
         markerGainText(band).takeIf { displayOptions.showMarkerGain },
         markerQText(band).takeIf { displayOptions.showMarkerQuality },
@@ -438,7 +443,8 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         renderedMarker = BandMarker(band.id, band.frequency, gain, band.q, markerBandwidth(band),
             markerX, markerY, radius, frequencyText, gainText, qText, bwText, RectF(label), RectF(graphBounds),
             horizontalCrosshair, verticalCrosshair, gainAxisMarker, frequencyAxisMarker,
-            statusText, labelLines, markerTextPaint.textSize / resources.displayMetrics.scaledDensity)
+            statusText, labelLines, markerTextPaint.textSize / resources.displayMetrics.scaledDensity,
+            markerFilterTypeText(band))
         canvas.save()
         canvas.clipRect(graphBounds)
         canvas.drawLine(horizontalCrosshair.x1, horizontalCrosshair.y1,

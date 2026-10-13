@@ -110,29 +110,77 @@ class PeqBandSelectionUiTest {
         tap(card, rectangle.exactCenterX(), rectangle.exactCenterY())
     }
 
-    @Test fun powerStaysCenteredAndHeaderControlsDoNotOverlapAcrossValuesAndWidths() {
+    @Test fun nineEqualHeaderSlotsStayFixedWhenWarningAndNewBadgeVisibilityChanges() {
         launch(PeqState(listOf(PeqBand("center")), showQSlider = true, showFrequencySlider = true))
+        val slots = listOf(R.id.peq_band_number, R.id.peq_band_delete, R.id.peq_band_title, R.id.peq_band_warning,
+            R.id.peq_band_power, R.id.peq_band_drag_handle, R.id.peq_band_locate, R.id.peq_band_new, R.id.peq_band_lock)
+        val locks = PeqBandLockStore(controller!!.get())
         for (width in listOf(320, 411, 600)) {
+            var stableBounds: List<Rect>? = null
             for ((frequency, gain) in listOf(0.0 to 0.0, 1000.0 to 100.0, 0.0 to -100.0, 20000.0 to 0.1)) {
+                if (frequency == 0.0) locks.markNew("center") else locks.markUsed("center")
                 state = state.copy(bands = listOf(state.bands.single().copy(frequency = frequency, gain = gain)))
                 adapter.submitState(state)
                 layout(width)
                 val card = list.findViewHolderForAdapterPosition(0)!!.itemView as MaterialCardView
-                assertEquals("Power center at width $width", card.width / 2f,
-                    bounds(card, R.id.peq_band_power).exactCenterX(), 1f)
-                val ids = listOf(R.id.peq_band_number, R.id.peq_band_delete, R.id.peq_band_title, R.id.peq_band_warning,
-                    R.id.peq_band_power, R.id.peq_band_drag_handle, R.id.peq_band_new, R.id.peq_band_lock)
-                ids.zipWithNext().forEach { (left, right) ->
-                    assertTrue("Header controls must not overlap at width $width", bounds(card, left).right <= bounds(card, right).left)
+                val header = bounds(card, R.id.peq_band_header)
+                val rectangles = slots.map { bounds(card, it) }
+                assertTrue("Nine slot widths differ by at most a rounding pixel at $width dp",
+                    rectangles.maxOf { it.width() } - rectangles.minOf { it.width() } <= 1)
+                rectangles.forEachIndexed { index, rectangle ->
+                    assertEquals("Slot ${index + 1} at width $width", header.left + header.width() * (index + 0.5f) / 9f,
+                        rectangle.exactCenterX(), 1f)
+                    assertEquals(header.top, rectangle.top)
+                    assertEquals(header.bottom, rectangle.bottom)
                 }
-                assertEquals(bounds(card, R.id.peq_band_title).right, bounds(card, R.id.peq_band_warning).left)
-                assertTrue(bounds(card, R.id.peq_band_power).bottom <= bounds(card, R.id.peq_band_gain).top)
-                assertTrue(bounds(card, R.id.peq_band_gain).right <= bounds(card, R.id.peq_band_locate).left)
+                rectangles.zipWithNext().forEach { (left, right) -> assertEquals(left.right, right.left) }
+                if (stableBounds != null) assertEquals("Hidden badges must reserve their complete slots", stableBounds, rectangles)
+                stableBounds = rectangles
+                assertEquals(card.width / 2f, bounds(card, R.id.peq_band_power).exactCenterX(), 1f)
+                assertEquals(0, rectangles.first().left)
+                assertEquals(0, rectangles.first().top)
                 assertNotNull(card.findViewById<View>(R.id.peq_band_number).background)
+                val divider = bounds(card, R.id.peq_band_divider)
+                assertEquals(0, divider.left)
+                assertEquals(card.width, divider.right)
+                assertEquals(header.bottom, divider.top)
                 assertEquals(if (frequency == 0.0) View.VISIBLE else View.INVISIBLE,
                     card.findViewById<View>(R.id.peq_band_warning).visibility)
+                assertEquals(if (frequency == 0.0) View.VISIBLE else View.INVISIBLE,
+                    card.findViewById<View>(R.id.peq_band_new).visibility)
+                assertEquals(Color.rgb(211, 47, 47), card.findViewById<MaterialButton>(R.id.peq_band_delete).iconTint!!.defaultColor)
             }
         }
+    }
+
+    @Test fun compactRowsKeepLabelsBeforeMinusAndNumericBoxesBetweenSliderAndPlus() {
+        launch(PeqState(listOf(PeqBand("compact", qualityDisplay = PeqQualityDisplay.BW))))
+        val rows = listOf(
+            listOf(R.id.peq_gain_label, R.id.peq_band_minus, R.id.peq_band_slider, R.id.peq_band_gain, R.id.peq_band_plus, R.id.peq_gain_lock),
+            listOf(R.id.peq_q_label, R.id.peq_q_minus, R.id.peq_q_slider, R.id.peq_q_value, R.id.peq_q_plus, R.id.peq_q_lock),
+            listOf(R.id.peq_frequency_label, R.id.peq_frequency_minus, R.id.peq_frequency_slider, R.id.peq_frequency_value, R.id.peq_frequency_plus, R.id.peq_frequency_lock)
+        )
+        for (width in listOf(320, 411)) {
+            layout(width)
+            val card = list.findViewHolderForAdapterPosition(0)!!.itemView as MaterialCardView
+            val density = card.resources.displayMetrics.density
+            assertTrue("Three rows and header stay compact at width $width", card.height / density in 180f..205f)
+            rows.forEach { ids ->
+                val rectangles = ids.map { bounds(card, it) }
+                rectangles.zipWithNext().forEach { (left, right) -> assertTrue(left.right <= right.left) }
+                rectangles.forEach { assertEquals(rectangles.first().exactCenterY(), it.exactCenterY(), 1f) }
+                assertNotNull(card.findViewById<View>(ids[3]).background)
+                assertTrue("Compact layout must keep a usable slider track", card.findViewById<Slider>(ids[2]).trackWidth / density >= 50f)
+            }
+            assertEquals("BW 值", card.findViewById<TextView>(R.id.peq_q_label).text.toString())
+            assertFalse(card.findViewById<TextView>(R.id.peq_q_value).text.contains("BW"))
+        }
+        val card = row()
+        tap(card, R.id.peq_band_gain)
+        tap(card, R.id.peq_q_value)
+        tap(card, R.id.peq_frequency_value)
+        assertEquals(listOf(PeqEditField.GAIN, PeqEditField.QUALITY, PeqEditField.FREQUENCY), fields)
+        assertTrue(changes.isEmpty())
     }
 
     @Test fun selectionPayloadPreservesControlsAndRecycledCardsRestoreTheirBackground() {

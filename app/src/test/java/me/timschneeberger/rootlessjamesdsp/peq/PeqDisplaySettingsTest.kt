@@ -39,7 +39,7 @@ class PeqDisplaySettingsTest {
         val locks = PeqBandLockStore(app)
         locks.setBandLocked("default-1", false)
         val before = audio.all.toMap()
-        val custom = PeqEditorSettings(true, 0, 20, false, true, false, false)
+        val custom = PeqEditorSettings(true, 0, 20, false, true, false, false, false)
         assertTrue(prefs.save(custom))
         assertEquals(custom, PeqEditorPreferences(app).load())
         assertEquals(before, audio.all)
@@ -59,8 +59,9 @@ class PeqDisplaySettingsTest {
         ui.peqConfirmDelete.isChecked = true
         ui.peqShowMarkerGain.isChecked = false
         ui.peqPreviewDisabledBands.isChecked = false
+        ui.peqShowMarkerFilterType.isChecked = false
         assertEquals(original.copy(confirmDelete = true, markerDurationSeconds = 0, markerTextSizeSp = 8,
-            showMarkerGain = false, previewDisabledBands = false), settings.validatedSettings())
+            showMarkerGain = false, previewDisabledBands = false, showMarkerFilterType = false), settings.validatedSettings())
         assertEquals(before, stored.all)
         assertEquals(original, prefs.load())
     }
@@ -100,5 +101,20 @@ class PeqDisplaySettingsTest {
         val before = stored.all.toMap()
         assertEquals(PeqEditorSettings(showMarkerFrequency = false), prefs.load())
         assertEquals(before, stored.all)
+    }
+
+    @Test fun filterTypeDisplayDefaultsOnForExistingSettingsAndOnlyConfirmationSavesIt() {
+        stored.edit().putBoolean("showMarkerFrequency", false).putInt("markerTextSizeSp", 13).commit()
+        val before = stored.all.toMap()
+        val (ui, settings) = controls()
+        assertTrue(ui.peqShowMarkerFilterType.isChecked)
+        ui.peqShowMarkerFilterType.performClick()
+        assertFalse(settings.validatedSettings()!!.showMarkerFilterType)
+        assertEquals(before, stored.all)
+        assertTrue(settings.validateAndSave())
+        assertFalse(prefs.load().showMarkerFilterType)
+        assertFalse(prefs.load().showMarkerFrequency)
+        assertEquals(13, prefs.load().markerTextSizeSp)
+        assertFalse(controls().first.peqShowMarkerFilterType.isChecked)
     }
 }

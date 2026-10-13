@@ -1,23 +1,19 @@
 package me.timschneeberger.rootlessjamesdsp.peq
 
 import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.HorizontalScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import me.timschneeberger.rootlessjamesdsp.R
-import kotlin.math.roundToInt
 
 /** Compact filter chooser. Its host owns draft persistence and the audio preview lifetime. */
 object PeqFilterTypeDialog {
@@ -39,60 +35,20 @@ object PeqFilterTypeDialog {
             text = lockedHint
             isVisible = !lockedHint.isNullOrBlank()
         }
-        val types = root.findViewById<MaterialButtonToggleGroup>(R.id.peq_filter_types)
-        val scroll = root.findViewById<HorizontalScrollView>(R.id.peq_filter_scroll)
+        val types = root.findViewById<PeqFilterSelector>(R.id.peq_filter_types)
         val monitor = root.findViewById<MaterialButton>(R.id.peq_filter_monitor)
         val confirm = root.findViewById<MaterialButton>(R.id.peq_filter_confirm)
-        val surfaceText = MaterialColors.getColor(root, com.google.android.material.R.attr.colorOnSurface)
-        val primaryContainer = MaterialColors.getColor(root, com.google.android.material.R.attr.colorPrimaryContainer)
-        val onPrimaryContainer = MaterialColors.getColor(root, com.google.android.material.R.attr.colorOnPrimaryContainer)
-        val outline = MaterialColors.getColor(root, com.google.android.material.R.attr.colorOutline)
         val monitorOff = MaterialColors.getColor(root, com.google.android.material.R.attr.colorOnSurfaceVariant)
         val monitorOn = Color.rgb(46, 125, 50)
-        val density = context.resources.displayMetrics.density
-        fun dp(value: Int) = (value * density).roundToInt()
-        var selected = initialType
         var listening = false
-        val buttons = PeqFilterType.entries.associateWith { type ->
-            MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                id = buttonId(type)
-                text = PeqBandAdapter.typeLabel(context, type)
-                contentDescription = text
-                setTextSize(14f)
-                minWidth = dp(62)
-                minimumWidth = dp(62)
-                minHeight = 0
-                minimumHeight = 0
-                maxLines = 1
-                setPadding(dp(10), 0, dp(10), 0)
-                insetTop = 0
-                insetBottom = 0
-                cornerRadius = dp(24)
-                strokeWidth = dp(1)
-                strokeColor = ColorStateList.valueOf(outline)
-                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(48))
-                types.addView(this)
-            }
-        }
+        types.setSelection(initialType)
         fun render() {
-            buttons.forEach { (type, button) ->
-                val checked = selected == type
-                button.backgroundTintList = ColorStateList.valueOf(when {
-                    !checked -> Color.TRANSPARENT
-                    listening -> monitorOn
-                    else -> primaryContainer
-                })
-                button.setTextColor(when {
-                    !checked -> surfaceText
-                    listening -> Color.WHITE
-                    else -> onPrimaryContainer
-                })
-            }
+            types.monitoring = listening
             monitor.isSelected = listening
             monitor.setTextColor(if (listening) monitorOn else monitorOff)
             monitor.contentDescription = context.getString(if (listening)
                 R.string.peq_live_monitor_on else R.string.peq_live_monitor_off)
-            confirm.isEnabled = selected != null
+            confirm.isEnabled = types.selectedType != null
         }
         fun monitoring(enabled: Boolean, notify: Boolean) {
             if (listening == enabled) return
@@ -101,35 +57,30 @@ object PeqFilterTypeDialog {
             if (notify) onMonitorChanged(enabled)
         }
         root.tag = MonitorControl(::monitoring)
-        initialType?.let { types.check(buttonId(it)) }
-        types.addOnButtonCheckedListener { _, checkedId, checked ->
-            if (!checked) return@addOnButtonCheckedListener
-            val type = PeqFilterType.entries.first { buttonId(it) == checkedId }
-            if (selected != type) {
-                selected = type
-                render()
-                onTypeSelected(type)
-            }
+        types.onTypeSelected = { type ->
+            render()
+            onTypeSelected(type)
         }
         render()
         val dialog = MaterialAlertDialogBuilder(context).setView(root).create()
+        dialog.window?.apply {
+            setGravity(Gravity.CENTER)
+            setWindowAnimations(0)
+        }
         root.findViewById<View>(R.id.peq_filter_cancel).setOnClickListener { dialog.dismiss() }
         monitor.setOnClickListener { monitoring(!listening, true) }
-        confirm.setOnClickListener { selected?.let { if (onConfirm(it)) dialog.dismiss() } }
+        confirm.setOnClickListener { types.selectedType?.let { if (onConfirm(it)) dialog.dismiss() } }
         dialog.setOnDismissListener {
             monitoring(false, false)
             onDismiss()
         }
         dialog.setOnShowListener {
             dialog.window?.apply {
-                setGravity(Gravity.BOTTOM)
+                setGravity(Gravity.CENTER)
+                setWindowAnimations(0)
                 setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             }
-            initialType?.let { type -> scroll.post {
-                val button = buttons.getValue(type)
-                scroll.smoothScrollTo((button.left + button.width / 2 - scroll.width / 2).coerceAtLeast(0), 0)
-            } }
         }
         return dialog
     }

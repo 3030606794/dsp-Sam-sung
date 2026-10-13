@@ -156,6 +156,9 @@
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_frequency"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_show_marker_frequency" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_filter_type"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_show_marker_filter_type" />
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_marker_gain"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_show_marker_gain" />

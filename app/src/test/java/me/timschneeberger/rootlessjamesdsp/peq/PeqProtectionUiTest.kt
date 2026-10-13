@@ -5,13 +5,11 @@ import android.content.Context
 import android.os.Bundle
 import android.os.Looper
 import android.view.View
-import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.textfield.TextInputLayout
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import org.junit.After
@@ -256,26 +254,22 @@ class PeqProtectionUiTest {
         launch(original, unlocked = setOf("second", "third"))
         edit(0, 1, 2)
         click(R.id.peq_parameters)
-        val menu = dialog()
-        fun texts(view: View): List<String> = when (view) {
-            is TextView -> listOf(view.text.toString())
-            is ViewGroup -> (0 until view.childCount).flatMap { texts(view.getChildAt(it)) }
-            else -> emptyList()
-        }
-        val scan = app.getString(R.string.peq_bulk_scan_hint, 3, 1, 1, 0, 1, 0)
-        assertTrue(texts(menu.window!!.decorView).contains(scan))
-        choose(menu, R.string.peq_bulk_q)
         val quality = dialog()
-        val input = quality.findViewById<EditText>(R.id.peq_bulk_quality_input)!!
-        val box = quality.findViewById<TextInputLayout>(R.id.peq_bulk_quality_box)!!
-        assertTrue(box.helperText.toString().contains(app.getString(R.string.peq_bulk_lock_hint, 1, 2)))
+        val scan = app.getString(R.string.peq_bulk_scan_hint, 3, 1, 1, 0, 1, 0)
+        assertEquals(scan, quality.findViewById<TextView>(R.id.peq_batch_scan)!!.text.toString())
+        val input = quality.findViewById<EditText>(R.id.peq_batch_q_input)!!
+        assertEquals(app.getString(R.string.peq_bulk_mode_hint, 1, 1),
+            quality.findViewById<TextView>(R.id.peq_batch_q_hint)!!.text.toString())
+        assertEquals(app.getString(R.string.peq_bulk_mode_hint, 0, 1),
+            quality.findViewById<TextView>(R.id.peq_batch_bw_hint)!!.text.toString())
+        assertFalse(quality.findViewById<View>(R.id.peq_batch_bw_input)!!.isEnabled)
         input.setText("5.5")
         quality.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         layout()
         val afterQuality = original.copy(bands = original.bands.map {
             if (it.id == "third") it.copy(q = 5.5) else it })
         assertSaved(afterQuality)
-        assertEquals(app.getString(R.string.peq_bulk_lock_hint, 1, 2), ShadowToast.getTextOfLatestToast())
+        assertEquals(app.getString(R.string.peq_bulk_applied), ShadowToast.getTextOfLatestToast())
         resetAction(R.string.peq_reset_gain)
         val afterGain = afterQuality.copy(bands = afterQuality.bands.map {
             if (it.id == "third") it.copy(gain = 0.0) else it })
@@ -291,6 +285,47 @@ class PeqProtectionUiTest {
         assertEquals(PeqModel.DEFAULT_Q, final.bands[2].q, 0.0)
         assertEquals(20000.0, final.bands[2].frequency, 0.0)
         assertEquals(app.getString(R.string.peq_reset_protected_result, 2, 2), ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test fun unifiedBatchDraftCancelsAllFieldsAndConfirmingUntouchedFieldsPreservesEveryBand() {
+        val original = initial()
+        launch(original, unlocked = original.bands.map { it.id }.toSet())
+        click(R.id.peq_parameters)
+        val draft = dialog()
+        draft.findViewById<EditText>(R.id.peq_batch_q_input)!!.setText("1.5")
+        draft.findViewById<EditText>(R.id.peq_batch_bw_input)!!.setText("0.5")
+        draft.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.HIGH_PASS))!!.performClick()
+        assertSaved(original)
+        assertNull(PeqPreviewSession.current())
+        draft.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        layout()
+        assertSaved(original)
+        click(R.id.peq_parameters)
+        dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        assertSaved(original)
+    }
+
+    @Test fun unifiedBatchDraftRechecksLocksAtConfirmationAndKeepsTheSelectionScope() {
+        val original = initial()
+        launch(original, unlocked = original.bands.map { it.id }.toSet())
+        edit(0, 1)
+        click(R.id.peq_parameters)
+        val draft = dialog()
+        draft.findViewById<EditText>(R.id.peq_batch_q_input)!!.setText("1.5")
+        draft.findViewById<EditText>(R.id.peq_batch_bw_input)!!.setText("0.5")
+        draft.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.HIGH_PASS))!!.performClick()
+        locks.setBandLocked("first", true)
+        locks.setFieldLocked("second", PeqEditField.QUALITY, true)
+        draft.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        layout()
+        assertFalse(draft.isShowing)
+        assertSaved(original.copy(bands = original.bands.map {
+            if (it.id == "second") it.copy(type = PeqFilterType.HIGH_PASS) else it
+        }))
+        assertTrue(locks.isBandLocked("first"))
+        assertTrue(locks.isFieldLocked("second", PeqEditField.QUALITY))
+        assertNull(PeqPreviewSession.current())
     }
 
     class HostActivity : AppCompatActivity() {

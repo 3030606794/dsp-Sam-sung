@@ -94,19 +94,19 @@ class PeqSelectionUiTest {
     }
     private fun dialog(): AlertDialog { idle(); return ShadowDialog.getLatestDialog() as AlertDialog }
     private fun choose(dialog: AlertDialog, index: Int) {
-        if (dialog.findViewById<View>(R.id.peq_filter_types) != null)
+        if (dialog.findViewById<View>(R.id.peq_filter_types) != null ||
+            dialog.findViewById<View>(R.id.peq_batch_filter) != null)
             dialog.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.entries[index]))!!.performClick()
         else dialog.listView.performItemClick(null, index, index.toLong())
         idle()
     }
-    private fun parameters(index: Int): AlertDialog {
+    private fun parameters(): AlertDialog {
         click(R.id.peq_parameters)
-        choose(dialog(), index)
         return dialog()
     }
     private fun quality(index: Int, value: String) {
-        val editor = parameters(index)
-        editor.findViewById<EditText>(R.id.peq_bulk_quality_input)!!.setText(value)
+        val editor = parameters()
+        editor.findViewById<EditText>(if (index == 0) R.id.peq_batch_q_input else R.id.peq_batch_bw_input)!!.setText(value)
         editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         layout()
         assertFalse(editor.isShowing)
@@ -143,13 +143,12 @@ class PeqSelectionUiTest {
         assertSaved(original)
         quality(0, "1.25")
         val afterQ = original.copy(bands = original.bands.mapIndexed { index, band ->
-            if (index != 1) band.copy(q = 1.25, qualityDisplay = PeqQualityDisplay.Q) else band
+            if (index == 0) band.copy(q = 1.25) else band
         })
         assertSaved(afterQ)
         quality(1, "0.5")
         assertSaved(afterQ.copy(bands = afterQ.bands.mapIndexed { index, band ->
-            if (index != 1) band.copy(q = PeqResponse.qFromBandwidth(0.5, band.frequency),
-                qualityDisplay = PeqQualityDisplay.BW) else band
+            if (index == 2) band.copy(q = PeqResponse.qFromBandwidth(0.5, band.frequency)) else band
         }))
         assertTrue(row(0).isSelected)
         assertTrue(row(2).isSelected)
@@ -167,9 +166,9 @@ class PeqSelectionUiTest {
             if (index != 1) band.copy(gain = 0.0) else band
         })
         assertSaved(reset)
-        val picker = parameters(2)
+        val picker = parameters()
         choose(picker, PeqFilterType.PEAK.ordinal)
-        picker.findViewById<View>(R.id.peq_filter_confirm)!!.performClick()
+        picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         layout()
         val afterType = reset.copy(bands = reset.bands.mapIndexed { index, band ->
             if (index != 1) band.copy(type = PeqFilterType.PEAK) else band
@@ -229,8 +228,11 @@ class PeqSelectionUiTest {
         repeat(4) { assertFalse(row(it).isSelected) }
         click(R.id.peq_selection_done)
         assertEquals(View.GONE, view<View>(R.id.peq_selection_controls).visibility)
+        val beforeQuality = repository.load()
         quality(0, "1.75")
-        assertTrue(repository.load().bands.all { it.q == 1.75 })
+        assertEquals(beforeQuality.copy(bands = beforeQuality.bands.map {
+            if (it.qualityDisplay == PeqQualityDisplay.Q) it.copy(q = 1.75) else it
+        }), repository.load())
         assertEquals(repository.load(), fragment().editorState)
     }
 

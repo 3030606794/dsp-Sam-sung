@@ -327,7 +327,7 @@ class PeqMarkerTest {
         curve.showMarker(band.id)
         val original = draw(curve)!!
         curve.setDisplayOptions(PeqEditorSettings(markerTextSizeSp = 20, showMarkerFrequency = false,
-            showMarkerGain = false))
+            showMarkerGain = false, showMarkerFilterType = false))
         val large = draw(curve)!!
         assertEquals(listOf("Q: 2.500"), large.labelLines)
         assertEquals("", large.frequencyText)
@@ -339,7 +339,7 @@ class PeqMarkerTest {
         assertFalse(curve.contentDescription.contains("dB"))
         assertSame(state, curve.requestedState)
         curve.setDisplayOptions(PeqEditorSettings(showMarkerFrequency = false, showMarkerGain = false,
-            showMarkerQuality = false))
+            showMarkerQuality = false, showMarkerFilterType = false))
         val hidden = draw(curve)!!
         assertTrue(hidden.labelLines.isEmpty())
         assertTrue(hidden.labelBounds.isEmpty)
@@ -371,6 +371,35 @@ class PeqMarkerTest {
             assertNull(curve.requestedPlotState)
             assertNull(curve.renderedMarker)
         } finally { before.recycle() }
+    }
+
+    @Test fun filterTypeLabelTracksTheCurrentBandAndCanHideWithoutAffectingOtherMarkerContent() {
+        val curve = launch()
+        val options = PeqEditorSettings(showMarkerFrequency = false, showMarkerGain = false,
+            showMarkerQuality = false)
+        curve.setDisplayOptions(options)
+        PeqFilterType.entries.forEach { type ->
+            val band = PeqBand("disabled", type = type, enabled = false, gain = 3.0)
+            val state = PeqState(listOf(band))
+            curve.setState(state, false)
+            curve.showMarker(band.id)
+            curve.setPreviewBand(band.id)
+            val label = PeqBandAdapter.typeLabel(curve.context, type)
+            val marker = draw(curve)!!
+            assertEquals(label, marker.filterTypeText)
+            assertEquals(listOf("未开启", label), marker.labelLines)
+            assertTrue(curve.contentDescription.contains(label))
+            assertSame(state, curve.requestedState)
+            assertTrue(curve.requestedPlotState!!.bands.single().enabled)
+            curve.setDisplayOptions(options.copy(showMarkerFilterType = false))
+            val hidden = draw(curve)!!
+            assertNull(hidden.filterTypeText)
+            assertEquals(listOf("未开启"), hidden.labelLines)
+            assertFalse(curve.contentDescription.contains(label))
+            assertTrue(curve.requestedPlotState!!.bands.single().enabled)
+            assertFalse(curve.requestedState!!.bands.single().enabled)
+            curve.setDisplayOptions(options)
+        }
     }
 
     class HostActivity : FragmentActivity() {

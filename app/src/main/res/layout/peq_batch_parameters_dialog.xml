@@ -1,0 +1,42 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="wrap_content" android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:paddingHorizontal="12dp" android:paddingVertical="4dp">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/peq_bulk_q" android:textAppearance="?attr/textAppearanceTitleSmall" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp" android:gravity="center_vertical">
+            <com.google.android.material.slider.Slider android:id="@+id/peq_batch_q_slider"
+                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+            <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_batch_q_box"
+                android:layout_width="72dp" android:layout_height="wrap_content" app:hintEnabled="false">
+                <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_batch_q_input"
+                    android:layout_width="match_parent" android:layout_height="40dp" android:padding="4dp"
+                    android:gravity="center" android:textSize="14sp" android:inputType="numberDecimal" android:selectAllOnFocus="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+        <TextView android:id="@+id/peq_batch_q_hint" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceBodySmall" android:layout_marginBottom="8dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/peq_bulk_bw" android:textAppearance="?attr/textAppearanceTitleSmall" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp" android:gravity="center_vertical">
+            <com.google.android.material.slider.Slider android:id="@+id/peq_batch_bw_slider"
+                android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+            <com.google.android.material.textfield.TextInputLayout android:id="@+id/peq_batch_bw_box"
+                android:layout_width="72dp" android:layout_height="wrap_content" app:hintEnabled="false">
+                <com.google.android.material.textfield.TextInputEditText android:id="@+id/peq_batch_bw_input"
+                    android:layout_width="match_parent" android:layout_height="40dp" android:padding="4dp"
+                    android:gravity="center" android:textSize="14sp" android:inputType="numberDecimal" android:selectAllOnFocus="true" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+        <TextView android:id="@+id/peq_batch_bw_hint" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceBodySmall" android:layout_marginBottom="8dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center"
+            android:text="@string/peq_filter_type" android:textAppearance="?attr/textAppearanceTitleSmall" />
+        <me.timschneeberger.rootlessjamesdsp.peq.PeqFilterSelector android:id="@+id/peq_batch_filter"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" />
+        <TextView android:id="@+id/peq_batch_scan" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:textAppearance="?attr/textAppearanceBodySmall" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+            android:text="@string/peq_bulk_draft_hint" android:textAppearance="?attr/textAppearanceBodySmall" />
+    </LinearLayout>
+</ScrollView>

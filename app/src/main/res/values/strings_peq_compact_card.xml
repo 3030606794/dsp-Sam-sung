@@ -1,0 +1,4 @@
+<resources>
+    <string name="peq_card_frequency_label">频率</string>
+    <string name="peq_card_bandwidth_label">BW 值</string>
+</resources>

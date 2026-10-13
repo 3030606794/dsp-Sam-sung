@@ -18,7 +18,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import com.google.android.material.materialswitch.MaterialSwitch
-import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
@@ -390,9 +389,7 @@ class PeqEditorUiTest {
         launch()
         PeqFilterType.entries.forEach { type ->
             val dialog = edit()
-            val selector = dialog.findViewById<MaterialAutoCompleteTextView>(R.id.peq_band_type)!!
-            selector.setText(PeqBandAdapter.typeLabel(application, type), false)
-            selector.onItemClickListener!!.onItemClick(null, null, type.ordinal, type.ordinal.toLong())
+            dialog.findViewById<PeqFilterSelector>(R.id.peq_band_type)!!.setSelection(type, notify = true)
             dialog.findViewById<EditText>(R.id.peq_frequency_input)!!.setText("1234.5")
             dialog.findViewById<EditText>(R.id.peq_quality_input)!!.setText("3.25")
             dialog.findViewById<EditText>(R.id.peq_gain_input)!!.setText("-2.75")

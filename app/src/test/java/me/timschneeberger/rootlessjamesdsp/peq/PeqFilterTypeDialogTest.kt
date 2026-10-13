@@ -1,18 +1,19 @@
 package me.timschneeberger.rootlessjamesdsp.peq
 
 import android.app.Application
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.os.Looper
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.graphics.ColorUtils
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.button.MaterialButtonToggleGroup
 import me.timschneeberger.rootlessjamesdsp.R
 import org.junit.After
 import org.junit.Assert.*
@@ -49,26 +50,42 @@ class PeqFilterTypeDialogTest {
         idle()
     }
     private fun button(dialog: AlertDialog, type: PeqFilterType) =
-        dialog.findViewById<MaterialButton>(PeqFilterTypeDialog.buttonId(type))!!
+        dialog.findViewById<ViewGroup>(PeqFilterTypeDialog.buttonId(type))!!
+    private fun background(view: View) = (view.background as ColorDrawable).color
+    private fun label(view: ViewGroup) = view.getChildAt(0) as TextView
 
-    @Test fun narrowScreenKeepsSevenTypesInOneScrollableCapsuleAndFooterInOneRowAtBottom() {
+    @Test fun narrowScreenShowsSevenEqualChoicesWithUnscaledLabelsAndResponseIconsInCenteredDialog() {
         val picker = create(hint = "已锁定的频段不会修改")
-        val types = picker.findViewById<MaterialButtonToggleGroup>(R.id.peq_filter_types)!!
-        val scroll = picker.findViewById<HorizontalScrollView>(R.id.peq_filter_scroll)!!
+        val types = picker.findViewById<PeqFilterSelector>(R.id.peq_filter_types)!!
         assertEquals(7, types.childCount)
-        assertEquals(1, types.checkedButtonIds.size)
-        assertTrue(types.width > scroll.width)
-        PeqFilterType.entries.map { button(picker, it) }.zipWithNext().forEach { (left, right) ->
+        assertEquals(PeqFilterType.PEAK, types.selectedType)
+        val choices = PeqFilterType.entries.map { button(picker, it) }
+        assertTrue(choices.maxOf { it.width } - choices.minOf { it.width } <= 1)
+        assertTrue(choices.all { it.left >= 0 && it.right <= types.width })
+        choices.forEach {
+            val label = label(it)
+            val icon = it.getChildAt(1) as ImageView
+            assertEquals(14f, label.textSize / label.resources.displayMetrics.scaledDensity, 0.01f)
+            assertTrue(label.paint.measureText(label.text.toString()) <= label.width + 1)
+            assertNotNull(icon.drawable)
+            assertTrue(icon.top >= label.bottom)
+        }
+        choices.zipWithNext().forEach { (left, right) ->
             assertEquals(left.top, right.top)
-            assertTrue(right.left > left.left)
+            assertEquals(left.right, right.left)
         }
         val footer = listOf(R.id.peq_filter_cancel, R.id.peq_filter_monitor, R.id.peq_filter_confirm)
             .map { picker.findViewById<View>(it)!! }
         assertTrue(footer.all { it.top == footer.first().top && it.bottom == footer.first().bottom })
         assertTrue(footer.maxOf { it.width } - footer.minOf { it.width } <= 1)
         val root = picker.findViewById<View>(R.id.peq_filter_dialog_root)!!
-        assertTrue(root.height / root.resources.displayMetrics.density < 260f)
-        assertEquals(Gravity.BOTTOM, picker.window!!.attributes.gravity)
+        val footerRow = picker.findViewById<View>(R.id.peq_filter_footer)!!
+        // Height follows the labels, response icons and optional wrapping protection hint.
+        // A fixed cap would demand clipping content as typography or the hint grows.
+        assertTrue(footerRow.bottom <= root.height - root.paddingBottom)
+        assertEquals(root.paddingBottom, root.height - footerRow.bottom)
+        assertEquals(Gravity.CENTER, picker.window!!.attributes.gravity)
+        assertEquals(0, picker.window!!.attributes.windowAnimations)
         assertEquals(0, picker.window!!.attributes.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         assertEquals(Gravity.CENTER, picker.findViewById<TextView>(R.id.peq_filter_dialog_title)!!.gravity)
         assertEquals(View.VISIBLE, picker.findViewById<View>(R.id.peq_filter_lock_hint)!!.visibility)
@@ -81,27 +98,27 @@ class PeqFilterTypeDialogTest {
         val picker = create(selected = selected::add, monitor = monitoring::add,
             confirm = { confirmed = true; true })
         val peak = button(picker, PeqFilterType.PEAK)
-        val offColor = peak.backgroundTintList!!.defaultColor
+        val offColor = background(peak)
         assertTrue(selected.isEmpty())
         assertTrue(monitoring.isEmpty())
         val monitor = picker.findViewById<MaterialButton>(R.id.peq_filter_monitor)!!
         assertFalse(monitor.isSelected)
         monitor.performClick()
         assertTrue(monitor.isSelected)
-        assertNotEquals(offColor, peak.backgroundTintList!!.defaultColor)
-        assertTrue(ColorUtils.calculateContrast(peak.currentTextColor, peak.backgroundTintList!!.defaultColor) >= 4.5)
+        assertNotEquals(offColor, background(peak))
+        assertTrue(ColorUtils.calculateContrast(label(peak).currentTextColor, background(peak)) >= 4.5)
         button(picker, PeqFilterType.HIGH_PASS).performClick()
         assertEquals(listOf(PeqFilterType.HIGH_PASS), selected)
         assertEquals(listOf(true), monitoring)
         assertTrue(picker.isShowing)
         assertFalse(confirmed)
         val active = button(picker, PeqFilterType.HIGH_PASS)
-        val green = active.backgroundTintList!!.defaultColor
+        val green = background(active)
         PeqFilterTypeDialog.setMonitoring(picker, false)
         assertFalse(monitor.isSelected)
-        assertNotEquals(green, active.backgroundTintList!!.defaultColor)
+        assertNotEquals(green, background(active))
         assertEquals(listOf(true), monitoring)
-        assertEquals(offColor, active.backgroundTintList!!.defaultColor)
+        assertEquals(offColor, background(active))
     }
 
     @Test fun mixedTypeWaitsForSelectionAndConfirmationFailureKeepsDraftVisible() {
@@ -134,6 +151,35 @@ class PeqFilterTypeDialogTest {
         assertEquals(1, closed)
         assertFalse(picker.isShowing)
         assertFalse(create().findViewById<View>(R.id.peq_filter_monitor)!!.isSelected)
+    }
+
+    @Test fun reusableSelectorBindsSilentlyAndDisablingItBlocksEveryChild() {
+        val picker = create()
+        val types = picker.findViewById<PeqFilterSelector>(R.id.peq_filter_types)!!
+        val changes = mutableListOf<PeqFilterType>()
+        types.onTypeSelected = changes::add
+        types.selectedType = PeqFilterType.LOW_SHELF
+        types.monitoring = true
+        assertTrue(changes.isEmpty())
+        assertTrue(button(picker, PeqFilterType.LOW_SHELF).isSelected)
+        types.isEnabled = false
+        PeqFilterType.entries.forEach { type ->
+            val option = button(picker, type)
+            assertFalse(option.isEnabled)
+            assertFalse(label(option).isEnabled)
+            assertFalse(option.getChildAt(1).isEnabled)
+            option.performClick()
+        }
+        assertTrue(changes.isEmpty())
+        assertEquals(PeqFilterType.LOW_SHELF, types.selectedType)
+        types.isEnabled = true
+        button(picker, PeqFilterType.BAND_PASS).performClick()
+        assertEquals(listOf(PeqFilterType.BAND_PASS), changes)
+        types.setSelection(PeqFilterType.NOTCH, notify = true)
+        assertEquals(listOf(PeqFilterType.BAND_PASS, PeqFilterType.NOTCH), changes)
+        types.setSelection(null)
+        assertNull(types.selectedType)
+        assertTrue(PeqFilterType.entries.none { button(picker, it).isSelected })
     }
 
     class HostActivity : AppCompatActivity() {

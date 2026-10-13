@@ -13,9 +13,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.appbar.MaterialToolbar
-import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import org.junit.After
@@ -102,7 +100,7 @@ class PeqRefinementUiTest {
     private fun filterPicker(): AlertDialog {
         row().findViewById<View>(R.id.peq_band_title).performClick()
         return dialog().also { assertEquals(PeqFilterType.entries.size,
-            it.findViewById<MaterialButtonToggleGroup>(R.id.peq_filter_types)!!.childCount) }
+            it.findViewById<PeqFilterSelector>(R.id.peq_filter_types)!!.childCount) }
     }
 
     private fun choose(dialog: AlertDialog, type: PeqFilterType) {
@@ -278,9 +276,8 @@ class PeqRefinementUiTest {
         }
         assertFalse(editor.findViewById<MaterialButton>(R.id.peq_quality_q)!!.isEnabled)
         assertFalse(editor.findViewById<MaterialButton>(R.id.peq_quality_bw)!!.isEnabled)
-        val type = editor.findViewById<MaterialAutoCompleteTextView>(R.id.peq_band_type)!!
-        type.onItemClickListener!!.onItemClick(null, null, PeqFilterType.LOW_SHELF.ordinal,
-            PeqFilterType.LOW_SHELF.ordinal.toLong())
+        val type = editor.findViewById<PeqFilterSelector>(R.id.peq_band_type)!!
+        type.setSelection(PeqFilterType.LOW_SHELF, notify = true)
         editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         idle()
         assertFalse(editor.isShowing)
@@ -304,6 +301,59 @@ class PeqRefinementUiTest {
         assertEquals(original.bands.reversed(), repository.load().bands)
         assertFalse(fragment().moveBand(1, 0))
         assertEquals(original.bands.reversed(), fragment().editorState.bands)
+    }
+
+    @Test fun preciseFilterMonitoringIsTemporaryAndStopsOnCancelAndPause() {
+        val original = original()
+        launch(original)
+        row().findViewById<View>(R.id.peq_band_number).performClick()
+        val editor = dialog()
+        val types = editor.findViewById<PeqFilterSelector>(R.id.peq_band_type)!!
+        val monitor = editor.findViewById<View>(R.id.peq_band_monitor)!!
+        assertFalse(monitor.isSelected)
+        types.setSelection(PeqFilterType.HIGH_PASS, true)
+        assertNull(PeqPreviewSession.current())
+        monitor.performClick()
+        assertTrue(monitor.isSelected)
+        assertTrue(types.monitoring)
+        assertEquals(withType(original, PeqFilterType.HIGH_PASS), PeqPreviewSession.current())
+        assertEquals(original, repository.load())
+        assertFalse(prefs.getBoolean(enableKey, false))
+        types.setSelection(PeqFilterType.NOTCH, true)
+        assertEquals(withType(original, PeqFilterType.NOTCH), PeqPreviewSession.current())
+        controller!!.pause()
+        idle()
+        assertNull(PeqPreviewSession.current())
+        assertFalse(monitor.isSelected)
+        assertFalse(types.monitoring)
+        controller!!.resume()
+        idle()
+        monitor.performClick()
+        assertNotNull(PeqPreviewSession.current())
+        editor.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        idle()
+        assertNull(PeqPreviewSession.current())
+        assertEquals(original, repository.load())
+    }
+
+    @Test fun preciseFilterMonitoringCommitsOnlyWhenConfirmedAndInvalidDraftEndsAudioPreview() {
+        val original = original()
+        launch(original)
+        row().findViewById<View>(R.id.peq_band_number).performClick()
+        val editor = dialog()
+        editor.findViewById<View>(R.id.peq_band_monitor)!!.performClick()
+        editor.findViewById<PeqFilterSelector>(R.id.peq_band_type)!!.setSelection(PeqFilterType.LOW_PASS, true)
+        assertNotNull(PeqPreviewSession.current())
+        val input = editor.findViewById<EditText>(R.id.peq_frequency_input)!!
+        input.setText("")
+        assertNull(PeqPreviewSession.current())
+        assertEquals(original, repository.load())
+        input.setText("777.125")
+        assertNotNull(PeqPreviewSession.current())
+        editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertNull(PeqPreviewSession.current())
+        assertEquals(withType(original, PeqFilterType.LOW_PASS), repository.load())
     }
 
     class HostActivity : AppCompatActivity() {

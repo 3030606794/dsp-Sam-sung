@@ -8,7 +8,10 @@
     <string name="peq_bulk_enable">一键打开</string>
     <string name="peq_bulk_disable">一键关闭</string>
     <string name="peq_bulk_lock_hint">可修改 %1$d 段，锁定 %2$d 段。锁定项目会跳过，请先解锁后再设置。</string>
-    <string name="peq_bulk_scan_hint">已扫描 %1$d 段：整段锁定 %2$d 段；增益锁定 %3$d 段，Q 锁定 %4$d 段，BW 锁定 %5$d 段，频率锁定 %6$d 段。批量设置和重置均保留锁定参数。</string>
+    <string name="peq_bulk_scan_hint">共：%1$d 段\n整段锁定：%2$d 段\n增益锁定：%3$d 段\nQ 值锁定：%4$d 段\nBW 值锁定：%5$d 段\n频率锁定：%6$d 段\n批量设置和重置均保留锁定参数。</string>
+    <string name="peq_bulk_mode_hint">可修改 %1$d 段，锁定 %2$d 段；仅修改同类频段。</string>
+    <string name="peq_bulk_draft_hint">调节的项目将在确定后应用，取消不保存。</string>
+    <string name="peq_bulk_applied">参数已应用，锁定项与未调节项目保持原值。</string>
     <string name="peq_reset_protected_result">已处理 %1$d 段可修改参数；%2$d 段包含锁定参数，已保留。</string>
     <string name="peq_bulk_lock_result">已处理 %1$d 段</string>
     <string name="peq_resize_protected">已移除 %1$d 段未锁定频段；锁定频段已保留，当前共 %2$d 段。</string>

@@ -348,14 +348,17 @@ class PeqBandAdapter(
                 binding.peqBandPlus.isEnabled = current.gain < state.gainRange
                 val quality = displayedQuality(current)
                 val bounds = qualityBounds(current, state.qRange)
-                binding.peqQValue.text = context.getString(if (bandwidth) R.string.peq_bw_value else R.string.peq_q_value,
-                    fixedNumber(quality, 3))
+                binding.peqQLabel.setText(if (bandwidth) R.string.peq_card_bandwidth_label else R.string.peq_quality)
+                binding.peqQValue.text = fixedNumber(quality, 3)
+                binding.peqQValue.contentDescription = context.getString(
+                    if (bandwidth) R.string.peq_bw_value else R.string.peq_q_value, fixedNumber(quality, 3))
                 binding.peqQSlider.contentDescription = context.getString(if (bandwidth) R.string.peq_bandwidth else R.string.peq_quality)
                 binding.peqQMinus.contentDescription = context.getString(if (bandwidth) R.string.peq_bw_decrease else R.string.peq_quality_decrease)
                 binding.peqQPlus.contentDescription = context.getString(if (bandwidth) R.string.peq_bw_increase else R.string.peq_quality_increase)
                 binding.peqQMinus.isEnabled = quality > bounds.start
                 binding.peqQPlus.isEnabled = quality < bounds.endInclusive
-                binding.peqFrequencyValue.text = context.getString(R.string.peq_frequency_value, number(current.frequency, 3))
+                binding.peqFrequencyValue.text = context.getString(R.string.peq_band_header_frequency, number(current.frequency, 3))
+                binding.peqFrequencyValue.contentDescription = context.getString(R.string.peq_frequency_value, number(current.frequency, 3))
                 binding.peqFrequencyMinus.isEnabled = current.frequency > PeqModel.MIN_FREQUENCY
                 binding.peqFrequencyPlus.isEnabled = current.frequency < PeqModel.MAX_FREQUENCY
                 renderControlState()
@@ -451,8 +454,8 @@ class PeqBandAdapter(
                 }
                 control.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
                     override fun onStartTrackingTouch(slider: Slider) {
-                    if (!editing && slider.isEnabled) { markUsed(band.id); onInteractionStarted(band.id) }
-                }
+                        if (!editing && slider.isEnabled) { markUsed(band.id); onInteractionStarted(band.id) }
+                    }
                     override fun onStopTrackingTouch(slider: Slider) = onInteractionFinished()
                 })
             }
