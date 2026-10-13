@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.Handler
@@ -55,7 +56,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** An editor only: saving bands never enables the effect or its global power switch. */
+/** Parameter edits never enable PEQ; only the explicit power button changes its switch. */
 class PeqFragment : Fragment() {
     private var binding: PeqFragmentBinding? = null
     private lateinit var repository: PeqRepository
@@ -78,6 +79,11 @@ class PeqFragment : Fragment() {
     private val pendingSave = Runnable { flushPendingSave() }
     private val dialogs = mutableListOf<AlertDialog>()
     private var presetDialogs: PeqPresetsDialog? = null
+    private var powerPreferences: SharedPreferences? = null
+    private val powerListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == getString(R.string.key_geq_enable)) renderPower()
+    }
+    private var stopFilterPreview: (() -> Unit)? = null
     private val addButtonGestures = mutableListOf<PeqAddButtonGestures>()
     private var pendingExportFileName: String? = null
     private val importPresets = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -148,6 +154,9 @@ class PeqFragment : Fragment() {
             PeqSelectionScope.EXCLUDED else PeqSelectionScope.SELECTED
         pendingExportFileName = savedInstanceState?.getString("peq_export_snapshot")
         requireContext().registerLocalReceiver(receiver, IntentFilter(Constants.ACTION_PRESET_LOADED))
+        powerPreferences = requireContext().getSharedPreferences(Constants.PREF_GEQ, Context.MODE_PRIVATE).also {
+            it.registerOnSharedPreferenceChangeListener(powerListener)
+        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View {
@@ -191,6 +200,15 @@ class PeqFragment : Fragment() {
             }
         }).also { it.attachToRecyclerView(ui.peqBandList) }
         ui.peqSettings.setOnClickListener { showSettings() }
+        ui.peqPower.setOnClickListener {
+            flushPendingSave()
+            val prefs = powerPreferences ?: return@setOnClickListener
+            val key = getString(R.string.key_geq_enable)
+            if (prefs.edit().putBoolean(key, !prefs.getBoolean(key, false)).commit()) {
+                renderPower()
+                notifyAudioAndPreview()
+            } else toast(getString(R.string.peq_save_failed))
+        }
         ui.peqReset.setOnClickListener { showResetMenu() }
         ui.peqParameters.setOnClickListener { showParametersMenu() }
         listOf(ui.peqReset, ui.peqPresets, ui.peqParameters, ui.peqEditSelection).forEach {
@@ -301,6 +319,7 @@ class PeqFragment : Fragment() {
     }
 
     private fun render(animate: Boolean = true, interactingBand: String? = null) {
+        renderPower()
         binding?.apply {
             if (editorState.bands.none { it.id == selectedBandId }) selectedBandId = editorState.bands.firstOrNull()?.id
             bandAdapter.submitState(editorState, interactingBand)
@@ -324,6 +343,13 @@ class PeqFragment : Fragment() {
                 if (editorState.pinResponse || wasApplied) peqResponseAppbar.setExpanded(true, false)
                 (requireActivity() as MenuHost).invalidateMenu()
             }
+        }
+    }
+
+    private fun renderPower() {
+        binding?.peqPower?.apply {
+            isSelected = powerPreferences?.getBoolean(getString(R.string.key_geq_enable), false) == true
+            contentDescription = getString(if (isSelected) R.string.peq_power_on else R.string.peq_power_off)
         }
     }
 
@@ -368,6 +394,7 @@ class PeqFragment : Fragment() {
     internal fun moveBand(from: Int, to: Int): Boolean {
         if (editingSelection || from !in editorState.bands.indices || to !in editorState.bands.indices || from == to)
             return false
+        if (PeqBandLockStore(requireContext()).isBandLocked(editorState.bands[from].id)) return false
         cancelPendingSave()
         editorState = PeqBandOrder.move(editorState, from, to)
         saveQueued = true
@@ -523,18 +550,59 @@ class PeqFragment : Fragment() {
     private fun showBandFilterType(id: String) = showFilterTypePicker(id)
 
     private fun showFilterTypePicker(bandId: String?, scopeIds: Set<String>? = null) {
+        if (bandId != null && (editingSelection || !PeqBandLockStore(requireContext()).canEdit(bandId))) return
         flushPendingSave()
+        stopFilterPreview?.invoke()
         val ids = bandId?.let { setOf(it) } ?: scopeIds ?: requireOperationIds() ?: return
         val types = PeqFilterType.entries
         val band = bandId?.let { id -> editorState.bands.firstOrNull { it.id == id } ?: return }
         var selected = band?.type ?: editorState.bands.filter { it.id in ids }.map { it.type }.distinct().singleOrNull()
+        var previewToken: PeqPreviewSession.Token? = null
+        var listening = false
+        fun draft(): PeqState = selected?.let { type ->
+            PeqSelection.update(editorState, ids) { PeqBulkParameters.filterType(it, type) }
+        } ?: editorState
+        fun updatePreview() {
+            if (!listening) return
+            val next = draft()
+            val token = previewToken
+            if (token == null) previewToken = PeqPreviewSession.begin(next)
+            else PeqPreviewSession.update(token, next)
+            binding?.peqCurve?.setState(next, animate = false)
+            notifyAudioAndPreview()
+        }
+        fun clearPreview() {
+            listening = false
+            previewToken?.let { if (PeqPreviewSession.end(it)) notifyAudioAndPreview() }
+            previewToken = null
+            binding?.peqCurve?.setState(editorState, animate = false)
+        }
         val labels = types.map { PeqBandAdapter.typeLabel(requireContext(), it) }.toTypedArray()
         val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle(if (bandId == null) scopedTitle(if (editingSelection) R.string.peq_filter_type
                 else R.string.peq_bulk_filter_title, ids) else getString(R.string.peq_filter_type))
-            .setSingleChoiceItems(labels, selected?.ordinal ?: -1) { _, index -> selected = types[index] }
-            .setPositiveButton(android.R.string.ok, null).setNegativeButton(android.R.string.cancel, null).create()
+            .setSingleChoiceItems(labels, selected?.ordinal ?: -1) { _, index ->
+                selected = types[index]
+                updatePreview()
+            }
+            .setPositiveButton(android.R.string.ok, null).setNegativeButton(android.R.string.cancel, null)
+            .setNeutralButton(R.string.peq_live_monitor_off, null).create()
+        fun renderMonitor() {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.apply {
+                setText(if (listening) R.string.peq_live_monitor_on else R.string.peq_live_monitor_off)
+                isSelected = listening
+                setTextColor(if (listening) android.graphics.Color.rgb(46, 173, 85)
+                    else MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurfaceVariant))
+            }
+        }
+        val stop: () -> Unit = { clearPreview(); renderMonitor() }
+        stopFilterPreview = stop
         dialog.setOnShowListener {
+            renderMonitor()
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                if (listening) clearPreview() else { listening = true; updatePreview() }
+                renderMonitor()
+            }
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val type = selected ?: return@setOnClickListener
                 val next = PeqSelection.update(editorState, ids) { PeqBulkParameters.filterType(it, type) }
@@ -544,7 +612,13 @@ class PeqFragment : Fragment() {
                 }
             }
         }
-        track(dialog).show()
+        track(dialog).also {
+            it.setOnDismissListener {
+                dialogs.remove(it)
+                clearPreview()
+                if (stopFilterPreview === stop) stopFilterPreview = null
+            }
+        }.show()
     }
 
     private fun addBands(edge: PeqResizeEdge, count: Int): Boolean {
@@ -725,6 +799,8 @@ class PeqFragment : Fragment() {
     }
 
     private fun editBand(id: String, focusField: PeqEditField? = null) {
+        val locks = PeqBandLockStore(requireContext())
+        if (editingSelection || !locks.canEdit(id, focusField)) return
         flushPendingSave()
         selectBand(id)
         val band = editorState.bands.firstOrNull { it.id == id } ?: return
@@ -740,6 +816,14 @@ class PeqFragment : Fragment() {
         ui.peqBandType.setText(PeqBandAdapter.typeLabel(requireContext(), band.type), false)
         ui.peqFrequencyInput.setText(frequencyText)
         ui.peqGainInput.setText(PeqBandAdapter.number(band.gain, 4))
+        val frequencyLocked = locks.isFieldLocked(id, PeqEditField.FREQUENCY)
+        val gainLocked = locks.isFieldLocked(id, PeqEditField.GAIN)
+        val qualityLocked = locks.isFieldLocked(id, PeqEditField.QUALITY)
+        ui.peqFrequencyBox.isEnabled = !frequencyLocked
+        ui.peqGainBox.isEnabled = !gainLocked
+        ui.peqQualityBox.isEnabled = !qualityLocked
+        ui.peqQualityQ.isEnabled = !qualityLocked
+        ui.peqQualityBw.isEnabled = !qualityLocked
         val gainLimit = PeqBandAdapter.number(editorState.gainRange)
         val qLimit = PeqBandAdapter.number(editorState.qRange, 3)
         ui.peqGainBox.hint = getString(R.string.peq_gain_limit, gainLimit)
@@ -792,19 +876,19 @@ class PeqFragment : Fragment() {
         renderQualityMode()
         updateTypeFields()
         fun editedBand(showErrors: Boolean = true): PeqBand? {
-            val freq = frequency()
-            val gain = if (selectedType.usesGain) ui.peqGainInput.text?.toString()?.toDoubleOrNull() else band.gain
+            val freq = if (frequencyLocked) band.frequency else frequency()
+            val gain = if (selectedType.usesGain && !gainLocked) ui.peqGainInput.text?.toString()?.toDoubleOrNull() else band.gain
             // Conversion roundoff at an exact Q boundary must not reject an unchanged value.
-            val q = inputQ()?.let { value ->
+            val q = if (qualityLocked) band.q else inputQ()?.let { value ->
                 if (value >= PeqModel.MIN_Q - 1e-9 && value <= editorState.qRange + 1e-9)
                     value.coerceIn(PeqModel.MIN_Q, editorState.qRange) else value
             }
             val frequencyError = if (freq == null || !PeqModel.validFrequency(freq))
                 getString(R.string.peq_invalid_frequency) else null
-            val gainError = if (selectedType.usesGain &&
+            val gainError = if (selectedType.usesGain && !gainLocked &&
                 (gain == null || !gain.isFinite() || gain !in -editorState.gainRange..editorState.gainRange))
                 getString(R.string.peq_invalid_gain, gainLimit) else null
-            val qualityError = if (q == null || !q.isFinite() || q !in PeqModel.MIN_Q..editorState.qRange)
+            val qualityError = if (!qualityLocked && (q == null || !q.isFinite() || q !in PeqModel.MIN_Q..editorState.qRange))
                 qualityError() else null
             if (showErrors) {
                 ui.peqFrequencyBox.error = frequencyError
@@ -813,7 +897,7 @@ class PeqFragment : Fragment() {
             }
             if (frequencyError != null || gainError != null || qualityError != null) return null
             return band.copy(type = selectedType, frequency = requireNotNull(freq), gain = requireNotNull(gain),
-                q = requireNotNull(q), qualityDisplay = qualityEditor.mode)
+                q = requireNotNull(q), qualityDisplay = if (qualityLocked) band.qualityDisplay else qualityEditor.mode)
         }
         previewDraft = preview@{
             if (changingMode) return@preview
@@ -890,6 +974,7 @@ class PeqFragment : Fragment() {
     private fun dismissDialogs() { dialogs.toList().forEach { it.dismiss() } }
 
     override fun onPause() {
+        stopFilterPreview?.invoke()
         addButtonGestures.forEach { it.cancel() }
         bandAdapter.cancelPendingRepeats()
         flushPendingSave()
@@ -917,6 +1002,8 @@ class PeqFragment : Fragment() {
     }
 
     override fun onDestroy() {
+        powerPreferences?.unregisterOnSharedPreferenceChangeListener(powerListener)
+        powerPreferences = null
         context?.unregisterLocalReceiver(receiver)
         super.onDestroy()
     }

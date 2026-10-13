@@ -59,9 +59,25 @@ class PeqRepositoryTest {
         preferences.edit().putString("geq_nodes", "GraphicEQ: 100 12;").commit()
         val before = preferences.all.toMap()
         val result = repository.loadResult()
-        assertEquals(10, result.state.bands.size)
+        assertEquals(PeqModel.defaultState(), result.state)
+        assertEquals(4, result.state.bands.size)
         assertFalse(result.hasSavedState)
         assertFalse(result.corrupt)
+        assertEquals(before, preferences.all)
+    }
+
+    @Test fun savedEditorSettingsSurviveNewInstallDefaultChangesAndPresetExport() {
+        val original = PeqModel.defaultState(10).copy(
+            gainRange = 12.0, gainStep = 0.1, qStep = 0.01, qRange = 100.0,
+            frequencyStep = 25.0, showQSlider = false, showFrequencySlider = false,
+            pinResponse = false)
+        assertTrue(repository.save(original))
+        val before = preferences.all.toMap()
+        val loaded = repository.loadResult()
+        assertTrue(loaded.hasSavedState)
+        assertFalse(loaded.corrupt)
+        assertEquals(original, loaded.state)
+        assertEquals(original, repository.importJson(repository.exportJson(loaded.state)))
         assertEquals(before, preferences.all)
     }
 
@@ -116,6 +132,7 @@ class PeqRepositoryTest {
         assertFalse(loaded.state.showQSlider)
         assertFalse(loaded.state.showFrequencySlider)
         assertEquals(0.01, loaded.state.qStep, 0.0)
+        assertEquals(100.0, loaded.state.qRange, 0.0)
         assertEquals(1.0, loaded.state.frequencyStep, 0.0)
         assertEquals(PeqQualityDisplay.Q, loaded.state.bands.single().qualityDisplay)
         assertEquals(31.5, loaded.state.bands.single().frequency, 0.0)
@@ -170,7 +187,7 @@ class PeqRepositoryTest {
         assertEquals(PeqState(listOf(PeqBand("custom", frequency = 777.125, gain = -27.375,
             q = 23.125, qualityDisplay = PeqQualityDisplay.BW)), gainRange = 100.0,
             gainStep = 1.5, showQSlider = true, showFrequencySlider = true,
-            qStep = 0.01, frequencyStep = 1.0), result.state)
+            qStep = 0.01, frequencyStep = 1.0, qRange = 100.0), result.state)
         assertEquals(before, preferences.all)
     }
 

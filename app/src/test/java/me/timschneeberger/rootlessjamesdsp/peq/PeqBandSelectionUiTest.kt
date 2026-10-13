@@ -1,6 +1,8 @@
 package me.timschneeberger.rootlessjamesdsp.peq
 
 import android.app.Application
+import android.content.Context
+import android.graphics.Color
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.Looper
@@ -12,6 +14,7 @@ import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.slider.Slider
 import me.timschneeberger.rootlessjamesdsp.R
@@ -48,9 +51,11 @@ class PeqBandSelectionUiTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
 
-    private fun launch(initial: PeqState) {
+    private fun launch(initial: PeqState, unlock: Boolean = true) {
         state = initial
         controller = Robolectric.buildActivity(HostActivity::class.java).setup().visible()
+        controller!!.get().getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
+        if (unlock) initial.bands.forEach { PeqBandLockStore(controller!!.get()).setBandLocked(it.id, false) }
         adapter = PeqBandAdapter(onBandChanged = { band ->
             changes += band
             state = state.copy(bands = state.bands.map { if (it.id == band.id) band else it })
@@ -103,38 +108,24 @@ class PeqBandSelectionUiTest {
         tap(card, rectangle.exactCenterX(), rectangle.exactCenterY())
     }
 
-    @Test fun locatorStaysAtCardCenterAndWarningHasAFixedSlotAcrossValuesAndWidths() {
+    @Test fun powerStaysCenteredAndHeaderControlsDoNotOverlapAcrossValuesAndWidths() {
         launch(PeqState(listOf(PeqBand("center")), showQSlider = true, showFrequencySlider = true))
         for (width in listOf(320, 411, 600)) {
-            var stableGainBounds: Rect? = null
-            var stableWarningBounds: Rect? = null
             for ((frequency, gain) in listOf(0.0 to 0.0, 1000.0 to 100.0, 0.0 to -100.0, 20000.0 to 0.1)) {
                 state = state.copy(bands = listOf(state.bands.single().copy(frequency = frequency, gain = gain)))
                 adapter.submitState(state)
                 layout(width)
                 val card = list.findViewHolderForAdapterPosition(0)!!.itemView as MaterialCardView
-                val locator = bounds(card, R.id.peq_band_locate)
-                assertEquals("Locator center at width $width, $frequency Hz, $gain dB",
-                    card.width / 2f, locator.exactCenterX(), 1f)
-                val warning = bounds(card, R.id.peq_band_warning)
-                val gainBounds = bounds(card, R.id.peq_band_gain)
-                val header = bounds(card, R.id.peq_band_header)
-                listOf(R.id.peq_band_title, R.id.peq_band_drag_handle, R.id.peq_band_locate,
-                    R.id.peq_band_gain, R.id.peq_band_edit).forEachIndexed { column, id ->
-                    assertEquals("Column ${column + 1} center at width $width",
-                        header.left + header.width() * (column + 0.5f) / 5f,
-                        bounds(card, id).exactCenterX(), 1.5f)
+                assertEquals("Power center at width $width", card.width / 2f,
+                    bounds(card, R.id.peq_band_power).exactCenterX(), 1f)
+                val ids = listOf(R.id.peq_band_number, R.id.peq_band_title, R.id.peq_band_drag_handle,
+                    R.id.peq_band_power, R.id.peq_band_locate, R.id.peq_band_gain, R.id.peq_band_lock)
+                ids.zipWithNext().forEach { (left, right) ->
+                    assertTrue("Header controls must not overlap at width $width", bounds(card, left).right <= bounds(card, right).left)
                 }
-                assertTrue("Warning must not overlap gain", warning.right <= gainBounds.left)
+                assertNotNull(card.findViewById<View>(R.id.peq_band_number).background)
                 assertEquals(if (frequency == 0.0) View.VISIBLE else View.INVISIBLE,
                     card.findViewById<View>(R.id.peq_band_warning).visibility)
-                assertEquals(locator.right, warning.left)
-                assertTrue(warning.width() > 0)
-                if (stableWarningBounds != null) assertEquals(stableWarningBounds, warning)
-                if (stableGainBounds != null) assertEquals(stableGainBounds, gainBounds)
-                stableWarningBounds = warning
-                stableGainBounds = gainBounds
-                assertTrue(gainBounds.width() > 0)
             }
         }
     }
@@ -182,46 +173,133 @@ class PeqBandSelectionUiTest {
         assertTrue(changes.isEmpty())
     }
 
-    @Test fun onlyBlankCardSpaceSelectsAndControlsKeepTheirOriginalActions() {
+    @Test fun editingMakesEveryCardAreaSelectWithoutRunningAnyControlAction() {
         launch(PeqState(listOf(PeqBand("clicks", frequency = 0.0)),
             showQSlider = true, showFrequencySlider = true, qRange = PeqModel.MIN_Q))
         val card = row()
+        val original = state
         card.performClick()
         assertTrue(selectedClicks.isEmpty())
         adapter.submitSelection(true, emptySet())
         layout()
-        // The outer card padding is blank, below every child control.
         tap(card, card.width / 2f, card.height - 1f)
-        assertEquals(listOf("clicks"), selectedClicks)
-        selectedClicks.clear()
-        tap(card, R.id.peq_band_title)
-        tap(card, R.id.peq_band_gain)
-        tap(card, R.id.peq_q_value)
-        tap(card, R.id.peq_frequency_value)
-        tap(card, R.id.peq_band_locate)
-        tap(card, R.id.peq_band_warning)
-        tap(card, R.id.peq_band_edit)
-        assertEquals(listOf("clicks"), types)
-        assertEquals(listOf(PeqEditField.GAIN, PeqEditField.QUALITY, PeqEditField.FREQUENCY), fields)
-        assertEquals(listOf("clicks"), locations)
-        assertEquals(listOf("clicks"), edits)
-        assertTrue(selectedClicks.isEmpty())
-        tap(card, R.id.peq_band_plus)
-        assertTrue(changes.isNotEmpty())
-        tap(card, R.id.peq_band_slider)
-        tap(card, R.id.peq_frequency_slider)
-        assertTrue(selectedClicks.isEmpty())
-        // A disabled quality slider/button still belongs to the control, not blank card space.
-        assertFalse(card.findViewById<Slider>(R.id.peq_q_slider).isEnabled)
-        tap(card, R.id.peq_q_slider)
-        tap(card, R.id.peq_q_plus)
-        assertTrue(selectedClicks.isEmpty())
+        val controls = listOf(R.id.peq_band_number, R.id.peq_band_title, R.id.peq_band_gain,
+            R.id.peq_q_value, R.id.peq_frequency_value, R.id.peq_band_locate, R.id.peq_band_warning,
+            R.id.peq_band_lock, R.id.peq_band_power, R.id.peq_gain_lock, R.id.peq_q_lock,
+            R.id.peq_frequency_lock, R.id.peq_band_plus, R.id.peq_band_slider, R.id.peq_frequency_slider,
+            R.id.peq_q_slider, R.id.peq_q_plus, R.id.peq_band_drag_handle)
+        controls.forEach { id ->
+            val before = selectedClicks.size
+            tap(card, id)
+            assertEquals("A tap on $id selects the card", before + 1, selectedClicks.size)
+        }
+        assertEquals(List(controls.size + 1) { "clicks" }, selectedClicks)
+        assertTrue(types.isEmpty())
+        assertTrue(fields.isEmpty())
+        assertTrue(locations.isEmpty())
+        assertTrue(edits.isEmpty())
+        assertTrue(changes.isEmpty())
+        assertEquals(original, state)
+        val locks = PeqBandLockStore(controller!!.get())
+        assertFalse(locks.isBandLocked("clicks"))
+        assertFalse(locks.isFieldLocked("clicks", PeqEditField.GAIN))
         adapter.submitSelection(false, emptySet())
         layout()
+        val count = selectedClicks.size
         card.performClick()
-        assertTrue(selectedClicks.isEmpty())
-        card.findViewById<View>(R.id.peq_band_header).performClick()
+        assertEquals(count, selectedClicks.size)
+        tap(card, R.id.peq_band_number)
         assertEquals(listOf("clicks"), edits)
+    }
+
+    @Test fun scrollingAndCancelledGesturesNeverSelectOrChangeParameters() {
+        launch(PeqModel.defaultState(3))
+        adapter.submitSelection(true, emptySet())
+        val card = row()
+        val original = state
+        val area = bounds(card, R.id.peq_band_slider)
+        val now = SystemClock.uptimeMillis()
+        fun event(action: Int, y: Float) {
+            MotionEvent.obtain(now, now + 20, action, area.exactCenterX(), y, 0).also {
+                card.dispatchTouchEvent(it); it.recycle()
+            }
+        }
+        event(MotionEvent.ACTION_DOWN, area.exactCenterY())
+        event(MotionEvent.ACTION_MOVE, area.exactCenterY() + 100)
+        event(MotionEvent.ACTION_UP, area.exactCenterY() + 100)
+        event(MotionEvent.ACTION_DOWN, area.exactCenterY())
+        event(MotionEvent.ACTION_CANCEL, area.exactCenterY())
+        event(MotionEvent.ACTION_UP, area.exactCenterY())
+        assertTrue(selectedClicks.isEmpty())
+        assertEquals(original, state)
+    }
+
+    @Test fun mainLockDefaultsToRedAndProtectsParametersWhilePowerStillBypassesBand() {
+        launch(PeqState(listOf(PeqBand("locked", gain = 3.0, q = 2.0, frequency = 1234.0))), unlock = false)
+        val card = row()
+        val locks = PeqBandLockStore(controller!!.get())
+        val lock = card.findViewById<MaterialButton>(R.id.peq_band_lock)
+        assertTrue(locks.isBandLocked("locked"))
+        assertEquals(Color.rgb(211, 47, 47), lock.iconTint!!.defaultColor)
+        assertFalse(card.findViewById<Slider>(R.id.peq_band_slider).isEnabled)
+        listOf(R.id.peq_band_number, R.id.peq_band_title, R.id.peq_band_gain, R.id.peq_band_plus,
+            R.id.peq_q_plus, R.id.peq_frequency_plus, R.id.peq_gain_lock).forEach { card.findViewById<View>(it).performClick() }
+        assertTrue(edits.isEmpty()); assertTrue(types.isEmpty()); assertTrue(fields.isEmpty()); assertTrue(changes.isEmpty())
+        val before = state.bands.single()
+        tap(card, R.id.peq_band_power)
+        assertEquals(before.copy(enabled = false), state.bands.single())
+        tap(card, R.id.peq_band_lock)
+        assertFalse(locks.isBandLocked("locked"))
+        assertEquals(Color.GRAY, lock.iconTint!!.defaultColor)
+        assertTrue(card.findViewById<Slider>(R.id.peq_band_slider).isEnabled)
+        tap(card, R.id.peq_band_number)
+        tap(card, R.id.peq_band_title)
+        assertEquals(listOf("locked"), edits)
+        assertEquals(listOf("locked"), types)
+        tap(card, R.id.peq_band_power)
+        assertEquals(before, state.bands.single())
+    }
+
+    @Test fun individualLocksProtectEachFieldAndSurviveRebindingAndReordering() {
+        launch(PeqState(listOf(PeqBand("one", gain = 3.0, q = 2.0), PeqBand("two"))))
+        val first = row()
+        tap(first, R.id.peq_gain_lock)
+        val before = state
+        first.findViewById<View>(R.id.peq_band_plus).performClick()
+        first.findViewById<View>(R.id.peq_band_gain).performClick()
+        assertEquals(before, state)
+        assertTrue(fields.isEmpty())
+        tap(first, R.id.peq_q_plus)
+        assertEquals(2.5, state.bands.first().q, 0.0)
+        tap(first, R.id.peq_q_lock)
+        tap(first, R.id.peq_frequency_lock)
+        val saved = state
+        listOf(R.id.peq_q_plus, R.id.peq_q_value, R.id.peq_frequency_plus, R.id.peq_frequency_value)
+            .forEach { first.findViewById<View>(it).performClick() }
+        assertEquals(saved, state)
+        assertTrue(fields.isEmpty())
+        state = state.copy(bands = state.bands.reversed())
+        adapter.submitReorderedState(state, 0, 1)
+        val reordered = row(1)
+        assertFalse(reordered.findViewById<Slider>(R.id.peq_band_slider).isEnabled)
+        assertFalse(reordered.findViewById<Slider>(R.id.peq_q_slider).isEnabled)
+        assertFalse(reordered.findViewById<Slider>(R.id.peq_frequency_slider).isEnabled)
+        val reloaded = PeqBandLockStore(controller!!.get())
+        assertFalse(reloaded.isBandLocked("one"))
+        PeqEditField.entries.forEach { assertTrue(reloaded.isFieldLocked("one", it)) }
+        assertFalse(reloaded.isFieldLocked("two", PeqEditField.GAIN))
+        tap(reordered, R.id.peq_gain_lock)
+        tap(reordered, R.id.peq_band_plus)
+        assertEquals(3.5, state.bands[1].gain, 0.0)
+    }
+
+    @Test fun lockedQualityDoesNotChangeIndirectlyWhenMovingBandwidthFrequency() {
+        launch(PeqState(listOf(PeqBand("bw", frequency = 1000.0, q = 2.0, qualityDisplay = PeqQualityDisplay.BW))))
+        val card = row()
+        tap(card, R.id.peq_q_lock)
+        tap(card, R.id.peq_frequency_plus)
+        assertEquals(1001.0, state.bands.single().frequency, 0.0)
+        assertEquals(2.0, state.bands.single().q, 0.0)
     }
 
     @Test fun onlyHandleLongPressStartsDragAndTitleClickAreaStaysAroundText() {
@@ -230,8 +308,7 @@ class PeqBandSelectionUiTest {
         val title = card.findViewById<TextView>(R.id.peq_band_title)
         val header = bounds(card, R.id.peq_band_header)
         val titleBounds = bounds(card, R.id.peq_band_title)
-        assertTrue("Title is limited to the first column", titleBounds.width() <= header.width() / 5 + 1)
-        assertTrue("Ripple only surrounds text", title.width <= title.paint.measureText(title.text.toString()) + 2f)
+        assertTrue("Title stays left of the central power", titleBounds.right <= bounds(card, R.id.peq_band_power).left)
         card.findViewById<View>(R.id.peq_band_header).performClick()
         assertTrue(edits.isEmpty())
         assertTrue(types.isEmpty())
@@ -248,7 +325,7 @@ class PeqBandSelectionUiTest {
         handle.performLongClick()
         tap(card, R.id.peq_band_drag_handle)
         assertTrue(draggedHolders.isEmpty())
-        assertTrue(selectedClicks.isEmpty())
+        assertEquals(listOf(state.bands.first().id), selectedClicks)
         adapter.submitSelection(false, emptySet())
         state = state.copy(bands = state.bands.take(1))
         adapter.submitState(state)
@@ -283,11 +360,11 @@ class PeqBandSelectionUiTest {
         assertSame(moving, list.findViewHolderForAdapterPosition(2))
         assertSame(movingSlider, moving.itemView.findViewById<Slider>(R.id.peq_band_slider))
         for (index in 0..2) {
-            assertTrue(row(index).findViewById<TextView>(R.id.peq_band_title).text.startsWith("${index + 1} • "))
+            assertEquals((index + 1).toString(), row(index).findViewById<TextView>(R.id.peq_band_number).text.toString())
         }
         row(2).findViewById<View>(R.id.peq_band_plus).performClick()
         assertEquals(firstId, changes.single().id)
-        assertTrue(row(2).findViewById<TextView>(R.id.peq_band_title).text.startsWith("3 • "))
+        assertEquals("3", row(2).findViewById<TextView>(R.id.peq_band_number).text.toString())
         assertEquals(listOf(ids[1], ids[2], ids[0]), state.bands.map { it.id })
     }
 

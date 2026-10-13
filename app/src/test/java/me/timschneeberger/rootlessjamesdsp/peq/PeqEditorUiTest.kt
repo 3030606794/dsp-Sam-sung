@@ -47,7 +47,10 @@ class PeqEditorUiTest {
     private val repository get() = PeqRepository(application)
     private var controller: ActivityController<HostActivity>? = null
 
-    @Before fun clear() { prefs.edit().clear().commit() }
+    @Before fun clear() {
+        prefs.edit().clear().commit()
+        application.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
+    }
     @After fun close() {
         controller?.pause()?.stop()?.destroy()
         idle()
@@ -67,6 +70,9 @@ class PeqEditorUiTest {
         idle()
     }
     private fun launch(): PeqFragment {
+        // These existing editing workflows operate on explicitly unlocked cards.
+        val locks = PeqBandLockStore(application)
+        repository.load().bands.forEach { locks.setBandLocked(it.id, false) }
         controller = Robolectric.buildActivity(HostActivity::class.java).setup().visible()
         layout()
         return fragment()
@@ -88,7 +94,12 @@ class PeqEditorUiTest {
         return dialog()
     }
     private fun edit(index: Int = 0): AlertDialog {
-        row(index).findViewById<MaterialButton>(R.id.peq_band_edit).performClick()
+        val card = row(index)
+        if (PeqBandLockStore(application).isBandLocked(repository.load().bands[index].id)) {
+            card.findViewById<View>(R.id.peq_band_lock).performClick()
+            layout()
+        }
+        row(index).findViewById<View>(R.id.peq_band_number).performClick()
         return dialog()
     }
 
@@ -96,7 +107,7 @@ class PeqEditorUiTest {
         launch()
         assertFalse(repository.hasSavedState())
         assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
-        assertEquals(10, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
+        assertEquals(4, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
         fun texts(view: View): List<String> = when (view) {
             is TextView -> listOf(view.text.toString())
             is ViewGroup -> (0 until view.childCount).flatMap { texts(view.getChildAt(it)) }
@@ -297,8 +308,8 @@ class PeqEditorUiTest {
         assertEquals(original.bands.size.toDouble(), reopened.findViewById<EditText>(R.id.peq_band_count)!!.text.toString().toDouble(), 0.0)
         assertEquals(original.qStep, reopened.findViewById<EditText>(R.id.peq_q_step)!!.text.toString().toDouble(), 0.0)
         assertEquals(original.frequencyStep, reopened.findViewById<EditText>(R.id.peq_frequency_step)!!.text.toString().toDouble(), 0.0)
-        assertFalse(reopened.findViewById<MaterialSwitch>(R.id.peq_show_q_slider)!!.isChecked)
-        assertFalse(reopened.findViewById<MaterialSwitch>(R.id.peq_show_frequency_slider)!!.isChecked)
+        assertEquals(original.showQSlider, reopened.findViewById<MaterialSwitch>(R.id.peq_show_q_slider)!!.isChecked)
+        assertEquals(original.showFrequencySlider, reopened.findViewById<MaterialSwitch>(R.id.peq_show_frequency_slider)!!.isChecked)
     }
 
     @Test fun invalidSettingInputNeverClampsOrSavesAndCanBeCorrected() {
@@ -393,8 +404,9 @@ class PeqEditorUiTest {
             assertEquals(-2.75, saved.gain, 0.0)
             assertEquals(View.VISIBLE,
                 row(0).findViewById<View>(R.id.peq_gain_controls).visibility)
+            val gainStep = repository.load().gainStep
             row(0).findViewById<MaterialButton>(R.id.peq_band_plus).performClick()
-            assertEquals(-2.65, repository.load().bands.single().gain, 1e-12)
+            assertEquals(saved.gain + gainStep, repository.load().bands.single().gain, 1e-12)
         }
     }
 
@@ -454,7 +466,7 @@ class PeqEditorUiTest {
     }
 
     @Test fun maximumQSurvivesRepeatedBandwidthSwitchesAndRememberedModeCanBeEditedBothWays() {
-        repository.save(PeqState(listOf(PeqBand(frequency = 1000.0, q = 100.0))))
+        repository.save(PeqState(listOf(PeqBand(frequency = 1000.0, q = 100.0)), qRange = 100.0))
         launch()
         val first = edit()
         repeat(3) {
@@ -490,7 +502,8 @@ class PeqEditorUiTest {
     }
 
     @Test fun optionalLogarithmicSlidersUseRealUserEventsAndPersistWithoutRedistributingSameCount() {
-        val original = PeqState(listOf(PeqBand(frequency = 777.0, q = 2.0, gain = 0.1)))
+        val original = PeqState(listOf(PeqBand(frequency = 777.0, q = 2.0, gain = 0.1)),
+            showQSlider = false, showFrequencySlider = false, qRange = 100.0)
         repository.save(original)
         launch()
         val settings = settings()

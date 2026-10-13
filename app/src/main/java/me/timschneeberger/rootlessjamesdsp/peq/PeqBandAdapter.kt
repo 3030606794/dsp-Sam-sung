@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.Rect
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -12,6 +11,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import com.google.android.material.color.MaterialColors
 import me.timschneeberger.rootlessjamesdsp.R
@@ -50,6 +50,7 @@ class PeqBandAdapter(
     /** Selection updates do not rebind sliders or interrupt an in-progress drag. */
     fun submitSelection(editing: Boolean, selectedIds: Set<String>) {
         val modeChanged = this.editing != editing
+        if (modeChanged) cancelPendingRepeats()
         val previous = this.selectedIds
         this.editing = editing
         this.selectedIds = selectedIds.toSet()
@@ -131,20 +132,75 @@ class PeqBandAdapter(
             com.google.android.material.R.attr.colorSecondaryContainer)
         private val selectedStroke = MaterialColors.getColor(binding.root,
             com.google.android.material.R.attr.colorPrimary)
-        private val controlBounds = Rect()
-        private val controls = listOf(binding.peqBandSlider, binding.peqQSlider, binding.peqFrequencySlider,
-            binding.peqBandMinus, binding.peqBandPlus, binding.peqQMinus, binding.peqQPlus,
-            binding.peqFrequencyMinus, binding.peqFrequencyPlus, binding.peqBandDragHandle)
-        private var blockedControlTouch = false
-        private var blockedHeaderTouch = false
-
+        private val locks = PeqBandLockStore(binding.root.context)
+        private var boundId: String? = null
         fun cancelRepeats() = repeaters.forEach { it.cancel() }
 
-        @SuppressLint("ClickableViewAccessibility")
+        private fun selectInstead(id: String): Boolean {
+            if (!editing) return false
+            onToggleSelection(id)
+            return true
+        }
+
+        private fun canEdit(id: String, field: PeqEditField? = null) = !editing && locks.canEdit(id, field)
+
+        private fun renderLock(button: MaterialButton, locked: Boolean, description: String) {
+            button.setIconResource(if (locked) R.drawable.ic_peq_lock else R.drawable.ic_peq_lock_open)
+            button.iconTint = ColorStateList.valueOf(if (locked) Color.rgb(211, 47, 47) else Color.GRAY)
+            button.contentDescription = description
+            button.isEnabled = !editing
+        }
+
+        private fun renderControlState() {
+            val id = boundId ?: return
+            val band = state.bands.firstOrNull { it.id == id } ?: return
+            val context = binding.root.context
+            val mainLocked = locks.isBandLocked(id)
+            renderLock(binding.peqBandLock, mainLocked, context.getString(
+                if (mainLocked) R.string.peq_unlock_band else R.string.peq_lock_band))
+            val fieldLocks = listOf(Triple(binding.peqGainLock, PeqEditField.GAIN, R.string.peq_gain),
+                Triple(binding.peqQLock, PeqEditField.QUALITY, R.string.peq_quality),
+                Triple(binding.peqFrequencyLock, PeqEditField.FREQUENCY, R.string.peq_frequency))
+            fieldLocks.forEach { (button, field, label) ->
+                val locked = locks.isFieldLocked(id, field)
+                renderLock(button, locked, context.getString(
+                    if (locked) R.string.peq_unlock_parameter else R.string.peq_lock_parameter, context.getString(label)))
+                button.isEnabled = !editing && !mainLocked
+            }
+            val gainEnabled = canEdit(id, PeqEditField.GAIN) && band.type.usesGain
+            binding.peqBandSlider.isEnabled = gainEnabled
+            binding.peqBandMinus.isEnabled = gainEnabled && band.gain > -state.gainRange
+            binding.peqBandPlus.isEnabled = gainEnabled && band.gain < state.gainRange
+            binding.peqBandGain.isEnabled = gainEnabled
+            val qEnabled = canEdit(id, PeqEditField.QUALITY)
+            val bounds = qualityBounds(band, state.qRange)
+            binding.peqQSlider.isEnabled = qEnabled && bounds.start < bounds.endInclusive
+            binding.peqQMinus.isEnabled = qEnabled && displayedQuality(band) > bounds.start
+            binding.peqQPlus.isEnabled = qEnabled && displayedQuality(band) < bounds.endInclusive
+            binding.peqQValue.isEnabled = qEnabled
+            binding.peqBandSummary.isEnabled = qEnabled
+            val frequencyEnabled = canEdit(id, PeqEditField.FREQUENCY)
+            binding.peqFrequencySlider.isEnabled = frequencyEnabled
+            binding.peqFrequencyMinus.isEnabled = frequencyEnabled && band.frequency > PeqModel.MIN_FREQUENCY
+            binding.peqFrequencyPlus.isEnabled = frequencyEnabled && band.frequency < PeqModel.MAX_FREQUENCY
+            binding.peqFrequencyValue.isEnabled = frequencyEnabled
+            binding.peqBandHeaderFrequency.isEnabled = frequencyEnabled
+            binding.peqBandNumber.isEnabled = canEdit(id)
+            binding.peqBandTitle.isEnabled = canEdit(id)
+            binding.peqBandDragHandle.isEnabled = canEdit(id) && state.bands.size > 1
+            binding.peqBandLocate.isEnabled = !editing
+            binding.peqBandWarning.isEnabled = !editing
+            binding.peqBandPower.isEnabled = !editing
+            binding.peqBandPower.iconTint = ColorStateList.valueOf(if (band.enabled) Color.rgb(46, 170, 83) else Color.GRAY)
+            binding.peqBandPower.contentDescription = context.getString(
+                if (band.enabled) R.string.peq_disable_band else R.string.peq_enable_band)
+        }
+
         fun bindSelection(id: String) {
             if (previousEditing != editing) cancelRepeats()
             previousEditing = editing
             val selected = editing && id in selectedIds
+            binding.root.selectionMode = editing
             binding.root.isSelected = selected
             binding.root.setCardBackgroundColor(if (selected) ColorStateList.valueOf(selectedBackground) else normalBackground)
             binding.root.setStrokeColor(if (selected) ColorStateList.valueOf(selectedStroke) else normalStroke)
@@ -152,45 +208,21 @@ class PeqBandAdapter(
                 .coerceAtLeast(1) else normalStrokeWidth
             binding.root.setOnClickListener(if (editing) View.OnClickListener { onToggleSelection(id) } else null)
             binding.root.isClickable = editing
+            binding.root.isFocusable = editing
             binding.peqBandHeader.setOnClickListener(if (editing) View.OnClickListener { onToggleSelection(id) } else null)
             binding.peqBandHeader.isClickable = editing
             binding.peqBandHeader.isFocusable = editing
-            binding.peqBandDragHandle.isEnabled = !editing && state.bands.size > 1
-            binding.peqBandHeader.setOnTouchListener { _, event ->
-                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                    binding.peqBandDragHandle.getDrawingRect(controlBounds)
-                    binding.peqBandHeader.offsetDescendantRectToMyCoords(binding.peqBandDragHandle, controlBounds)
-                    blockedHeaderTouch = editing && controlBounds.contains(event.x.toInt(), event.y.toInt())
-                }
-                val consumed = blockedHeaderTouch
-                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL)
-                    blockedHeaderTouch = false
-                consumed
-            }
-            // Disabled controls may decline ACTION_DOWN. Their space is still a control,
-            // so that event must not become a selection click on the card underneath.
-            binding.root.setOnTouchListener { _, event ->
-                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                    blockedControlTouch = editing && controls.any { control ->
-                        if (!control.isShown) false else {
-                            control.getDrawingRect(controlBounds)
-                            binding.root.offsetDescendantRectToMyCoords(control, controlBounds)
-                            controlBounds.contains(event.x.toInt(), event.y.toInt())
-                        }
-                    }
-                }
-                val consumed = blockedControlTouch
-                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL)
-                    blockedControlTouch = false
-                consumed
-            }
+            binding.peqBandHeader.importantForAccessibility = if (editing) View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+            renderControlState()
         }
 
         fun bindRank(band: PeqBand, index: Int) {
             rank = index
             val context = binding.root.context
-            val title = context.getString(R.string.peq_band_type_title, index + 1, typeLabel(context, band.type))
-            binding.peqBandTitle.text = if (band.enabled) title else context.getString(R.string.peq_band_disabled, title)
+            binding.peqBandNumber.text = (index + 1).toString()
+            binding.peqBandNumber.contentDescription = context.getString(R.string.peq_edit_band) + " " + (index + 1)
+            binding.peqBandTitle.text = typeLabel(context, band.type)
             binding.peqBandSlider.contentDescription = context.getString(R.string.peq_band_title,
                 index + 1, number(band.frequency))
         }
@@ -214,22 +246,57 @@ class PeqBandAdapter(
             cancelRepeats()
             val context = binding.root.context
             binding.root.isSaveFromParentEnabled = false
+            boundId = band.id
             bindSelection(band.id)
             bindRank(band, index)
-            binding.peqBandLocate.setOnClickListener { onLocate(band.id) }
+            binding.peqBandLocate.setOnClickListener { if (!selectInstead(band.id)) onLocate(band.id) }
             binding.peqBandWarning.setOnClickListener {
-                Toast.makeText(context, R.string.peq_frequency_unset_warning, Toast.LENGTH_LONG).show()
+                if (!selectInstead(band.id)) Toast.makeText(context, R.string.peq_frequency_unset_warning, Toast.LENGTH_LONG).show()
             }
             binding.peqBandDragHandle.setOnLongClickListener {
-                if (editing || state.bands.size <= 1) false
+                if (!canEdit(band.id) || state.bands.size <= 1) false
                 else { onStartDrag(this); true }
             }
-            binding.peqBandEdit.setOnClickListener { onBandSelected(band.id); onEdit(band.id) }
-            fun editField(field: PeqEditField) { onBandSelected(band.id); onEditField(band.id, field) }
+            binding.peqBandNumber.setOnClickListener {
+                if (!selectInstead(band.id) && canEdit(band.id)) { onBandSelected(band.id); onEdit(band.id) }
+            }
+            binding.peqBandLock.setOnClickListener {
+                if (!selectInstead(band.id)) {
+                    cancelRepeats()
+                    locks.setBandLocked(band.id, !locks.isBandLocked(band.id))
+                    renderControlState()
+                }
+            }
+            listOf(binding.peqGainLock to PeqEditField.GAIN, binding.peqQLock to PeqEditField.QUALITY,
+                binding.peqFrequencyLock to PeqEditField.FREQUENCY).forEach { (button, field) ->
+                button.setOnClickListener {
+                    if (!selectInstead(band.id) && canEdit(band.id)) {
+                        cancelRepeats()
+                        locks.setFieldLocked(band.id, field, !locks.isFieldLocked(band.id, field))
+                        renderControlState()
+                    }
+                }
+            }
+            binding.peqBandPower.setOnClickListener {
+                if (!selectInstead(band.id)) {
+                    state.bands.firstOrNull { it.id == band.id }?.let { current ->
+                        onBandChanged(current.copy(enabled = !current.enabled))
+                        onInteractionFinished()
+                        renderControlState()
+                    }
+                }
+            }
+            fun editField(field: PeqEditField) {
+                if (!selectInstead(band.id) && canEdit(band.id, field)) {
+                    onBandSelected(band.id); onEditField(band.id, field)
+                }
+            }
             binding.peqBandGain.setOnClickListener { editField(PeqEditField.GAIN) }
             binding.peqBandSummary.setOnClickListener { editField(PeqEditField.QUALITY) }
             binding.peqQValue.setOnClickListener { editField(PeqEditField.QUALITY) }
-            binding.peqBandTitle.setOnClickListener { onBandSelected(band.id); onEditType(band.id) }
+            binding.peqBandTitle.setOnClickListener {
+                if (!selectInstead(band.id) && canEdit(band.id)) { onBandSelected(band.id); onEditType(band.id) }
+            }
             binding.peqBandHeaderFrequency.setOnClickListener { editField(PeqEditField.FREQUENCY) }
             binding.peqFrequencyValue.setOnClickListener { editField(PeqEditField.FREQUENCY) }
             binding.peqGainControls.isVisible = band.type.usesGain
@@ -277,19 +344,20 @@ class PeqBandAdapter(
                 binding.peqFrequencyValue.text = context.getString(R.string.peq_frequency_value, number(current.frequency, 3))
                 binding.peqFrequencyMinus.isEnabled = current.frequency > PeqModel.MIN_FREQUENCY
                 binding.peqFrequencyPlus.isEnabled = current.frequency < PeqModel.MAX_FREQUENCY
+                renderControlState()
             }
             fun renderSliders() {
                 val current = currentBand() ?: return
                 slider.value = current.gain.coerceIn(-state.gainRange, state.gainRange).toFloat()
                 val bounds = qualityBounds(current, state.qRange)
-                binding.peqQSlider.isEnabled = bounds.start < bounds.endInclusive
+                binding.peqQSlider.isEnabled = canEdit(band.id, PeqEditField.QUALITY) && bounds.start < bounds.endInclusive
                 binding.peqQSlider.value = logarithmicPosition(displayedQuality(current), bounds.start, bounds.endInclusive)
                 binding.peqFrequencySlider.value = logarithmicPosition(current.frequency,
                     PeqModel.MIN_FREQUENCY, PeqModel.MAX_FREQUENCY)
             }
             fun userGain(requested: Double) {
                 val current = currentBand() ?: return
-                if (!current.type.usesGain) return
+                if (!canEdit(band.id, PeqEditField.GAIN) || !current.type.usesGain) { renderSliders(); return }
                 onBandSelected(current.id)
                 val next = requested.coerceIn(-state.gainRange, state.gainRange)
                 if (next != current.gain) onBandChanged(current.copy(gain = next))
@@ -301,14 +369,16 @@ class PeqBandAdapter(
                 if (fromUser) userGain(dragGain(changed, state.gainRange))
             }
             slider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-                override fun onStartTrackingTouch(slider: Slider) = onInteractionStarted(band.id)
+                override fun onStartTrackingTouch(slider: Slider) { if (!editing) onInteractionStarted(band.id) }
                 override fun onStopTrackingTouch(slider: Slider) = onInteractionFinished()
             })
             binding.peqBandMinus.setOnClickListener { currentBand()?.let {
+                if (selectInstead(band.id)) return@setOnClickListener
                 userGain(it.gain - state.gainStep)
                 onInteractionFinished()
             } }
             binding.peqBandPlus.setOnClickListener { currentBand()?.let {
+                if (selectInstead(band.id)) return@setOnClickListener
                 userGain(it.gain + state.gainStep)
                 onInteractionFinished()
             } }
@@ -325,10 +395,15 @@ class PeqBandAdapter(
             }
             fun userQuality(requested: Double) {
                 val current = currentBand() ?: return
+                if (!canEdit(band.id, PeqEditField.QUALITY)) { renderSliders(); return }
                 changeBand(withQuality(current, requested, state.qRange))
             }
             fun userFrequency(requested: Double) {
-                currentBand()?.let { changeBand(withFrequency(it, requested, state.qRange)) }
+                if (!canEdit(band.id, PeqEditField.FREQUENCY)) { renderSliders(); return }
+                currentBand()?.let {
+                    val moved = withFrequency(it, requested, state.qRange)
+                    changeBand(if (locks.isFieldLocked(it.id, PeqEditField.QUALITY)) moved.copy(q = it.q) else moved)
+                }
             }
             fun bindLogSlider(control: Slider, bounds: (PeqBand) -> ClosedFloatingPointRange<Double>,
                               draggedValue: (Float, Double, Double) -> Double, label: (PeqBand, Double) -> String,
@@ -356,7 +431,7 @@ class PeqBandAdapter(
                     }
                 }
                 control.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-                    override fun onStartTrackingTouch(slider: Slider) = onInteractionStarted(band.id)
+                    override fun onStartTrackingTouch(slider: Slider) { if (!editing) onInteractionStarted(band.id) }
                     override fun onStopTrackingTouch(slider: Slider) = onInteractionFinished()
                 })
             }
@@ -365,18 +440,22 @@ class PeqBandAdapter(
             bindLogSlider(binding.peqFrequencySlider, { PeqModel.MIN_FREQUENCY..PeqModel.MAX_FREQUENCY },
                 { position, _, _ -> dragFrequency(position) }, { _, value -> "${number(value, 0)} Hz" }, ::userFrequency)
             binding.peqQMinus.setOnClickListener { currentBand()?.let {
+                if (selectInstead(band.id)) return@setOnClickListener
                 userQuality(displayedQuality(it) - state.qStep)
                 onInteractionFinished()
             } }
             binding.peqQPlus.setOnClickListener { currentBand()?.let {
+                if (selectInstead(band.id)) return@setOnClickListener
                 userQuality(displayedQuality(it) + state.qStep)
                 onInteractionFinished()
             } }
             binding.peqFrequencyMinus.setOnClickListener { currentBand()?.let {
+                if (selectInstead(band.id)) return@setOnClickListener
                 userFrequency(it.frequency - state.frequencyStep)
                 onInteractionFinished()
             } }
             binding.peqFrequencyPlus.setOnClickListener { currentBand()?.let {
+                if (selectInstead(band.id)) return@setOnClickListener
                 userFrequency(it.frequency + state.frequencyStep)
                 onInteractionFinished()
             } }

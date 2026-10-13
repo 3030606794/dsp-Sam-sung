@@ -53,7 +53,10 @@ class PeqWorkflowUiTest {
     private val repository get() = PeqRepository(application)
     private var controller: ActivityController<HostActivity>? = null
 
-    @Before fun clear() { prefs.edit().clear().commit() }
+    @Before fun clear() {
+        prefs.edit().clear().commit()
+        application.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
+    }
     @After fun close() { controller?.pause()?.stop()?.destroy(); idle() }
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
     private fun advance(milliseconds: Long) = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(milliseconds))
@@ -70,6 +73,8 @@ class PeqWorkflowUiTest {
     }
     private fun launch(state: PeqState) {
         assertTrue(repository.save(state))
+        val locks = PeqBandLockStore(application)
+        state.bands.forEach { locks.setBandLocked(it.id, false) }
         controller = Robolectric.buildActivity(HostActivity::class.java).setup().visible()
         layout()
     }
@@ -81,7 +86,7 @@ class PeqWorkflowUiTest {
     }
     private fun dialog(): AlertDialog { idle(); return ShadowDialog.getLatestDialog() as AlertDialog }
     private fun settings(): AlertDialog { view<MaterialButton>(R.id.peq_settings).performClick(); return dialog() }
-    private fun edit(): AlertDialog { row().findViewById<MaterialButton>(R.id.peq_band_edit).performClick(); return dialog() }
+    private fun edit(): AlertDialog { row().findViewById<View>(R.id.peq_band_number).performClick(); return dialog() }
     private fun parameters(index: Int): AlertDialog {
         view<MaterialButton>(R.id.peq_parameters).performClick()
         val options = dialog()
@@ -324,7 +329,7 @@ class PeqWorkflowUiTest {
     @Test fun footerHasFiveEqualButtonsAndShortcutsAddBlankBandsAtEitherEdge() {
         val original = PeqModel.defaultState(3)
         launch(original)
-        val footer = listOf(R.id.peq_settings, R.id.peq_reset, R.id.peq_edit_selection,
+        val footer = listOf(R.id.peq_settings, R.id.peq_reset, R.id.peq_power,
             R.id.peq_presets, R.id.peq_parameters).map { view<View>(it) }
         assertTrue(footer.all { it.parent === footer.first().parent })
         assertTrue(footer.all { it.isShown && it.width > 0 })

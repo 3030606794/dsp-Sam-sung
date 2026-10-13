@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.ContextWrapper
 import kotlinx.serialization.json.*
+import me.timschneeberger.rootlessjamesdsp.testutil.ShadowPosixAtomicFile
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import org.junit.Assert.*
 import org.junit.Before
@@ -19,7 +20,7 @@ import java.io.IOException
 import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = Application::class)
+@Config(sdk = [35], application = Application::class, shadows = [ShadowPosixAtomicFile::class])
 class PeqPresetStoreTest {
     @get:Rule val temporary = TemporaryFolder()
     private lateinit var file: File

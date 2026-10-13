@@ -12,6 +12,7 @@ object PeqController {
     fun sync(context: Context, sender: (Int, IntArray) -> Boolean): Boolean {
         val prefs = PreferenceCache.getPreferences(context, Constants.PREF_GEQ)
         val enabled = prefs.all[context.getString(R.string.key_geq_enable)] as? Boolean == true
-        return sender(PARAMETER, PeqProtocol.payload(PeqRepository(context).load(), enabled))
+        val state = PeqPreviewSession.current() ?: PeqRepository(context).load()
+        return sender(PARAMETER, PeqProtocol.payload(state, enabled))
     }
 }

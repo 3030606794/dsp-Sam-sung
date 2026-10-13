@@ -30,13 +30,13 @@ data class PeqBand(
 data class PeqState(
     val bands: List<PeqBand>,
     val gainRange: Double = 18.0,
-    val gainStep: Double = 0.1,
-    val showQSlider: Boolean = false,
-    val showFrequencySlider: Boolean = false,
-    val qStep: Double = 0.01,
+    val gainStep: Double = 0.5,
+    val showQSlider: Boolean = true,
+    val showFrequencySlider: Boolean = true,
+    val qStep: Double = 0.5,
     val frequencyStep: Double = 1.0,
     val pinResponse: Boolean = true,
-    val qRange: Double = 100.0
+    val qRange: Double = 30.0
 )
 
 object PeqModel {
@@ -89,7 +89,7 @@ object PeqModel {
         return state
     }
 
-    fun defaultState(count: Int = 10): PeqState {
+    fun defaultState(count: Int = 4): PeqState {
         require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
         return PeqState(List(count) { index ->
             PeqBand(id = "default-${index + 1}", frequency = distributedFrequency(index, count))

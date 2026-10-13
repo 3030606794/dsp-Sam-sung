@@ -18,7 +18,7 @@ class PeqModelTest {
         val state = PeqState(bands, qRange = 0.1)
         assertSame(state, PeqModel.validate(state))
         assertEquals(bands, state.bands)
-        assertEquals(100.0, PeqState(emptyList()).qRange, 0.0)
+        assertEquals(30.0, PeqState(emptyList()).qRange, 0.0)
         assertSame(state, PeqModel.resize(state, 2, PeqResizeEdge.BACK, false))
         listOf(0.0, 0.099, 100.001, Double.NaN, Double.POSITIVE_INFINITY).forEach { invalid ->
             assertThrows(IllegalArgumentException::class.java) { PeqModel.validate(state.copy(qRange = invalid)) }
@@ -171,9 +171,16 @@ class PeqModelTest {
         }
     }
 
-    @Test fun defaultBandsAreNeutralAndValid() {
+    @Test fun freshDefaultsUseFourNeutralBandsAndTheRequestedEditorSettings() {
         val state = PeqModel.defaultState()
-        assertEquals(10, state.bands.size)
+        assertEquals(4, state.bands.size)
+        assertEquals(0.5, state.gainStep, 0.0)
+        assertEquals(18.0, state.gainRange, 0.0)
+        assertEquals(0.5, state.qStep, 0.0)
+        assertEquals(30.0, state.qRange, 0.0)
+        assertEquals(1.0, state.frequencyStep, 0.0)
+        assertTrue(state.showQSlider)
+        assertTrue(state.showFrequencySlider)
         assertTrue(state.bands.all { it.enabled && it.gain == 0.0 && it.type == PeqFilterType.PEAK })
         PeqModel.validate(state)
         PeqModel.validate(PeqModel.defaultState(170))

@@ -12,6 +12,7 @@ import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.FragmentActivity
 import me.timschneeberger.rootlessjamesdsp.R
+import me.timschneeberger.rootlessjamesdsp.testutil.ShadowPosixAtomicFile
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import org.junit.After
 import org.junit.Assert.*
@@ -32,7 +33,8 @@ import java.io.File
 
 /** Real dialogs exercise the library workflow; document-picker handoff stays outside this test. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = Application::class, qualifiers = "w411dp-h820dp-port")
+@Config(sdk = [35], application = Application::class, qualifiers = "w411dp-h820dp-port",
+    shadows = [ShadowPosixAtomicFile::class])
 @LooperMode(LooperMode.Mode.PAUSED)
 class PeqPresetsUiTest {
     @get:Rule val temporary = TemporaryFolder()

@@ -49,6 +49,7 @@ class PeqSelectionUiTest {
 
     @Before fun clear() {
         prefs.edit().clear().commit()
+        application.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
         presets.load().forEach { presets.delete(it.id) }
     }
     @After fun close() { controller?.pause()?.stop()?.destroy(); idle() }
@@ -72,6 +73,8 @@ class PeqSelectionUiTest {
         showQSlider = false, showFrequencySlider = false, frequencyStep = 37.0)
     private fun launch(state: PeqState = initial()) {
         assertTrue(repository.save(state))
+        val locks = PeqBandLockStore(application)
+        state.bands.forEach { locks.setBandLocked(it.id, false) }
         controller = Robolectric.buildActivity(HostActivity::class.java).setup().visible()
         layout()
     }
@@ -350,7 +353,8 @@ class PeqSelectionUiTest {
         controller!!.recreate()
         layout()
         assertSaved(reordered)
-        assertEquals("3 • ${PeqBandAdapter.typeLabel(application, original.bands[0].type)}",
+        assertEquals("3", row(2).findViewById<TextView>(R.id.peq_band_number).text.toString())
+        assertEquals(PeqBandAdapter.typeLabel(application, original.bands[0].type),
             row(2).findViewById<TextView>(R.id.peq_band_title).text.toString())
         edit(2)
         assertTrue(row(2).isSelected)
@@ -438,11 +442,10 @@ class PeqSelectionUiTest {
                 assertEquals(before, repository.load())
                 assertSame(moving, list.findViewHolderForAdapterPosition(to))
                 expected.bands.forEachIndexed { index, band ->
-                    val title = application.getString(R.string.peq_band_type_title,
-                        index + 1, PeqBandAdapter.typeLabel(application, band.type))
-                    val expectedTitle = if (band.enabled) title else application.getString(R.string.peq_band_disabled, title)
                     val card = requireNotNull(list.findViewHolderForAdapterPosition(index)).itemView
-                    assertEquals(expectedTitle, card.findViewById<TextView>(R.id.peq_band_title).text.toString())
+                    assertEquals((index + 1).toString(), card.findViewById<TextView>(R.id.peq_band_number).text.toString())
+                    assertEquals(PeqBandAdapter.typeLabel(application, band.type),
+                        card.findViewById<TextView>(R.id.peq_band_title).text.toString())
                 }
                 dispatch(MotionEvent.ACTION_UP, targetY)
                 fingerDown = false

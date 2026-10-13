@@ -1,0 +1,8 @@
+<resources>
+    <string name="peq_lock_band">锁定频段参数</string>
+    <string name="peq_unlock_band">解锁频段参数</string>
+    <string name="peq_lock_parameter">锁定%1$s</string>
+    <string name="peq_unlock_parameter">解锁%1$s</string>
+    <string name="peq_enable_band">开启频段</string>
+    <string name="peq_disable_band">关闭频段</string>
+</resources>

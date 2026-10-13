@@ -35,7 +35,7 @@ class PeqControllerTest {
         val output = packet()
         assertEquals(1, output[0])
         assertEquals(0, output[1])
-        assertEquals(10, output[2])
+        assertEquals(4, output[2])
         assertFalse(prefs.getBoolean(enableKey, false))
     }
 

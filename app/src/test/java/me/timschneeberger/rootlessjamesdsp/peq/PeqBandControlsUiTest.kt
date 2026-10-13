@@ -48,6 +48,7 @@ class PeqBandControlsUiTest {
 
     @Before fun clear() {
         application.getSharedPreferences(Constants.PREF_GEQ, Context.MODE_PRIVATE).edit().clear().commit()
+        application.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
     }
     @After fun close() { controller?.pause()?.stop()?.destroy(); idle() }
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
@@ -63,6 +64,7 @@ class PeqBandControlsUiTest {
         idle()
     }
     private fun launch(state: PeqState) {
+        state.bands.forEach { PeqBandLockStore(application).setBandLocked(it.id, false) }
         assertTrue(repository.save(state))
         controller = Robolectric.buildActivity(HostActivity::class.java).setup().visible()
         layout()
@@ -74,7 +76,7 @@ class PeqBandControlsUiTest {
         layout()
         return requireNotNull(list.findViewHolderForAdapterPosition(index)).itemView
     }
-    private fun press(row: View, id: Int) = row.findViewById<MaterialButton>(id).performClick()
+    private fun press(row: View, id: Int) = row.findViewById<View>(id).performClick()
     private fun pressRight(slider: Slider) {
         assertTrue(slider.requestFocus())
         assertTrue(slider.onKeyDown(KeyEvent.KEYCODE_DPAD_RIGHT,
@@ -123,7 +125,7 @@ class PeqBandControlsUiTest {
             adapter.submitState(state)
             val current = row()
             val title = current.findViewById<TextView>(R.id.peq_band_title)
-            assertEquals("1 • ${PeqBandAdapter.typeLabel(application, PeqFilterType.HIGH_SHELF)}", title.text.toString())
+            assertEquals(PeqBandAdapter.typeLabel(application, PeqFilterType.HIGH_SHELF), title.text.toString())
             assertEquals(if (showQ && showFrequency) View.GONE else View.VISIBLE,
                 current.findViewById<View>(R.id.peq_band_details).visibility)
             assertEquals(if (showFrequency) View.GONE else View.VISIBLE,
@@ -164,7 +166,7 @@ class PeqBandControlsUiTest {
             bands = listOf(state.bands.single().copy(type = PeqFilterType.LOW_PASS, qualityDisplay = PeqQualityDisplay.Q)))
         adapter.submitState(state)
         val reused = row()
-        assertEquals("1 • ${PeqBandAdapter.typeLabel(application, PeqFilterType.LOW_PASS)}",
+        assertEquals(PeqBandAdapter.typeLabel(application, PeqFilterType.LOW_PASS),
             reused.findViewById<TextView>(R.id.peq_band_title).text.toString())
         assertEquals(application.getString(R.string.peq_q_value, "2.346"),
             reused.findViewById<TextView>(R.id.peq_band_summary).text.toString())
@@ -210,8 +212,8 @@ class PeqBandControlsUiTest {
 
     @Test fun choosingBandwidthPersistsBothModeAndTheActualRowSliderWithoutChangingQ() {
         val original = PeqBand(q = 2.345678901, frequency = 7000.0, gain = 6.0)
-        launch(PeqState(listOf(original), showQSlider = true, showFrequencySlider = true))
-        press(row(), R.id.peq_band_edit)
+        launch(PeqState(listOf(original), qStep = 0.01, qRange = PeqModel.MAX_Q, showQSlider = true, showFrequencySlider = true))
+        press(row(), R.id.peq_band_number)
         idle()
         val dialog = ShadowDialog.getLatestDialog() as AlertDialog
         dialog.findViewById<MaterialButton>(R.id.peq_quality_bw)!!.performClick()
@@ -258,7 +260,7 @@ class PeqBandControlsUiTest {
 
     @Test fun bandwidthSliderWidensCurveAndFrequencyMovementKeepsBandwidthOnTheActiveRow() {
         val original = PeqBand(q = 2.0, frequency = 1000.0, gain = 12.0, qualityDisplay = PeqQualityDisplay.BW)
-        launch(PeqState(listOf(original), qStep = 100.0, frequencyStep = 1000.0,
+        launch(PeqState(listOf(original), qRange = PeqModel.MAX_Q, qStep = 100.0, frequencyStep = 1000.0,
             showQSlider = true, showFrequencySlider = true))
         val current = row()
         val slider = current.findViewById<Slider>(R.id.peq_q_slider)
@@ -292,7 +294,7 @@ class PeqBandControlsUiTest {
 
     @Test fun largeButtonStepsStillAllowFineDraggingAndBindingKeepsStoredPrecision() {
         val original = PeqBand(q = 2.033456789, frequency = 777.123456, gain = 12.000123)
-        launch(PeqState(listOf(original), gainStep = 2.0, qStep = 100.0, frequencyStep = 1000.0,
+        launch(PeqState(listOf(original), qRange = PeqModel.MAX_Q, gainStep = 2.0, qStep = 100.0, frequencyStep = 1000.0,
             showQSlider = true, showFrequencySlider = true))
         assertEquals(original, repository.load().bands.single())
         val current = row()
@@ -328,7 +330,7 @@ class PeqBandControlsUiTest {
             band.copy(q = 10.0, qualityDisplay = if (index == 0 || index == 169) PeqQualityDisplay.BW else PeqQualityDisplay.Q,
                 type = if (index == 169) PeqFilterType.BAND_PASS else PeqFilterType.PEAK)
         }
-        launch(PeqState(bands, showQSlider = true))
+        launch(PeqState(bands, qStep = 0.01, showQSlider = true))
         assertTrue(row().findViewById<TextView>(R.id.peq_q_value).text.startsWith("BW"))
         assertTrue(row(80).findViewById<TextView>(R.id.peq_q_value).text.startsWith("Q"))
         val last = row(169)
@@ -494,7 +496,7 @@ class PeqBandControlsUiTest {
     }
 
     @Test fun locatorHasItsOwnCallbackAndDraggingSignalsStartAndFinish() {
-        var state = PeqState(listOf(PeqBand(q = 2.0)), showQSlider = true, showFrequencySlider = true)
+        var state = PeqState(listOf(PeqBand(q = 2.0)), qRange = PeqModel.MAX_Q, showQSlider = true, showFrequencySlider = true)
         launch(state)
         val located = mutableListOf<String>()
         val selected = mutableListOf<String>()
@@ -541,7 +543,7 @@ class PeqBandControlsUiTest {
         fields.forEach { (id, _) -> current.findViewById<View>(id).performClick() }
         assertEquals(fields.map { state.bands.single().id to it.second }, editFields)
         assertEquals(0, edited)
-        press(current, R.id.peq_band_edit)
+        press(current, R.id.peq_band_number)
         assertEquals(1, edited)
         state = state.copy(qRange = 0.5)
         adapter.submitState(state)
@@ -553,7 +555,7 @@ class PeqBandControlsUiTest {
 
     @Test fun editingAnotherBandMovesTheMarkerAndLocatorRestoresVisibilityAfterRotation() {
         val bands = listOf(PeqBand(frequency = 200.0), PeqBand(frequency = 1000.0), PeqBand(frequency = 5000.0))
-        launch(PeqState(bands, frequencyStep = 125.0, showFrequencySlider = true))
+        launch(PeqState(bands, gainStep = 0.1, frequencyStep = 125.0, showFrequencySlider = true))
         assertNull(drawMarkerOrNull())
         val second = row(1)
         press(second, R.id.peq_band_plus)
@@ -584,7 +586,7 @@ class PeqBandControlsUiTest {
     @Test fun preciseFrequencyAndGainDraftUpdatesTheMarkerButCancelRestoresSavedParameters() {
         val original = PeqState(listOf(PeqBand(frequency = 200.0), PeqBand(frequency = 1000.0, gain = -3.0)))
         launch(original)
-        press(row(1), R.id.peq_band_edit)
+        press(row(1), R.id.peq_band_number)
         idle()
         val dialog = ShadowDialog.getLatestDialog() as AlertDialog
         dialog.findViewById<EditText>(R.id.peq_frequency_input)!!.setText("1234.5")
