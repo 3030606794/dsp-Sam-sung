@@ -7,14 +7,16 @@ import android.util.AttributeSet
 import androidx.preference.DialogPreference
 import androidx.preference.PreferenceViewHolder
 import me.timschneeberger.rootlessjamesdsp.R
-import me.timschneeberger.rootlessjamesdsp.databinding.PreferenceEqualizerBinding
+import me.timschneeberger.rootlessjamesdsp.databinding.PreferenceGraphicEqualizerBinding
+import me.timschneeberger.rootlessjamesdsp.peq.PeqResponseView
+import me.timschneeberger.rootlessjamesdsp.view.EqPreview
 import me.timschneeberger.rootlessjamesdsp.interop.PreferenceCache
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.view.EqualizerSurface
 
 class EqualizerPreference : DialogPreference, SharedPreferences.OnSharedPreferenceChangeListener {
 
-    private var equalizerView: EqualizerSurface? = null
+    private var equalizerView: PeqResponseView? = null
     var initialValue: String = ""
 
     var entries = arrayOf<CharSequence>()
@@ -39,7 +41,7 @@ class EqualizerPreference : DialogPreference, SharedPreferences.OnSharedPreferen
         context: Context, attrs: AttributeSet?, defStyleAttr: Int,
         defStyleRes: Int
     ) : super(context, attrs, defStyleAttr, defStyleRes) {
-        layoutResource = R.layout.preference_equalizer
+        layoutResource = R.layout.preference_graphic_equalizer
         dialogLayoutResource = R.layout.preference_equalizer_dialog
 
         this.positiveButtonText = context.getString(android.R.string.ok)
@@ -75,40 +77,22 @@ class EqualizerPreference : DialogPreference, SharedPreferences.OnSharedPreferen
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
         super.onBindViewHolder(holder)
 
-        equalizerView = PreferenceEqualizerBinding.bind(holder.itemView).layoutEqualizer
-        setEqualizerViewValues(initialValue)
-        updateFilterType()
+        val binding = PreferenceGraphicEqualizerBinding.bind(holder.itemView)
+        binding.root.findViewById<android.widget.TextView>(R.id.preview_title).text = "EQ"
+        binding.nodeCount.text = "15 个频段 · 点击调节"
+        equalizerView = binding.layoutPeq
+        updateFromPreferences()
     }
 
     fun updateFromPreferences() {
         initialValue = getPersistedString(initialValue)
-        setEqualizerViewValues(initialValue)
-        updateFilterType()
+        equalizerView?.let { EqPreview.render(context, it, initialValue) }
     }
 
-    fun updateFilterType() {
-        val type = PreferenceCache.uncachedGet(context, Constants.PREF_EQ, R.string.key_eq_filter_type, "0").toIntOrNull() ?: 0
-        equalizerView?.mode = if(type == 0) EqualizerSurface.Mode.Fir else EqualizerSurface.Mode.Iir
-        equalizerView?.iirOrder = when(type) {
-            1 -> 4
-            2 -> 6
-            3 -> 8
-            4 -> 10
-            else -> 12
-        }
-    }
-
-    private fun setEqualizerViewValues(value: String) {
-        value
-            .split(";")
-            .drop(15)
-            .dropLastWhile(String::isEmpty)
-            .map(String::toDoubleOrNull)
-            .forEachIndexed { index, s -> equalizerView?.setBand(index, s ?: 0.0) }
-    }
+    fun updateFilterType() = updateFromPreferences()
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-        if(key == context.getString(R.string.key_eq_filter_type)) {
+        if(key == this.key || key == context.getString(R.string.key_eq_filter_type) || key == context.getString(R.string.key_eq_interpolation)) {
             updateFilterType()
         }
     }

@@ -111,6 +111,21 @@ class PeqResponseView @JvmOverloads constructor(context: Context, attrs: Attribu
         contentDescription = context.getString(R.string.peq_response_title)
     }
 
+    /** Reuse the chart axes and drawing for EQ without converting EQ into PEQ filters. */
+    fun setExternalResponse(frequencies: DoubleArray, gains: DoubleArray, range: Double = 18.0) {
+        require(frequencies.size == gains.size && frequencies.size >= 2)
+        generation.incrementAndGet()
+        animator?.cancel()
+        worker?.close()
+        worker = null
+        requestedState = null
+        hideMarker()
+        gainRange = range
+        responseFrequencies = frequencies.copyOf()
+        responseValues = gains.copyOf()
+        invalidate()
+    }
+
     fun setState(state: PeqState, animate: Boolean = true) {
         val previousState = requestedState
         val sameResponse = previousState != null && sameFilters(previousState, state)

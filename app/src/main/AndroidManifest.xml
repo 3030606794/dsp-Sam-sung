@@ -165,6 +165,7 @@
                 android:value=".activity.MainActivity" />
         </activity>
 
+        <activity android:name=".activity.EqualizerActivity" android:exported="false" />
         <activity
             android:name=".activity.GraphicEqualizerActivity"
             android:exported="false"

@@ -226,9 +226,7 @@ class PreferenceGroupFragment : PreferenceFragmentCompat(), KoinComponent {
     override fun onDisplayPreferenceDialog(preference: Preference) {
         when (preference) {
             is EqualizerPreference -> {
-                val dialogFragment = EqualizerDialogFragment.newInstance(preference.key)
-                dialogFragment.setTargetFragment(this, 0)
-                dialogFragment.show(parentFragmentManager, null)
+                startActivity(Intent(requireContext(), me.timschneeberger.rootlessjamesdsp.activity.EqualizerActivity::class.java))
             }
             is CompanderPreference -> {
                 val dialogFragment = CompanderDialogFragment.newInstance(preference.key)

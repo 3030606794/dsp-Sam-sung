@@ -191,6 +191,38 @@ class GroupedDspUiTest {
         assertEquals(android.graphics.Color.rgb(128, 128, 128), colors.getColorForState(power.drawableState, 0))
     }
 
+    @Test fun eqPreviewOpensDedicatedActivityInsteadOfDialog() {
+        val host = launch()
+        val fragment = dsp(host).childFragmentManager.findFragmentById(R.id.card_eq)
+            as me.timschneeberger.rootlessjamesdsp.fragment.PreferenceGroupFragment
+        val preference = fragment.findPreference<me.timschneeberger.rootlessjamesdsp.preference.EqualizerPreference>(app.getString(R.string.key_eq_bands))!!
+        fragment.onDisplayPreferenceDialog(preference)
+        val intent = shadowOf(host).nextStartedActivity
+        assertEquals(me.timschneeberger.rootlessjamesdsp.activity.EqualizerActivity::class.java.name, intent.component!!.className)
+        assertTrue(dsp(host).childFragmentManager.fragments.none { it is androidx.fragment.app.DialogFragment })
+    }
+
+    @Test fun fullScreenEqEditsOnlyEqAndPreservesGainAcrossRecreation() {
+        val beforePeq = app.getSharedPreferences(Constants.PREF_GEQ, Context.MODE_PRIVATE).all.toMap()
+        val next = Robolectric.buildActivity(me.timschneeberger.rootlessjamesdsp.activity.EqualizerActivity::class.java).setup().visible()
+        try {
+            next.get().setBandGain(4, 3.5)
+            idle()
+            val value = app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
+                .getString(app.getString(R.string.key_eq_bands), "")!!
+            assertEquals(30, value.split(';').size)
+            assertEquals(3.5, me.timschneeberger.rootlessjamesdsp.view.EqPreview.parse(value)[4], 0.0)
+            assertFalse(app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
+                .getBoolean(app.getString(R.string.key_eq_enable), false))
+            assertEquals(beforePeq, app.getSharedPreferences(Constants.PREF_GEQ, Context.MODE_PRIVATE).all)
+            next.recreate()
+            idle()
+            val reloaded = app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
+                .getString(app.getString(R.string.key_eq_bands), "")!!
+            assertEquals(value, reloaded)
+        } finally { next.pause().stop().destroy(); idle() }
+    }
+
     class Host : FragmentActivity() {
         override fun onCreate(state: Bundle?) {
             setTheme(R.style.Theme_RootlessJamesDSP)
