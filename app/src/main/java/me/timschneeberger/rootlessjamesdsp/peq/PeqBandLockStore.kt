@@ -21,6 +21,18 @@ class PeqBandLockStore(context: Context) {
         }.apply()
     }
 
+    /** Apply only after successfully saving a system preset and calling markNew for its fresh IDs. */
+    fun applySystemPresetDefaults(ids: Collection<String>) {
+        preferences.edit().apply {
+            ids.forEach { id ->
+                putBoolean("$id.band", false)
+                PeqEditField.entries.forEach { field ->
+                    putBoolean("$id.${field.name}", field == PeqEditField.QUALITY || field == PeqEditField.FREQUENCY)
+                }
+            }
+        }.apply()
+    }
+
     fun markUsed(id: String) {
         if (isNew(id)) preferences.edit().putBoolean("$id.new", false).apply()
     }

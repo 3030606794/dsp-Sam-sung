@@ -30,7 +30,7 @@ import java.io.File
     qualifiers = "zh-rCN-w320dp-h720dp-port-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class PeqSystemPresetToolbarTest {
-    @Test fun compactPhoneKeepsSystemPresetsBesideTheTitleAndAboveTheSummary() = checkToolbar(320)
+    @Test fun compactPhoneKeepsSystemPresetsAndLongSummaryOnOneCenteredLineBelowPeq() = checkToolbar(320)
 
     @Test
     @Config(qualifiers = "zh-rCN-w411dp-h891dp-port-mdpi")
@@ -51,7 +51,8 @@ class PeqSystemPresetToolbarTest {
             val header = toolbar.parent as ViewGroup
             val appBar = header.parent as ViewGroup
             val title = children(toolbar).filterIsInstance<TextView>().single { it.text == toolbar.title }
-            val summary = children(toolbar).filterIsInstance<TextView>().single { it.text == toolbar.subtitle }
+            val summary = binding.peqToolbarSummary
+            val summaryRow = binding.peqToolbarSummaryRow
             val back = children(toolbar).filterIsInstance<ImageButton>().single { it.drawable != null }
             val pin = toolbar.findViewById<View>(R.id.peq_pin_response)
             assertNotNull("The pin action must be measured, not omitted from the test toolbar", pin)
@@ -68,8 +69,10 @@ class PeqSystemPresetToolbarTest {
 
             assertEquals(64, header.height)
             assertEquals(width / 2f, bounds(header, title).exactCenterX(), 1f)
-            assertEquals(width / 2f, bounds(header, summary).exactCenterX(), 1f)
+            assertEquals(width / 2f, bounds(header, summaryRow).exactCenterX(), 1f)
             assertEquals(13f, summary.textSize, 0.1f)
+            assertEquals(13f, binding.peqSystemPresets.textSize, 0.1f)
+            assertTrue("The native subtitle must not duplicate the shared row", toolbar.subtitle.isNullOrEmpty())
             assertReadable(title)
             assertReadable(summary)
             assertReadable(binding.peqSystemPresets)
@@ -92,14 +95,29 @@ class PeqSystemPresetToolbarTest {
                 assertFalse("$width dp: ${a.key} ${a.value} overlaps ${b.key} ${b.value}",
                     Rect.intersects(a.value, b.value))
             }
-            assertTrue("The preset entry is left of PEQ",
-                controls.getValue("system presets").right <= controls.getValue("title").left)
-            assertTrue("The summary is below the preset entry",
-                controls.getValue("system presets").bottom <= controls.getValue("summary").top)
+            assertTrue("The shared row is below PEQ",
+                controls.getValue("title").bottom <= bounds(header, summaryRow).top)
+            assertEquals("Preset and summary text share the same baseline",
+                controls.getValue("system presets").top + binding.peqSystemPresets.baseline,
+                controls.getValue("summary").top + summary.baseline)
+            val separator = bounds(header, binding.peqToolbarSummarySeparator)
+            assertEquals("-", binding.peqToolbarSummarySeparator.text.toString().trim())
+            assertTrue(controls.getValue("system presets").right <= separator.left)
+            assertTrue(separator.right <= controls.getValue("summary").left)
 
-            // The overlay is an actual independent button, not decoration or a toolbar-wide click.
+            // Only the preset entry owns the action, rather than the whole summary line.
             assertTrue(binding.peqSystemPresets.performClick())
             assertEquals(1, host.presetClicks)
+            assertFalse(summary.performClick())
+            assertFalse(summaryRow.performClick())
+            assertEquals(1, host.presetClicks)
+
+            summary.text = host.getString(R.string.peq_summary, 4, "0.5", "18")
+            binding.root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY))
+            binding.root.layout(0, 0, width, 720)
+            assertEquals(width / 2f, bounds(header, summaryRow).exactCenterX(), 1f)
+            assertReadable(summary)
         } finally {
             controller.pause().stop().destroy()
             shadowOf(Looper.getMainLooper()).idle()
@@ -134,7 +152,7 @@ class PeqSystemPresetToolbarTest {
             setSupportActionBar(binding.toolbar)
             supportActionBar!!.setTitle(R.string.fusion_peq_title)
             supportActionBar!!.setDisplayHomeAsUpEnabled(true)
-            binding.toolbar.subtitle = getString(R.string.peq_summary, 4, "0.5", "18")
+            binding.peqToolbarSummary.text = getString(R.string.peq_summary, 130, "0.5", "12")
             binding.peqSystemPresets.setOnClickListener { presetClicks++ }
         }
 

@@ -108,9 +108,11 @@ class PeqFilterSelectorDrawingTest {
                 for (icons in listOf(false, true)) {
                     adapter.submitCardFilterIcons(icons)
                     measure(card, width)
-                    assertEquals("Only the footer grows when curves are shown", if (icons) 56 else 40, inline.height)
+                    if (icons) assertTrue("The icon footer is compact instead of the old 56 dp row",
+                        inline.height in 36..41)
+                    else assertEquals(32, inline.height)
                     assertEquals(40, card.findViewById<View>(R.id.peq_band_header).height)
-                    if (icons) assertEquals(textOnlyCardHeight + 16, card.height)
+                    if (icons) assertEquals(textOnlyCardHeight + inline.height - 32, card.height)
                     else textOnlyCardHeight = card.height
                     assertEquals(card.height, rectangle(inline).bottom)
                     val bitmap = Bitmap.createBitmap(card.width, card.height, Bitmap.Config.ARGB_8888)
@@ -124,6 +126,39 @@ class PeqFilterSelectorDrawingTest {
                             val cellBounds = rectangle(choices.getChildAt(index))
                             assertTrue("Inline cell $index must fit entirely inside its footer: $cellBounds in $footerBounds",
                                 footerBounds.contains(cellBounds))
+                        }
+                        if (!icons) {
+                            val textCells = (0 until choices.childCount).map(choices::getChildAt).filterIsInstance<TextView>()
+                            textCells.forEach { cell ->
+                                val area = rectangle(cell)
+                                val background = bitmap.getPixel(area.centerX(), area.top + 2)
+                                // Draw the complete cell without its parent's separator overlay.
+                                // Cropping 3 px to avoid that separator removes the capital C's
+                                // top in the narrow English "Cancel" cell, falsely shifting its
+                                // measured center down to the remaining lowercase glyphs.
+                                val textBitmap = Bitmap.createBitmap(cell.width, cell.height, Bitmap.Config.ARGB_8888)
+                                try {
+                                    textBitmap.eraseColor(background)
+                                    val textCanvas = Canvas(textBitmap)
+                                    val layer = textCanvas.saveLayerAlpha(0f, 0f, cell.width.toFloat(),
+                                        cell.height.toFloat(), (cell.alpha * 255).toInt())
+                                    cell.draw(textCanvas)
+                                    textCanvas.restoreToCount(layer)
+                                    val rows = (3 until cell.height - 3).filter { y ->
+                                        (0 until cell.width).any { x ->
+                                            val pixel = textBitmap.getPixel(x, y)
+                                            abs(Color.red(pixel) - Color.red(background)) +
+                                                abs(Color.green(pixel) - Color.green(background)) +
+                                                abs(Color.blue(pixel) - Color.blue(background)) >= 35
+                                        }
+                                    }
+                                    assertTrue("${cell.text} has visible glyphs", rows.isNotEmpty())
+                                    assertEquals("${cell.text} shares the plain strip's visual center",
+                                        (cell.height - 1) / 2f, (rows.first() + rows.last()) / 2f, 1f)
+                                } finally { textBitmap.recycle() }
+                            }
+                            val lock = card.findViewById<View>(R.id.peq_inline_lock)
+                            assertEquals(footerBounds.exactCenterY(), rectangle(lock).exactCenterY(), 0.5f)
                         }
                         PeqFilterType.entries.forEach { type ->
                             val label = card.findViewById<TextView>(PeqFilterTypeDialog.buttonId(type))
@@ -141,6 +176,11 @@ class PeqFilterSelectorDrawingTest {
                             assertTrue("$type label has visible rendered pixels", inkRows.isNotEmpty())
                             if (icons) {
                                 assertCompactTextCurveGap(inkRows, "Footer $type at $width dp")
+                                assertTrue("$type text begins 5 dp below the top border, got ${inkRows.first()}",
+                                    inkRows.first() in 4..6)
+                                val bottomInset = area.height() - 1 - inkRows.last()
+                                assertTrue("$type curve ends 5 dp above the bottom border, got $bottomInset",
+                                    bottomInset in 4..6)
                             } else {
                                 assertTrue("Text-only mode leaves no stale icon at the bottom of $type",
                                     inkRows.none { it >= area.height() - 7 })
@@ -188,21 +228,39 @@ class PeqFilterSelectorDrawingTest {
                                 abs(Color.blue(pixel) - Color.blue(background)) >= 75
                         }
                     }
-                    assertCompactTextCurveGap(inkRows, "Header $type at $width dp")
+                    assertCompactTextCurveGap(inkRows, "Header $type at $width dp", expectedGap = 5)
                     assertTrue("Header text and curve have padding inside their fixed slot",
-                        inkRows.first() >= 4 && inkRows.last() <= area.height() - 5)
+                        inkRows.first() >= 3 && inkRows.last() <= area.height() - 4)
+                    if (type == PeqFilterType.PEAK) {
+                        val number = card.findViewById<PeqBandNumberView>(R.id.peq_band_number)
+                        val numberArea = Rect().also {
+                            number.getDrawingRect(it)
+                            card.offsetDescendantRectToMyCoords(number, it)
+                        }
+                        val numberBackground = bitmap.getPixel(numberArea.centerX(), numberArea.top + 2)
+                        val numberInk = (3 until numberArea.height() - 3).filter { y ->
+                            (numberArea.left + 6 until numberArea.right - 6).any { x ->
+                                val pixel = bitmap.getPixel(x, numberArea.top + y)
+                                abs(Color.red(pixel) - Color.red(numberBackground)) +
+                                    abs(Color.green(pixel) - Color.green(numberBackground)) +
+                                    abs(Color.blue(pixel) - Color.blue(numberBackground)) >= 75
+                            }
+                        }
+                        assertCompactTextCurveGap(numberInk, "Number/settings at $width dp", expectedGap = 5)
+                    }
                 } finally { bitmap.recycle() }
             }
         } finally { preferences.edit().clear().commit() }
     }
 
-    private fun assertCompactTextCurveGap(inkRows: List<Int>, description: String) {
+    private fun assertCompactTextCurveGap(inkRows: List<Int>, description: String, expectedGap: Int = 3) {
         assertTrue("$description renders visible text and a visible curve", inkRows.size >= 6)
         val separation = inkRows.zipWithNext().maxByOrNull { (before, after) -> after - before }!!
         val gap = separation.second - separation.first - 1
-        // Pixel coverage of a 3 dp geometric gap varies at antialiased glyph edges.
+        // Pixel coverage of the geometric gap varies at antialiased glyph edges.
         // This rejects the old 16 dp compound-drawable gap as well as overlapping ink.
-        assertTrue("$description keeps a compact 3 dp visible gap, found $gap raster rows", gap in 2..5)
+        assertTrue("$description keeps a $expectedGap dp visible gap, found $gap raster rows",
+            gap in expectedGap - 1..expectedGap + 2)
         assertTrue("$description has text above the gap", inkRows.count { it <= separation.first } >= 3)
         assertTrue("$description has a curve below the gap", inkRows.count { it >= separation.second } >= 3)
     }

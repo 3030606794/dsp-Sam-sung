@@ -136,4 +136,40 @@ class PeqBandLockStoreTest {
             assertTrue(locks.isBandLocked("other"))
         } finally { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
+
+    @Test fun systemImportLocksOnlyQualityAndFrequencyAndPreservesNewBadgesAndUnrelatedCards() {
+        val locks = PeqBandLockStore(app)
+        val ids = listOf("system-q", "system-bw")
+        ids.forEach(locks::markNew)
+        locks.markNew("personal")
+        locks.setBandLocked("personal", true)
+        locks.setFieldLocked("personal", PeqEditField.GAIN, true)
+        val otherBefore = prefs.all.filterKeys { it.startsWith("personal.") }
+        val observedComplete = mutableListOf<Boolean>()
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            observedComplete += ids.all { id ->
+                !locks.isBandLocked(id) && locks.isNew(id) &&
+                    locks.isFieldLocked(id, PeqEditField.QUALITY) && locks.isFieldLocked(id, PeqEditField.FREQUENCY) &&
+                    !locks.isFieldLocked(id, PeqEditField.GAIN) && !locks.isFieldLocked(id, PeqEditField.FILTER_TYPE)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        try {
+            locks.applySystemPresetDefaults(ids)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        } finally { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+
+        assertTrue(observedComplete.isNotEmpty())
+        assertTrue(observedComplete.all { it })
+        val reloaded = PeqBandLockStore(app)
+        ids.forEach { id ->
+            assertFalse(reloaded.isBandLocked(id))
+            assertTrue(reloaded.isNew(id))
+            assertFalse(reloaded.canEdit(id, PeqEditField.QUALITY))
+            assertFalse(reloaded.canEdit(id, PeqEditField.FREQUENCY))
+            assertTrue(reloaded.canEdit(id, PeqEditField.GAIN))
+            assertTrue(reloaded.canEdit(id, PeqEditField.FILTER_TYPE))
+        }
+        assertEquals(otherBefore, prefs.all.filterKeys { it.startsWith("personal.") })
+    }
 }

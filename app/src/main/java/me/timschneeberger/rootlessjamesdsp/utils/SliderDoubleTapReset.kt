@@ -9,6 +9,10 @@ import me.timschneeberger.rootlessjamesdsp.R
 
 /** Adds reset without consuming ordinary slider taps, drags or scrolling gestures. */
 object SliderDoubleTapReset {
+    fun clear(slider: Slider) {
+        (slider.getTag(R.id.slider_reset_binding) as? Binding)?.dispose()
+        slider.setTag(R.id.slider_reset_binding, null)
+    }
     fun install(slider: Slider, defaultValue: Float = 0f, onCancel: () -> Unit = {}, resetLabel: String? = null, onReset: () -> Unit) {
         // Preference rows can rebind after the first tap changes their stored value.
         // Keep the detector alive across that bind so the second tap is still recognized.
@@ -18,6 +22,7 @@ object SliderDoubleTapReset {
         binding.defaultValue = defaultValue
         binding.onCancel = onCancel
         binding.onReset = onReset
+        binding.attach()
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -28,6 +33,15 @@ object SliderDoubleTapReset {
         private var resetGesture = false
         private var accessibilityLabel: String? = null
         private var accessibilityAction = -1
+
+        fun dispose() {
+            slider.setOnTouchListener(null)
+            if (accessibilityAction != -1) ViewCompat.removeAccessibilityAction(slider, accessibilityAction)
+            accessibilityAction = -1
+            resetGesture = false
+            onReset = {}
+            onCancel = {}
+        }
 
         fun updateAccessibilityLabel(label: String) {
             if (accessibilityLabel == label) return
@@ -50,7 +64,7 @@ object SliderDoubleTapReset {
             }
         }).apply { setIsLongpressEnabled(false) }
 
-        init {
+        fun attach() {
             slider.setOnTouchListener { _, event ->
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) resetGesture = false
                 detector.onTouchEvent(event)

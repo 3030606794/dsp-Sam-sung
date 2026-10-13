@@ -13,12 +13,25 @@ import androidx.core.graphics.drawable.DrawableCompat
 import me.timschneeberger.rootlessjamesdsp.R
 import kotlin.math.roundToInt
 
-/** A filter label with an optional curve, separated by 3 dp of visible whitespace. */
+/** Positions the visible glyphs, avoiding transparent font/vector margins. */
 class PeqFilterLabelView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) :
     AppCompatTextView(context, attrs) {
     private var curve: Drawable? = null
     private val labelPaint = TextPaint()
     private val glyphBounds = Rect()
+
+    /** Footer cells use 5 dp outer insets and a 3 dp text/curve gap; headers keep a 5 dp gap. */
+    var inlineMode: Boolean = false
+        set(value) { if (field != value) { field = value; invalidate() } }
+
+    internal fun inlineHeightWithCurve(): Int {
+        val label = text.toString()
+        paint.getTextBounds(label, 0, label.length, glyphBounds)
+        // Font fallback can initially report empty glyph bounds. Reserve at least
+        // the requested text size so turning on curves never shrinks the row.
+        return (maxOf(glyphBounds.height().toFloat(), paint.textSize) +
+            25 * resources.displayMetrics.density).roundToInt()
+    }
 
     var filterIcon: PeqFilterType? = null
         set(value) {
@@ -31,7 +44,7 @@ class PeqFilterLabelView @JvmOverloads constructor(context: Context, attrs: Attr
     override fun onDraw(canvas: Canvas) {
         val type = filterIcon
         val icon = curve
-        if (type == null || icon == null || text.isNullOrEmpty()) {
+        if (text.isNullOrEmpty() || (!inlineMode && (type == null || icon == null))) {
             super.onDraw(canvas)
             return
         }
@@ -44,6 +57,13 @@ class PeqFilterLabelView @JvmOverloads constructor(context: Context, attrs: Attr
             (width - paddingLeft - paddingRight).coerceAtLeast(0).toFloat(), TextUtils.TruncateAt.END).toString()
         if (label.isEmpty()) return
         labelPaint.getTextBounds(label, 0, label.length, glyphBounds)
+        if (type == null || icon == null) {
+            // Chinese fallback and Latin action labels have different font line
+            // boxes. Center their visible glyphs on the same horizontal axis.
+            canvas.drawText(label, (width - glyphBounds.width()) / 2f - glyphBounds.left,
+                (height - glyphBounds.height()) / 2f - glyphBounds.top, labelPaint)
+            return
+        }
 
         // The shared 32x20 vectors include transparent space above and below their
         // 1.8-unit strokes. Position their visible edges, not those viewport margins.
@@ -53,16 +73,25 @@ class PeqFilterLabelView @JvmOverloads constructor(context: Context, attrs: Attr
             PeqFilterType.NOTCH -> 17.9f
             else -> 18.9f
         } / 20f * iconHeight
-        val gap = 3 * density
+        val gap = (if (inlineMode) 3 else 5) * density
         val contentHeight = glyphBounds.height() + gap + visibleBottom - visibleTop
-        val top = (height - contentHeight) / 2f
+        val top = if (inlineMode) 5 * density else (height - contentHeight) / 2f
         canvas.drawText(label, (width - glyphBounds.width()) / 2f - glyphBounds.left,
             top - glyphBounds.top, labelPaint)
         DrawableCompat.setTint(icon, currentTextColor)
         icon.setBounds(0, 0, iconWidth, iconHeight)
         val save = canvas.save()
         try {
-            canvas.translate((width - iconWidth) / 2f, top + glyphBounds.height() + gap - visibleTop)
+            val curveTop = top + glyphBounds.height() + gap
+            canvas.translate((width - iconWidth) / 2f, curveTop)
+            if (inlineMode) {
+                // All seven curves end 5 dp above the lower border. A shared row
+                // height accommodates slightly different glyph bounds without
+                // changing the 3 dp gap or adding invisible viewport whitespace.
+                val visibleHeight = (height - 5 * density - curveTop).coerceAtLeast(density)
+                canvas.scale(1f, visibleHeight / (visibleBottom - visibleTop))
+            }
+            canvas.translate(0f, -visibleTop)
             icon.draw(canvas)
         } finally { canvas.restoreToCount(save) }
     }

@@ -48,7 +48,8 @@ class PeqBandNumberDrawingTest {
                     assertTrue("The compact block is centered inside the unchanged hit target",
                         abs((rows.first() + rows.last()) / 2f - (badge.height - 1) / 2f) <= 2f)
                     val gaps = rows.zipWithNext().map { (previous, next) -> next - previous - 1 }
-                    assertTrue("No font-line leading leaves a large gap before the settings glyph", gaps.maxOrNull()!! <= 3)
+                    assertTrue("The visible number/settings gap is 5 dp, excluding vector whitespace",
+                        gaps.maxOrNull()!! in 4..6)
                     val directory = File("build/reports/peq-filter-raster").apply { mkdirs() }
                     File(directory, "number-$width-$number.png").outputStream().use {
                         bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)

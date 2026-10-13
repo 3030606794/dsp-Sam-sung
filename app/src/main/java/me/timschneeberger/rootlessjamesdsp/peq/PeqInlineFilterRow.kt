@@ -38,9 +38,10 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
             types.forEach { (type, cell) ->
                 cell.filterIcon = type.takeIf { value }
             }
+            val rowHeight = if (value) types.values.maxOf { it.inlineHeightWithCurve() } else dp(32)
             for (index in 0 until choices.childCount) {
                 val child = choices.getChildAt(index)
-                child.layoutParams = child.layoutParams.apply { height = dp(if (value) 56 else 40) }
+                child.layoutParams = child.layoutParams.apply { height = rowHeight }
             }
         }
     private var editable = false
@@ -78,7 +79,7 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
         id = R.id.peq_inline_lock
         scaleType = ImageView.ScaleType.CENTER_INSIDE
         setPadding(dp(9), dp(9), dp(9), dp(9))
-        layoutParams = LayoutParams(0, dp(40), 1f)
+        layoutParams = LayoutParams(0, dp(32), 1f)
         isClickable = true
         isFocusable = true
         if (feedback != 0) foreground = context.getDrawable(feedback)
@@ -152,9 +153,10 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
         gravity = Gravity.CENTER
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         includeFontPadding = false
+        inlineMode = true
         maxLines = 1
         setPadding(0, 0, 0, 0)
-        layoutParams = LayoutParams(0, dp(40), 1f)
+        layoutParams = LayoutParams(0, dp(32), 1f)
         isClickable = true
         isFocusable = true
         if (feedback != 0) foreground = context.getDrawable(feedback)

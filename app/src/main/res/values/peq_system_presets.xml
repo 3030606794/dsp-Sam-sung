@@ -7,11 +7,12 @@
     <string name="peq_system_presets_parametric">参数均衡</string>
     <string name="peq_system_presets_graphic">图形均衡</string>
     <string name="peq_system_presets_row">%1$s · %2$d 段</string>
-    <string name="peq_system_presets_details">%1$d 段 · %2$s–%3$s Hz\n应用后将替换全部频段（包括锁定的旧频段），新频段均解锁并开启。</string>
+    <string name="peq_system_presets_details">%1$d 段 · %2$s–%3$s Hz\n应用后将替换全部频段（包括锁定的旧频段）。新频段默认开启，Q/BW 和频率锁定，其余解锁。解锁后双击滑杆圆点可恢复导入原值。</string>
     <string name="peq_system_presets_compat">%1$d 段原始频率低于 20 Hz，将适配至当前下限 20 Hz。</string>
     <string name="peq_system_presets_preamp">原预设前级增益：%1$s dB。本次载入滤波参数，系统输出音量保持原值。</string>
     <string name="peq_system_presets_quality">BW 按 48 kHz 基准换算为 Q。</string>
     <string name="peq_system_presets_apply">应用预设</string>
     <string name="peq_system_presets_applied">已应用系统预设：%1$s（%2$d 段）</string>
     <string name="peq_system_presets_failed">系统预设读取失败</string>
+    <string name="peq_system_presets_origin_failed">预设已载入，但导入原值保存失败，请重新应用预设。</string>
 </resources>

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -79,6 +80,8 @@ class EqualizerActivity : BaseActivity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         val binding = ActivityGraphicEqBinding.inflate(layoutInflater)
+        binding.peqToolbarSummaryRow.visibility = View.GONE
+        binding.toolbar.layoutParams = binding.toolbar.layoutParams.apply { height = dp(64) }
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
         supportActionBar?.title = "EQ"

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="peq_system_preset_slider_reset_binding" type="id" />
+    <string name="peq_system_preset_restore_value">恢复导入时的数值</string>
+</resources>

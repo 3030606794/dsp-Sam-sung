@@ -392,7 +392,8 @@ class PeqFragment : Fragment() {
             // Gesture updates must not trail the thumb behind a transition animation.
             peqCurve.setState(editorState, animate && interactingBand == null)
             peqCurve.setSelectedBand(selectedBandId)
-            requireActivity().findViewById<MaterialToolbar>(R.id.toolbar)?.subtitle = getString(R.string.peq_summary,
+            requireActivity().findViewById<MaterialToolbar>(R.id.toolbar)?.subtitle = null
+            requireActivity().findViewById<TextView>(R.id.peq_toolbar_summary)?.text = getString(R.string.peq_summary,
                 editorState.bands.size, PeqBandAdapter.number(editorState.gainStep), PeqBandAdapter.number(editorState.gainRange))
             // Full banks still need the double-tap navigation shortcut.
             peqAddFront.isEnabled = true
@@ -1050,7 +1051,7 @@ class PeqFragment : Fragment() {
                     flushPendingSave()
                     binding?.peqBandList?.stopScroll()
                     clearMarker()
-                    val applied = save(preset.applyTo(editorState))
+                    val applied = save(preset.applyTo(editorState), systemPreset = true)
                     if (applied) {
                         finishSelection()
                         binding?.peqBandList?.scrollToPosition(0)
@@ -1066,7 +1067,7 @@ class PeqFragment : Fragment() {
         }
     }
 
-    private fun save(next: PeqState, interactingBand: String? = null): Boolean {
+    private fun save(next: PeqState, interactingBand: String? = null, systemPreset: Boolean = false): Boolean {
         cancelPendingSave()
         if (!repository.save(next)) {
             binding?.root?.let { Snackbar.make(it, R.string.peq_save_failed, Snackbar.LENGTH_LONG).show() }
@@ -1077,6 +1078,13 @@ class PeqFragment : Fragment() {
         next.bands.forEach { band ->
             if (band.id !in previous) locks.markNew(band.id)
             else if (previous[band.id] != band) locks.markUsed(band.id)
+        }
+        val origins = PeqSystemPresetOrigins(requireContext())
+        if (systemPreset) {
+            if (!origins.recordImportedBands(next.bands)) toast(getString(R.string.peq_system_presets_origin_failed))
+            locks.applySystemPresetDefaults(next.bands.map { it.id })
+        } else if (previous.keys != next.bands.mapTo(hashSetOf()) { it.id }) {
+            origins.retain(next.bands.mapTo(hashSetOf()) { it.id })
         }
         editorState = next
         lastSavedState = next
@@ -1402,6 +1410,23 @@ class PeqFragment : Fragment() {
                 if (endpoint && qualityEditor.mode == PeqQualityDisplay.BW) PeqQualityEditor.format(value)
                 else PeqBandAdapter.number(value, 6)
             })
+        PeqSystemPresetOrigins(requireContext()).find(id)?.let { origin ->
+            PeqSystemPresetSliderReset.install(ui.peqFrequencySlider) {
+                if (!frequencyLocked()) ui.peqFrequencyInput.setText(origin.frequency.toString())
+            }
+            PeqSystemPresetSliderReset.install(ui.peqGainSlider) {
+                if (!gainLocked()) ui.peqGainInput.setText(origin.gain.toString())
+            }
+            PeqSystemPresetSliderReset.install(ui.peqQualitySlider) {
+                if (!qualityLocked()) {
+                    val freq = frequency()?.takeIf { PeqModel.validFrequency(it) } ?: return@install
+                    val restored = origin.restoreQuality(band.copy(frequency = freq, qualityDisplay = qualityEditor.mode))
+                    qualityEditor = PeqQualityEditor(restored.q, freq, qualityEditor.mode)
+                    renderQualityMode()
+                    qualitySlider?.refresh()
+                }
+            }
+        }
         fun renderLocks() {
             val mainLocked = locks.isBandLocked(id)
             val bandEnabled = editorState.bands.firstOrNull { it.id == id }?.enabled == true

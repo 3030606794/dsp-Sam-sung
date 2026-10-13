@@ -13,22 +13,42 @@
         app:liftOnScroll="false">
 
         <FrameLayout android:layout_width="match_parent" android:layout_height="64dp">
-        <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/toolbar"
-            android:layout_width="match_parent"
-            android:layout_height="64dp"
-            app:titleCentered="true" app:subtitleCentered="true"
-            app:subtitleTextAppearance="@style/PeqToolbarSubtitle" />
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/peq_system_presets" style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="76dp" android:layout_height="32dp"
-            android:layout_gravity="top|start" android:layout_marginStart="56dp"
-            android:layout_marginTop="2dp" android:minWidth="0dp" android:minHeight="0dp"
-            android:insetTop="0dp" android:insetBottom="0dp"
-            android:paddingStart="2dp" android:paddingEnd="2dp"
-            android:paddingTop="0dp" android:paddingBottom="0dp"
-            android:includeFontPadding="false"
-            android:textSize="13sp" android:text="@string/peq_system_presets" />
+            <com.google.android.material.appbar.MaterialToolbar
+                android:id="@+id/toolbar"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:minHeight="0dp"
+                app:maxButtonHeight="48dp"
+                app:titleCentered="true" />
+            <LinearLayout
+                android:id="@+id/peq_toolbar_summary_row"
+                android:layout_width="wrap_content" android:layout_height="24dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginStart="4dp" android:layout_marginEnd="4dp"
+                android:orientation="horizontal" android:gravity="center_vertical"
+                android:baselineAligned="true">
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/peq_system_presets"
+                    android:layout_width="wrap_content" android:layout_height="match_parent"
+                    android:gravity="center" android:includeFontPadding="false"
+                    android:singleLine="true" android:textSize="13sp"
+                    android:textColor="?attr/colorPrimary" android:text="@string/peq_system_presets"
+                    android:clickable="true" android:focusable="true"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/peq_toolbar_summary_separator"
+                    android:layout_width="wrap_content" android:layout_height="match_parent"
+                    android:gravity="center" android:includeFontPadding="false"
+                    android:singleLine="true" android:textSize="13sp"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:text=" - " android:importantForAccessibility="no" />
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/peq_toolbar_summary"
+                    android:layout_width="wrap_content" android:layout_height="match_parent"
+                    android:gravity="center_vertical" android:includeFontPadding="false"
+                    android:singleLine="true" android:textSize="13sp"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
         </FrameLayout>
     </com.google.android.material.appbar.AppBarLayout>
 

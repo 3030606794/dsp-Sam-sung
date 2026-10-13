@@ -91,7 +91,7 @@ class PeqInlineFilterUiTest {
                 assertTrue(label.compoundDrawables.all { icon -> icon == null })
             }
             val density = choices.resources.displayMetrics.density
-            assertEquals(40f, choices.height / density, 1f)
+            assertEquals(32f, choices.height / density, 1f)
             assertEquals(40f, card().findViewById<View>(R.id.peq_band_header).height / density, 1f)
             val gain = card().findViewById<TextView>(R.id.peq_band_gain)
             val frequency = card().findViewById<TextView>(R.id.peq_frequency_value)

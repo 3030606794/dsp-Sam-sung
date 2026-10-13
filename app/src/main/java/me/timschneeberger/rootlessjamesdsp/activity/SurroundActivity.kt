@@ -119,6 +119,8 @@ class SurroundActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         pendingExportFileName = savedInstanceState?.getString("surround_export_snapshot")
         val binding = ActivityGraphicEqBinding.inflate(layoutInflater)
+        binding.peqToolbarSummaryRow.visibility = View.GONE
+        binding.toolbar.layoutParams = binding.toolbar.layoutParams.apply { height = dp(64) }
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
         supportActionBar?.title = getString(R.string.surround_title)

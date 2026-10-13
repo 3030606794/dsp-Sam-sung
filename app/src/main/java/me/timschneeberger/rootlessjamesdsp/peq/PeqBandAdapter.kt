@@ -408,7 +408,12 @@ class PeqBandAdapter(
         @SuppressLint("ClickableViewAccessibility")
         fun bind(band: PeqBand, index: Int) {
             cancelRepeats()
-            if (boundId != band.id) stopInline()
+            if (boundId != band.id) {
+                stopInline()
+                SliderDoubleTapReset.clear(binding.peqBandSlider)
+                listOf(binding.peqBandSlider, binding.peqQSlider, binding.peqFrequencySlider)
+                    .forEach(PeqSystemPresetSliderReset::clear)
+            }
             val context = binding.root.context
             binding.root.isSaveFromParentEnabled = false
             boundId = band.id
@@ -565,9 +570,6 @@ class PeqBandAdapter(
                 userGain(it.gain + state.gainStep)
                 onInteractionFinished()
             } }
-            SliderDoubleTapReset.install(slider, onCancel = onInteractionFinished) {
-                userGain(0.0); onInteractionFinished()
-            }
             fun changeBand(next: PeqBand) {
                 onBandSelected(next.id)
                 if (next != currentBand()) onBandChanged(next)
@@ -626,6 +628,40 @@ class PeqBandAdapter(
                 { current, value -> "${if (usesBandwidth(current)) "BW" else "Q"} ${fixedNumber(value, 3)}" }, ::userQuality)
             bindLogSlider(binding.peqFrequencySlider, { PeqModel.MIN_FREQUENCY..PeqModel.MAX_FREQUENCY },
                 { position, _, _ -> dragFrequency(position) }, { _, value -> "${number(value, 0)} Hz" }, ::userFrequency)
+            val origin = PeqSystemPresetOrigins(context).find(band.id)
+            if (origin != null) {
+                SliderDoubleTapReset.clear(slider)
+                fun resetImported(field: PeqEditField) {
+                    val current = currentBand() ?: return
+                    if (!canEdit(current.id, field)) return
+                    val next = when (field) {
+                        PeqEditField.GAIN -> current.copy(gain = origin.gain)
+                        PeqEditField.QUALITY -> origin.restoreQuality(current)
+                        PeqEditField.FREQUENCY -> withFrequency(current, origin.frequency, state.qRange).let {
+                            if (locks.isFieldLocked(current.id, PeqEditField.QUALITY)) it.copy(q = current.q) else it
+                        }
+                        else -> return
+                    }
+                    markUsed(current.id)
+                    changeBand(next)
+                    onInteractionFinished()
+                }
+                listOf(slider to PeqEditField.GAIN, binding.peqQSlider to PeqEditField.QUALITY,
+                    binding.peqFrequencySlider to PeqEditField.FREQUENCY).forEach { (control, field) ->
+                    PeqSystemPresetSliderReset.install(control, onCancel = onInteractionFinished) { resetImported(field) }
+                }
+            } else {
+                listOf(slider, binding.peqQSlider, binding.peqFrequencySlider).forEach(PeqSystemPresetSliderReset::clear)
+                SliderDoubleTapReset.install(slider, onCancel = onInteractionFinished) {
+                    userGain(0.0); onInteractionFinished()
+                }
+                listOf(binding.peqQSlider, binding.peqFrequencySlider).forEach { control ->
+                    control.setOnTouchListener { _, event ->
+                        if (event.actionMasked == MotionEvent.ACTION_CANCEL) onInteractionFinished()
+                        false
+                    }
+                }
+            }
             binding.peqQMinus.setOnClickListener { currentBand()?.let {
                 if (selectInstead(band.id)) return@setOnClickListener
                 userQuality(displayedQuality(it) - state.qStep)

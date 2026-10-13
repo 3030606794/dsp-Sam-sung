@@ -124,16 +124,15 @@ class PeqRefinementUiTest {
 
     @Test fun summaryAndEditAreCenteredAroundTheGraphWhilePowerStaysInTheFooter() {
         launch()
-        val toolbar = controller!!.get().findViewById<MaterialToolbar>(R.id.toolbar)
-        val summary = (0 until toolbar.childCount).map { toolbar.getChildAt(it) }
-            .filterIsInstance<TextView>().single { it.text == toolbar.subtitle }
+        val summary = controller!!.get().findViewById<TextView>(R.id.peq_toolbar_summary)
+        val summaryRow = controller!!.get().findViewById<View>(R.id.peq_toolbar_summary_row)
         val graph = bounds(view(R.id.peq_curve))
         val edit = bounds(view(R.id.peq_edit_selection))
         val power = bounds(view(R.id.peq_power))
         val root = bounds(fragment().requireView())
         assertTrue(bounds(summary).bottom <= graph.top)
         assertEquals(13f, summary.textSize / app.resources.displayMetrics.scaledDensity, 0.01f)
-        assertEquals(root.exactCenterX(), bounds(summary).exactCenterX(), 1f)
+        assertEquals(root.exactCenterX(), bounds(summaryRow).exactCenterX(), 1f)
         assertTrue(edit.top >= graph.bottom)
         assertEquals(root.exactCenterX(), edit.exactCenterX(), 1f)
         assertEquals(root.exactCenterX(), power.exactCenterX(), 1f)
