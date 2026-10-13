@@ -196,6 +196,8 @@ class GroupedDspUiTest {
         val fragment = dsp(host).childFragmentManager.findFragmentById(R.id.card_eq)
             as me.timschneeberger.rootlessjamesdsp.fragment.PreferenceGroupFragment
         val preference = fragment.findPreference<me.timschneeberger.rootlessjamesdsp.preference.EqualizerPreference>(app.getString(R.string.key_eq_bands))!!
+        assertNull(fragment.findPreference<androidx.preference.Preference>(app.getString(R.string.key_eq_filter_type)))
+        assertNull(fragment.findPreference<androidx.preference.Preference>(app.getString(R.string.key_eq_interpolation)))
         fragment.onDisplayPreferenceDialog(preference)
         val intent = shadowOf(host).nextStartedActivity
         assertEquals(me.timschneeberger.rootlessjamesdsp.activity.EqualizerActivity::class.java.name, intent.component!!.className)
@@ -215,8 +217,16 @@ class GroupedDspUiTest {
             assertFalse(app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
                 .getBoolean(app.getString(R.string.key_eq_enable), false))
             assertEquals(beforePeq, app.getSharedPreferences(Constants.PREF_GEQ, Context.MODE_PRIVATE).all)
+            val chart = next.get().findViewById<View>(R.id.layout_peq)
+            val scrollingParent = chart.parent
+            assertEquals(0, (scrollingParent as View).paddingLeft)
+            next.get().setPinned(true)
+            assertNotSame(scrollingParent, chart.parent)
+            assertEquals(value, app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
+                .getString(app.getString(R.string.key_eq_bands), ""))
             next.recreate()
             idle()
+            assertTrue(app.getSharedPreferences(Constants.PREF_APP, Context.MODE_PRIVATE).getBoolean("eq_pin_response", false))
             val reloaded = app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
                 .getString(app.getString(R.string.key_eq_bands), "")!!
             assertEquals(value, reloaded)
