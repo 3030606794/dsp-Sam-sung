@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_locate_or_duplicate_band">单击定位频段，双击复制频段</string>
+    <string name="peq_duplicate_current_band">复制当前频段</string>
+</resources>

@@ -201,17 +201,25 @@ class PeqRefinementUiTest {
         assertEquals(saved, prefs.all)
     }
 
-    @Test fun cancelBackOutsideDismissAndActivityPauseAllEndTemporaryAudition() {
+    @Test fun explicitCancelAndPauseEndAuditionWhileBackAndPassiveDismissPreserveIt() {
         val original = original()
         launch(original)
         val saved = prefs.all.toMap()
+        val cancelled = filterPicker()
+        cancelled.findViewById<View>(R.id.peq_filter_monitor)!!.performClick()
+        choose(cancelled, PeqFilterType.NOTCH)
+        assertNotNull(PeqPreviewSession.current())
+        cancelled.findViewById<View>(R.id.peq_filter_cancel)!!.performClick()
+        idle()
+        assertNull(PeqPreviewSession.current())
+        assertEquals(saved, prefs.all)
         val exits: List<(AlertDialog) -> Unit> = listOf(
-            { it.findViewById<View>(R.id.peq_filter_cancel)!!.performClick() },
             {
                 it.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK))
                 it.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK))
             },
-            { it.cancel() }
+            { it.cancel() },
+            { it.dismiss() }
         )
         for (exit in exits) {
             val picker = filterPicker()
@@ -221,9 +229,16 @@ class PeqRefinementUiTest {
             exit(picker)
             idle()
             assertFalse(picker.isShowing)
-            assertNull(PeqPreviewSession.current())
+            assertEquals(withType(original, PeqFilterType.NOTCH), PeqPreviewSession.current())
             assertEquals(saved, prefs.all)
             assertEquals(original, fragment().editorState)
+            val reopened = filterPicker()
+            assertTrue(reopened.findViewById<View>(R.id.peq_filter_monitor)!!.isSelected)
+            assertEquals(PeqFilterType.NOTCH, reopened.findViewById<PeqFilterSelector>(R.id.peq_filter_types)!!.selectedType)
+            reopened.findViewById<View>(R.id.peq_filter_cancel)!!.performClick()
+            idle()
+            assertNull(PeqPreviewSession.current())
+            assertEquals(saved, prefs.all)
         }
         val paused = filterPicker()
         paused.findViewById<View>(R.id.peq_filter_monitor)!!.performClick()

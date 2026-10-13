@@ -34,7 +34,8 @@ object PeqFilterTypeDialog {
         isLocked: (() -> Boolean)? = null,
         canToggleLock: () -> Boolean = { true },
         canEdit: () -> Boolean = { true },
-        onToggleLock: () -> Unit = {}
+        onToggleLock: () -> Unit = {},
+        onCancel: () -> Unit = {}
     ): AlertDialog {
         val root = LayoutInflater.from(context).inflate(R.layout.peq_filter_type_dialog, null)
         root.findViewById<TextView>(R.id.peq_filter_dialog_title).apply {
@@ -120,7 +121,10 @@ object PeqFilterTypeDialog {
                 flags = flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
             }
         }
-        root.findViewById<View>(R.id.peq_filter_cancel).setOnClickListener { dialog.dismiss() }
+        root.findViewById<View>(R.id.peq_filter_cancel).setOnClickListener {
+            onCancel()
+            dialog.dismiss()
+        }
         lock.setOnClickListener {
             if (isLocked != null && canToggleLock()) onToggleLock()
             render()

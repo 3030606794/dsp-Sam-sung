@@ -35,7 +35,13 @@ class PeqBandLockStore(context: Context) {
 
     /** One update clears every field lock while preserving the master lock and all other state. */
     fun unlockAllFields(id: String) {
+        unlockAll(id, includeBand = false)
+    }
+
+    /** Publish the final master/field state together so a double tap never unlocks in stages. */
+    fun unlockAll(id: String, includeBand: Boolean) {
         preferences.edit().apply {
+            if (includeBand) putBoolean("$id.band", false)
             PeqEditField.entries.forEach { putBoolean("$id.${it.name}", false) }
         }.apply()
     }

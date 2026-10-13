@@ -239,7 +239,7 @@ class PeqFilterHandoffUiTest {
         assertCardDraft(row(), PeqFilterType.BAND_PASS, listening = false)
     }
 
-    @Test fun cancellingOrDismissingAPopupAlsoCancelsTheInheritedCardAudition() {
+    @Test fun explicitCancelClearsTheSharedAuditionWhilePassiveDismissKeepsItAvailable() {
         val original = launch()
         val before = prefs.all.toMap()
         val card = inlineType(PeqFilterType.LOW_PASS)
@@ -256,8 +256,19 @@ class PeqFilterHandoffUiTest {
         assertEquals(original.bands.first().type, picker.findViewById<PeqFilterSelector>(R.id.peq_filter_types)!!.selectedType)
         choose(picker, PeqFilterType.HIGH_PASS)
         click(picker, R.id.peq_filter_monitor)
+        val owner = requireNotNull(sessionOwner())
         picker.cancel()
         idle()
+        assertFalse(picker.isShowing)
+        assertSame(owner, sessionOwner())
+        assertPreview(withType(original, PeqFilterType.HIGH_PASS), listening = true)
+        assertCardDraft(row(), PeqFilterType.HIGH_PASS, listening = true)
+        assertSaved(original)
+        assertEquals(before, prefs.all)
+        picker = popup()
+        assertSame(owner, sessionOwner())
+        assertTrue(picker.findViewById<View>(R.id.peq_filter_monitor)!!.isSelected)
+        click(picker, R.id.peq_filter_cancel)
         assertCleared(original)
         assertCardDraft(row(), original.bands.first().type, listening = false)
         assertEquals(before, prefs.all)

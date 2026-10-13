@@ -38,6 +38,7 @@ class PeqBandAdapter(
     private val onStartDrag: (RecyclerView.ViewHolder) -> Unit = {},
     private val onDelete: (String) -> Unit = {},
     private val onInlineFilterAction: (String, PeqInlineFilterAction) -> Unit = { _, _ -> },
+    private val onDuplicate: (String) -> Unit = {},
 ) : RecyclerView.Adapter<PeqBandAdapter.Holder>() {
     private var state = PeqState(emptyList())
     private var editing = false
@@ -46,12 +47,25 @@ class PeqBandAdapter(
     private var nextItemId = 0L
     private val attachedHolders = mutableSetOf<Holder>()
     private var allowLockedBandReorder = false
+    private var doubleTapUnlocksBand = true
+    private var showCardFilterIcons = false
     private var showInlineFilters = false
     private var inlineDraft: PeqInlineFilterDraft? = null
 
     init { setHasStableIds(true) }
 
     fun cancelPendingRepeats() = attachedHolders.forEach { it.cancelRepeats() }
+
+    fun submitGestureSettings(doubleTapUnlocksBand: Boolean) {
+        this.doubleTapUnlocksBand = doubleTapUnlocksBand
+    }
+
+    /** The optional icons only change the inline strip's presentation, never its draft. */
+    fun submitCardFilterIcons(show: Boolean) {
+        if (showCardFilterIcons == show) return
+        showCardFilterIcons = show
+        attachedHolders.toList().forEach { it.renderInline() }
+    }
 
     /** Apply this display policy without rebinding sliders or interrupting their gestures. */
     fun submitReorderPolicy(allowLocked: Boolean) {
@@ -182,11 +196,17 @@ class PeqBandAdapter(
         private val locks = PeqBandLockStore(binding.root.context)
         private var boundId: String? = null
         private val lockGestures = PeqBandLockGestures(binding.peqBandLock,
-            onSingle = ::toggleBandLock, onDouble = ::unlockFieldLocks)
+            onSingle = ::toggleBandLock, onDouble = ::unlockFieldLocks,
+            doubleTapActionLabel = binding.root.context.getString(R.string.peq_unlock_band))
+        private val locateGestures = PeqBandLockGestures(binding.peqBandLocate,
+            onSingle = { lockTarget()?.let(onLocate) },
+            onDouble = { lockTarget()?.takeIf { canEdit(it) }?.let(onDuplicate) },
+            doubleTapActionLabel = binding.root.context.getString(R.string.peq_duplicate_current_band))
 
         fun cancelRepeats() {
             repeaters.forEach { it.cancel() }
             lockGestures.cancel()
+            locateGestures.cancel()
         }
         fun stopInline() { boundId?.let(::invalidateInlineDraft) }
 
@@ -204,10 +224,13 @@ class PeqBandAdapter(
         private fun unlockFieldLocks() {
             val id = lockTarget() ?: return
             cancelRepeats()
-            locks.unlockAllFields(id)
+            locks.unlockAll(id, includeBand = doubleTapUnlocksBand)
             renderControlState()
-            Toast.makeText(binding.root.context, if (locks.isBandLocked(id))
-                R.string.peq_all_field_locks_unlocked_band_locked else R.string.peq_all_field_locks_unlocked,
+            Toast.makeText(binding.root.context, when {
+                doubleTapUnlocksBand -> R.string.peq_all_band_locks_unlocked
+                locks.isBandLocked(id) -> R.string.peq_all_field_locks_unlocked_band_locked
+                else -> R.string.peq_all_field_locks_unlocked
+            },
                 Toast.LENGTH_SHORT).show()
         }
 
@@ -218,6 +241,7 @@ class PeqBandAdapter(
             if ((!showInlineFilters || !editable) && inlineDraft?.bandId == id) invalidateInlineDraft(id)
             val draft = inlineDraft?.takeIf { it.bandId == id }
             binding.peqInlineFilter.isVisible = showInlineFilters
+            binding.peqInlineFilter.showFilterIcons = showCardFilterIcons
             binding.peqInlineFilter.bind(band.type, draft?.type, draft?.monitoring == true,
                 editable, locks.isFieldLocked(id, PeqEditField.FILTER_TYPE), !editing && !locks.isBandLocked(id))
         }
@@ -385,7 +409,6 @@ class PeqBandAdapter(
             }
             bindSelection(band.id)
             bindRank(band, index)
-            binding.peqBandLocate.setOnClickListener { if (!selectInstead(band.id)) onLocate(band.id) }
             binding.peqBandWarning.setOnClickListener {
                 if (!selectInstead(band.id)) Toast.makeText(context, R.string.peq_frequency_unset_warning, Toast.LENGTH_LONG).show()
             }

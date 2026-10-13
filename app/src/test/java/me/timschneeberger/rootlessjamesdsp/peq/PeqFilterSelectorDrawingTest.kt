@@ -5,10 +5,12 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
 import android.content.Context
 import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.view.ContextThemeWrapper
@@ -24,6 +26,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import kotlin.math.abs
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class, qualifiers = "w320dp-h720dp-port-mdpi")
@@ -74,6 +77,88 @@ class PeqFilterSelectorDrawingTest {
                         (x - 1..x).any { bitmap.getPixel(it, 3) != Color.MAGENTA })
                 }
             } finally { bitmap.recycle() }
+        }
+    }
+
+    @Test fun optionalInlineIconsRenderBelowAllSevenLabelsAtBothPhoneWidths() {
+        val context = ContextThemeWrapper(RuntimeEnvironment.getApplication(), R.style.Theme_RootlessJamesDSP)
+        val band = PeqBand("footer-raster", frequency = 12345.0, gain = 7.5, q = 2.5,
+            qualityDisplay = PeqQualityDisplay.BW)
+        val preferences = context.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE)
+        preferences.edit().clear().commit()
+        PeqBandLockStore(context).setBandLocked(band.id, false)
+        val adapter = PeqBandAdapter(onBandChanged = { true }, onEdit = {})
+        adapter.submitState(PeqState(listOf(band), showQSlider = true, showFrequencySlider = true))
+        adapter.submitInlineFilter(true)
+        val holder = adapter.onCreateViewHolder(FrameLayout(context), 0)
+        adapter.onBindViewHolder(holder, 0)
+        adapter.onViewAttachedToWindow(holder)
+        val card = holder.itemView as ViewGroup
+        val inline = card.findViewById<PeqInlineFilterRow>(R.id.peq_inline_filter)
+        fun rectangle(view: View) = Rect().also {
+            view.getDrawingRect(it)
+            card.offsetDescendantRectToMyCoords(view, it)
+        }
+        fun visibleAgainstBackground(pixel: Int, background: Int): Boolean = Color.alpha(pixel) > 100 &&
+            abs(Color.red(pixel) - Color.red(background)) + abs(Color.green(pixel) - Color.green(background)) +
+                abs(Color.blue(pixel) - Color.blue(background)) >= 75
+        try {
+            for (width in listOf(320, 411)) {
+                var textOnlyCardHeight = 0
+                for (icons in listOf(false, true)) {
+                    adapter.submitCardFilterIcons(icons)
+                    measure(card, width)
+                    assertEquals("Only the footer grows when curves are shown", if (icons) 56 else 40, inline.height)
+                    assertEquals(40, card.findViewById<View>(R.id.peq_band_header).height)
+                    if (icons) assertEquals(textOnlyCardHeight + 16, card.height)
+                    else textOnlyCardHeight = card.height
+                    assertEquals(card.height, rectangle(inline).bottom)
+                    val bitmap = Bitmap.createBitmap(card.width, card.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        bitmap.eraseColor(MaterialColors.getColor(card, com.google.android.material.R.attr.colorSurface))
+                        card.draw(Canvas(bitmap))
+                        writeRaster(bitmap, "compact-card-footer-${if (icons) "icons" else "text"}-$width")
+                        val footerBounds = rectangle(inline)
+                        val choices = card.findViewById<ViewGroup>(R.id.peq_inline_choices)
+                        for (index in 0 until choices.childCount) {
+                            val cellBounds = rectangle(choices.getChildAt(index))
+                            assertTrue("Inline cell $index must fit entirely inside its footer: $cellBounds in $footerBounds",
+                                footerBounds.contains(cellBounds))
+                        }
+                        PeqFilterType.entries.forEach { type ->
+                            val label = card.findViewById<TextView>(PeqFilterTypeDialog.buttonId(type))
+                            val area = rectangle(label)
+                            assertTrue("The entire $type label fits its own equal-width cell at $width dp",
+                                label.paint.measureText(label.text.toString()) <= label.width)
+                            // Thin Chinese glyphs are mostly antialiased rather than the exact
+                            // text color. Measure visible contrast with this cell's actual fill.
+                            val background = bitmap.getPixel(area.left + 3, area.top + 3)
+                            val inkRows = (3 until area.height() - 3).filter { y ->
+                                (area.left + 3 until area.right - 3).any { x ->
+                                    visibleAgainstBackground(bitmap.getPixel(x, area.top + y), background)
+                                }
+                            }
+                            assertTrue("$type label has visible rendered pixels", inkRows.isNotEmpty())
+                            if (icons) {
+                                assertTrue("$type has actual curve pixels below its label at $width dp",
+                                    inkRows.count { it >= area.height() / 2 + 1 } >= 3)
+                                assertTrue("$type text remains above its curve at $width dp",
+                                    inkRows.count { it < area.height() / 2 - 1 } >= 3)
+                                assertTrue("$type label and curve do not overlap at $width dp",
+                                    (area.height() / 2 - 6..area.height() / 2 + 6).any { gap ->
+                                        gap !in inkRows && inkRows.any { it < gap } && inkRows.any { it > gap }
+                                    })
+                            } else {
+                                assertTrue("Text-only mode leaves no stale icon at the bottom of $type",
+                                    inkRows.none { it >= area.height() - 7 })
+                            }
+                        }
+                    } finally { bitmap.recycle() }
+                }
+            }
+        } finally {
+            adapter.onViewDetachedFromWindow(holder)
+            preferences.edit().clear().commit()
         }
     }
 

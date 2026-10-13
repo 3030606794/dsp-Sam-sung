@@ -13,6 +13,7 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.appcompat.content.res.AppCompatResources
 import com.google.android.material.color.MaterialColors
 import me.timschneeberger.rootlessjamesdsp.R
 import kotlin.math.roundToInt
@@ -32,6 +33,23 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
     LinearLayout(context, attrs) {
     var onAction: ((PeqInlineFilterAction) -> Unit)? = null
     var onToggleLock: (() -> Unit)? = null
+    var showFilterIcons: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            types.forEach { (type, cell) ->
+                val icon = if (value) AppCompatResources.getDrawable(context, iconId(type))?.mutate()?.apply {
+                    setBounds(0, 0, dp(22), dp(16))
+                } else null
+                cell.setCompoundDrawables(null, null, null, icon)
+                cell.compoundDrawablePadding = if (value) dp(3) else 0
+                cell.compoundDrawableTintList = cell.textColors
+            }
+            for (index in 0 until choices.childCount) {
+                val child = choices.getChildAt(index)
+                child.layoutParams = child.layoutParams.apply { height = dp(if (value) 56 else 40) }
+            }
+        }
     private var editable = false
     private var lockEditable = false
     private var listening = false
@@ -54,7 +72,14 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
                 canvas.drawLine(x, 0f, x, height.toFloat(), paint)
             }
         }
-    }.apply { id = R.id.peq_inline_choices; orientation = HORIZONTAL }
+    }.apply {
+        id = R.id.peq_inline_choices
+        orientation = HORIZONTAL
+        // Text-only actions and text-plus-curve choices have different baselines.
+        // Align their complete cells so no compound drawable is pushed below the row.
+        isBaselineAligned = false
+        gravity = Gravity.CENTER_VERTICAL
+    }
     private val monitor = textCell(context.getString(R.string.peq_inline_monitor), R.id.peq_inline_monitor)
     private val lock = ImageView(context).apply {
         id = R.id.peq_inline_lock
@@ -105,7 +130,9 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
                 pending && monitoring -> green
                 else -> Color.TRANSPARENT
             })
-            cell.setTextColor(when { saved -> purpleText; pending && monitoring -> Color.WHITE; else -> normalText })
+            val foreground = when { saved -> purpleText; pending && monitoring -> Color.WHITE; else -> normalText }
+            cell.setTextColor(foreground)
+            cell.compoundDrawableTintList = ColorStateList.valueOf(foreground)
         }
         monitor.isEnabled = canEdit
         monitor.isSelected = monitoring
@@ -142,4 +169,14 @@ class PeqInlineFilterRow @JvmOverloads constructor(context: Context, attrs: Attr
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
+
+    private fun iconId(type: PeqFilterType): Int = when (type) {
+        PeqFilterType.PEAK -> R.drawable.ic_peq_filter_peak
+        PeqFilterType.LOW_SHELF -> R.drawable.ic_peq_filter_low_shelf
+        PeqFilterType.HIGH_SHELF -> R.drawable.ic_peq_filter_high_shelf
+        PeqFilterType.LOW_PASS -> R.drawable.ic_peq_filter_low_pass
+        PeqFilterType.HIGH_PASS -> R.drawable.ic_peq_filter_high_pass
+        PeqFilterType.NOTCH -> R.drawable.ic_peq_filter_notch
+        PeqFilterType.BAND_PASS -> R.drawable.ic_peq_filter_band_pass
+    }
 }

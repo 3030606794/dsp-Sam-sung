@@ -2,6 +2,8 @@
 <resources>
     <string name="peq_confirm_delete">删除频段前确认</string>
     <string name="peq_allow_locked_band_reorder">锁住频段后可移动卡片</string>
+    <string name="peq_double_tap_unlocks_band">双击总锁同时解锁大锁和小锁</string>
+    <string name="peq_show_card_filter_icons">频段卡片滤波器图标</string>
     <string name="peq_marker_duration">图形标记显示时长（秒）</string>
     <string name="peq_marker_duration_forever">永久</string>
     <string name="peq_invalid_marker_duration">请输入 0（永久）或 2–10 秒</string>

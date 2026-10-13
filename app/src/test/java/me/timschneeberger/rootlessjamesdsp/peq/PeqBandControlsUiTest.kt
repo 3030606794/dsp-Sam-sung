@@ -539,7 +539,7 @@ class PeqBandControlsUiTest {
         adapter.submitState(state)
         val current = row()
         val button = current.findViewById<MaterialButton>(R.id.peq_band_locate)
-        assertEquals("定位频段", button.contentDescription.toString())
+        assertEquals("单击定位频段，双击复制频段", button.contentDescription.toString())
         assertTrue(button.text.isEmpty())
         assertNotNull(button.icon)
         assertSame(current.findViewById<View>(R.id.peq_band_header), button.parent)

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_copied_band_numbers">已复制第%1$d段为第%2$d段</string>
+    <string name="peq_copy_limit">最多可保留 %1$d 个频段</string>
+</resources>

@@ -12,14 +12,15 @@ import androidx.core.view.ViewCompat
 import me.timschneeberger.rootlessjamesdsp.R
 import kotlin.math.abs
 
-/** Defers touch singles so a double tap never toggles the master lock first. */
+/** Confirms singles after the double-tap window; doubles act on the second down event. */
 class PeqBandLockGestures(
     private val button: View,
     private val onSingle: () -> Unit,
     private val onDouble: () -> Unit,
+    private val doubleTapActionLabel: String = button.context.getString(R.string.peq_unlock_all_field_locks),
 ) {
     private var acceptingGesture = false
-    private var doubleTap = false
+    private var pendingDoubleAction = false
     private var downX = 0f
     private var downY = 0f
     private val slop = ViewConfiguration.get(button.context).scaledTouchSlop
@@ -32,15 +33,10 @@ class PeqBandLockGestures(
         }
 
         override fun onDoubleTap(event: MotionEvent): Boolean {
-            doubleTap = acceptingGesture && button.isEnabled
-            return true
-        }
-
-        override fun onDoubleTapEvent(event: MotionEvent): Boolean {
-            if (event.actionMasked == MotionEvent.ACTION_UP && doubleTap && acceptingGesture && button.isEnabled) {
-                cancel()
-                onDouble()
-            }
+            // GestureDetector dispatches this while handling the second ACTION_DOWN.
+            // Run the callback just after its dispatch returns so callback-driven
+            // recycling/cancellation cannot re-enter the detector mid-dispatch.
+            pendingDoubleAction = acceptingGesture && button.isEnabled
             return true
         }
     }, Handler(Looper.getMainLooper())).apply { setIsLongpressEnabled(false) }
@@ -60,9 +56,10 @@ class PeqBandLockGestures(
             } else {
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                     acceptingGesture = true
-                    doubleTap = false
+                    pendingDoubleAction = false
                     downX = event.x
                     downY = event.y
+                    button.drawableHotspotChanged(event.x, event.y)
                     button.isPressed = true
                 }
                 when {
@@ -71,11 +68,18 @@ class PeqBandLockGestures(
                         (abs(event.x - downX) > slop || abs(event.y - downY) > slop) -> cancel()
                     acceptingGesture -> detector.onTouchEvent(event)
                 }
+                if (pendingDoubleAction) {
+                    cancel()
+                    onDouble()
+                    // Keep immediate pressed feedback until this second touch ends,
+                    // even if the callback refreshed the icon and cancelled gestures.
+                    button.isPressed = button.isAttachedToWindow && button.isEnabled
+                }
                 if (event.actionMasked == MotionEvent.ACTION_UP) button.isPressed = false
                 true
             }
         }
-        ViewCompat.addAccessibilityAction(button, button.context.getString(R.string.peq_unlock_all_field_locks)) { _, _ ->
+        ViewCompat.addAccessibilityAction(button, doubleTapActionLabel) { _, _ ->
             cancel()
             if (button.isEnabled) { onDouble(); true } else false
         }
@@ -88,7 +92,7 @@ class PeqBandLockGestures(
     /** Discards delayed confirmation before recycling, rebinding, selection mode or leaving the page. */
     fun cancel() {
         acceptingGesture = false
-        doubleTap = false
+        pendingDoubleAction = false
         button.isPressed = false
         val now = SystemClock.uptimeMillis()
         val event = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)

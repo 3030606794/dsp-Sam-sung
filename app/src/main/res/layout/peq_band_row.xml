@@ -31,10 +31,9 @@
             <androidx.constraintlayout.widget.Guideline android:id="@+id/peq_header_edge_8"
                 android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical"
                 app:layout_constraintGuide_percent="0.888888889" />
-            <TextView android:id="@+id/peq_band_number" android:layout_width="0dp"
+            <me.timschneeberger.rootlessjamesdsp.peq.PeqBandNumberView android:id="@+id/peq_band_number" android:layout_width="0dp"
                 android:layout_height="0dp" android:gravity="center" android:textSize="14sp" android:textStyle="bold"
-                android:includeFontPadding="false" android:drawableBottom="@drawable/peq_band_number_settings"
-                android:drawablePadding="-1dp" android:drawableTint="?attr/colorOnSecondaryContainer"
+                android:includeFontPadding="false"
                 android:background="@drawable/peq_band_number_background" android:textColor="?attr/colorOnSecondaryContainer"
                 android:clickable="true" android:focusable="true" android:contentDescription="@string/peq_edit_band"
                 app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="@id/peq_header_edge_1"
@@ -83,8 +82,8 @@
                 style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp"
                 android:layout_height="0dp" android:minWidth="0dp" android:minHeight="0dp" android:padding="4dp"
                 android:insetTop="0dp" android:insetBottom="0dp" app:backgroundTint="@android:color/transparent"
-                android:contentDescription="@string/peq_locate_band" android:tooltipText="@string/peq_locate_band"
-                app:icon="@drawable/ic_peq_locate_24" app:iconPadding="0dp" app:iconSize="20dp" app:iconGravity="textStart"
+                android:contentDescription="@string/peq_locate_or_duplicate_band" android:tooltipText="@string/peq_locate_or_duplicate_band"
+                app:icon="@drawable/ic_baseline_add_24dp" app:iconPadding="0dp" app:iconSize="20dp" app:iconGravity="textStart"
                 app:layout_constraintStart_toStartOf="@id/peq_header_edge_6" app:layout_constraintEnd_toEndOf="@id/peq_header_edge_7"
                 app:layout_constraintTop_toTopOf="parent" app:layout_constraintBottom_toBottomOf="parent" />
             <TextView android:id="@+id/peq_band_new" android:layout_width="0dp"

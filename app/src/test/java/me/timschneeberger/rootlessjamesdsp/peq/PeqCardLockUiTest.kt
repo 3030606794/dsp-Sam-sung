@@ -151,16 +151,36 @@ class PeqCardLockUiTest {
         assertTrue(locks.isBandLocked("a"))
     }
 
-    @Test fun physicalDoubleTapUnlocksAllFieldsButKeepsTheLockedMasterAndOtherCardUntouched() {
+    @Test fun physicalDoubleTapUnlocksTheMasterAndAllFieldsByDefaultWithoutTouchingOtherCards() {
         launch(masterLocked = true, fieldLocks = true)
         val otherBefore = lockPrefs.all.filterKeys { it.startsWith("b.") }
         val card = row()
         doubleTap(card.findViewById(R.id.peq_band_lock))
         awaitConfirmation()
-        assertTrue(locks.isBandLocked("a"))
+        assertFalse(locks.isBandLocked("a"))
         assertTrue(locks.isNew("a"))
         assertTrue(fieldState("a").values.none { it })
         assertEquals(otherBefore, lockPrefs.all.filterKeys { it.startsWith("b.") })
+        assertTrue(card.findViewById<View>(R.id.peq_band_slider).isEnabled)
+        assertTrue(card.findViewById<View>(R.id.peq_band_title).isEnabled)
+        assertEquals(Color.GRAY, card.findViewById<MaterialButton>(R.id.peq_band_lock).iconTint!!.defaultColor)
+        assertEquals(app.getString(R.string.peq_all_band_locks_unlocked), ShadowToast.getTextOfLatestToast())
+        assertAudioAndParametersUnchanged()
+    }
+
+    @Test fun disablingTheMasterUnlockPreferenceMakesDoubleTapClearOnlyIndependentLocks() {
+        assertTrue(PeqEditorPreferences(app).save(PeqEditorSettings(doubleTapUnlocksBand = false)))
+        launch(masterLocked = true, fieldLocks = true)
+        val before = lockPrefs.all.toMap()
+        val card = row()
+        doubleTap(card.findViewById(R.id.peq_band_lock))
+        awaitConfirmation()
+        assertTrue(locks.isBandLocked("a"))
+        assertTrue(locks.isNew("a"))
+        val expected = before.toMutableMap().apply {
+            PeqEditField.entries.forEach { put("a.${it.name}", false) }
+        }
+        assertEquals(expected, lockPrefs.all)
         assertFalse(card.findViewById<View>(R.id.peq_band_slider).isEnabled)
         assertFalse(card.findViewById<View>(R.id.peq_band_title).isEnabled)
         assertEquals(Color.rgb(211, 47, 47), card.findViewById<MaterialButton>(R.id.peq_band_lock).iconTint!!.defaultColor)
@@ -185,7 +205,7 @@ class PeqCardLockUiTest {
         }
         assertEquals(Color.GRAY, card.findViewById<MaterialButton>(R.id.peq_band_lock).iconTint!!.defaultColor)
         assertEquals(Color.GRAY, card.findViewById<MaterialButton>(R.id.peq_band_power).iconTint!!.defaultColor)
-        assertEquals(app.getString(R.string.peq_all_field_locks_unlocked), ShadowToast.getTextOfLatestToast())
+        assertEquals(app.getString(R.string.peq_all_band_locks_unlocked), ShadowToast.getTextOfLatestToast())
         assertAudioAndParametersUnchanged()
     }
 

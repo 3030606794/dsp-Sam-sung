@@ -120,6 +120,9 @@
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_inline_filters"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_show_inline_filters" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_show_card_filter_icons"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_show_card_filter_icons" />
         <TextView android:id="@+id/peq_marker_duration_label" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="8dp" android:labelFor="@id/peq_marker_duration"
             android:text="@string/peq_marker_duration" android:textAppearance="?attr/textAppearanceBodyMedium" />
@@ -183,5 +186,8 @@
         <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_allow_locked_band_reorder"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:text="@string/peq_allow_locked_band_reorder" />
+        <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/peq_double_tap_unlocks_band"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:text="@string/peq_double_tap_unlocks_band" />
     </LinearLayout>
 </ScrollView>

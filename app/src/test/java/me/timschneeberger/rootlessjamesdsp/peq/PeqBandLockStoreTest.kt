@@ -114,4 +114,26 @@ class PeqBandLockStoreTest {
         locks.unlockAllFields("band")
         assertEquals(expected, prefs.all)
     }
+
+    @Test fun unlockingMasterAndFieldsPublishesOneCompleteUnlockedStateToObservers() {
+        val locks = PeqBandLockStore(app)
+        locks.markNew("target")
+        locks.setBandLocked("target", true)
+        PeqEditField.entries.forEach { locks.setFieldLocked("target", it, true) }
+        locks.setBandLocked("other", true)
+        val observed = mutableListOf<Boolean>()
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            observed += !locks.isBandLocked("target") && PeqEditField.entries.none { locks.isFieldLocked("target", it) }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        try {
+            locks.unlockAll("target", includeBand = true)
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            assertTrue(observed.isNotEmpty())
+            assertTrue(observed.all { it })
+            assertFalse(PeqBandLockStore(app).isBandLocked("target"))
+            assertTrue(locks.isNew("target"))
+            assertTrue(locks.isBandLocked("other"))
+        } finally { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 }

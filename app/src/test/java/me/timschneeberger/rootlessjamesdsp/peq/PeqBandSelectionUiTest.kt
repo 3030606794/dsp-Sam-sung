@@ -46,6 +46,7 @@ class PeqBandSelectionUiTest {
     private val fields = mutableListOf<PeqEditField>()
     private val changes = mutableListOf<PeqBand>()
     private val deleted = mutableListOf<String>()
+    private val inlineActions = mutableListOf<Pair<String, PeqInlineFilterAction>>()
     private val draggedHolders = mutableListOf<RecyclerView.ViewHolder>()
     private val list get() = controller!!.get().list
 
@@ -67,7 +68,7 @@ class PeqBandSelectionUiTest {
         }, onEdit = { edits += it }, onLocate = { locations += it },
             onEditField = { _, field -> fields += field }, onEditType = { types += it },
             onToggleSelection = { selectedClicks += it }, onStartDrag = { draggedHolders += it },
-            onDelete = { deleted += it })
+            onDelete = { deleted += it }, onInlineFilterAction = { id, action -> inlineActions += id to action })
         list.adapter = adapter
         adapter.submitState(state)
         layout()
@@ -110,7 +111,7 @@ class PeqBandSelectionUiTest {
         val rectangle = bounds(card, id)
         assertFalse("Control must have a hit area: $id", rectangle.isEmpty)
         tap(card, rectangle.exactCenterX(), rectangle.exactCenterY())
-        if (id == R.id.peq_band_lock) {
+        if (id == R.id.peq_band_lock || id == R.id.peq_band_locate) {
             // These callers request a single tap; actual double-tap sequences have separate coverage.
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ViewConfiguration.getDoubleTapTimeout().toLong() + 1))
         }
@@ -187,6 +188,46 @@ class PeqBandSelectionUiTest {
         tap(card, R.id.peq_frequency_value)
         assertEquals(listOf(PeqEditField.GAIN, PeqEditField.QUALITY, PeqEditField.FREQUENCY), fields)
         assertTrue(changes.isEmpty())
+    }
+
+    @Test fun optionalFilterIconsKeepEachCellTappableWithoutChangingTheActiveDraftOrCardParameters() {
+        launch(PeqState(listOf(PeqBand("icons", type = PeqFilterType.PEAK))))
+        val original = state
+        val draft = PeqInlineFilterDraft("icons", PeqFilterType.HIGH_PASS, monitoring = true)
+        adapter.submitInlineFilter(true, draft)
+        for (width in listOf(320, 411)) {
+            adapter.submitCardFilterIcons(false)
+            layout(width)
+            val card = list.findViewHolderForAdapterPosition(0)!!.itemView as MaterialCardView
+            val originalHeight = card.height
+            PeqFilterType.entries.forEach { type ->
+                assertNull(card.findViewById<TextView>(PeqFilterTypeDialog.buttonId(type)).compoundDrawables[3])
+            }
+            inlineActions.clear()
+            adapter.submitCardFilterIcons(true)
+            layout(width)
+            assertTrue("Icons get their own space below the unchanged text", card.height > originalHeight)
+            assertTrue(inlineActions.isEmpty())
+            PeqFilterType.entries.forEach { type ->
+                val id = PeqFilterTypeDialog.buttonId(type)
+                val label = card.findViewById<TextView>(id)
+                assertNotNull(label.compoundDrawables[3])
+                assertEquals(PeqBandAdapter.typeLabel(card.context, type), label.text.toString())
+                assertEquals(label.currentTextColor, label.compoundDrawableTintList!!.defaultColor)
+                val rectangle = bounds(card, id)
+                // Hit the icon's lower part instead of only testing the label's old center.
+                tap(card, rectangle.exactCenterX(), rectangle.bottom - 12 * card.resources.displayMetrics.density)
+            }
+            assertEquals(PeqFilterType.entries.map { "icons" to PeqInlineFilterAction.Select(it) }, inlineActions)
+            assertTrue(card.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.HIGH_PASS)).isSelected)
+            assertTrue(card.findViewById<View>(R.id.peq_inline_monitor).isSelected)
+            adapter.submitCardFilterIcons(false)
+            layout(width)
+            assertEquals(originalHeight, card.height)
+            assertTrue(card.findViewById<View>(R.id.peq_inline_monitor).isSelected)
+            assertEquals(PeqFilterType.entries.size, inlineActions.size)
+            assertEquals(original, state)
+        }
     }
 
     @Test fun restoredUnitsAndSignedGainExtremesFitExistingSlotsWithoutMovingControls() {
@@ -361,8 +402,8 @@ class PeqBandSelectionUiTest {
         val original = state
         assertTrue(card.findViewById<View>(R.id.peq_band_number).isEnabled)
         val badge = card.findViewById<TextView>(R.id.peq_band_number)
-        assertNotNull(badge.compoundDrawables[3])
-        assertEquals(12f, badge.compoundDrawables[3].intrinsicHeight / badge.resources.displayMetrics.density, 1f)
+        assertTrue("The compact badge keeps the original TextView number and hit target", badge is PeqBandNumberView)
+        assertEquals("1", badge.text.toString())
         tap(card, R.id.peq_band_number)
         assertEquals(listOf("inspect"), edits)
         assertTrue(locks.isNew("inspect"))

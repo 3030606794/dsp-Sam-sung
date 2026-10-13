@@ -10,4 +10,5 @@
     <string name="peq_unlock_all_field_locks">解锁当前频段全部小锁</string>
     <string name="peq_all_field_locks_unlocked">已解锁全部小锁</string>
     <string name="peq_all_field_locks_unlocked_band_locked">已解锁全部小锁，整卡仍锁定</string>
+    <string name="peq_all_band_locks_unlocked">已解锁总锁和全部小锁</string>
 </resources>

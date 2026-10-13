@@ -44,7 +44,8 @@ class PeqDisplaySettingsTest {
         val custom = PeqEditorSettings(confirmDelete = true, markerDurationSeconds = 0, markerTextSizeSp = 20,
             showMarkerFrequency = false, showMarkerGain = true, showMarkerQuality = false, showMarkerFilterType = false,
             showMarkerBandNumber = true, showInlineFilters = true, showMarkerPreviewStatus = false,
-            showMarkerGuides = false, allowLockedBandReorder = true)
+            showMarkerGuides = false, allowLockedBandReorder = true,
+            doubleTapUnlocksBand = false, showCardFilterIcons = true)
         assertTrue(prefs.save(custom))
         assertEquals(custom, PeqEditorPreferences(app).load())
         assertEquals(before, audio.all)
@@ -64,8 +65,11 @@ class PeqDisplaySettingsTest {
         ui.peqConfirmDelete.isChecked = true
         ui.peqShowMarkerGain.isChecked = false
         ui.peqShowMarkerFilterType.isChecked = false
+        ui.peqDoubleTapUnlocksBand.isChecked = false
+        ui.peqShowCardFilterIcons.isChecked = true
         assertEquals(original.copy(confirmDelete = true, markerDurationSeconds = 0, markerTextSizeSp = 8,
-            showMarkerGain = false, showMarkerFilterType = false), settings.validatedSettings())
+            showMarkerGain = false, showMarkerFilterType = false,
+            doubleTapUnlocksBand = false, showCardFilterIcons = true), settings.validatedSettings())
         assertEquals(before, stored.all)
         assertEquals(original, prefs.load())
     }

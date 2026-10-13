@@ -15,7 +15,9 @@ data class PeqEditorSettings(
     val showInlineFilters: Boolean = false,
     val showMarkerPreviewStatus: Boolean = true,
     val showMarkerGuides: Boolean = true,
-    val allowLockedBandReorder: Boolean = false
+    val allowLockedBandReorder: Boolean = false,
+    val doubleTapUnlocksBand: Boolean = true,
+    val showCardFilterIcons: Boolean = false
 ) {
     fun validate(): PeqEditorSettings {
         require(markerDurationSeconds == 0 || markerDurationSeconds in 2..10)
@@ -44,7 +46,9 @@ class PeqEditorPreferences(context: Context) {
             showInlineFilters = boolean("showInlineFilters", false),
             showMarkerPreviewStatus = boolean("showMarkerPreviewStatus", true),
             showMarkerGuides = boolean("showMarkerGuides", true),
-            allowLockedBandReorder = boolean("allowLockedBandReorder", false))
+            allowLockedBandReorder = boolean("allowLockedBandReorder", false),
+            doubleTapUnlocksBand = boolean("doubleTapUnlocksBand", true),
+            showCardFilterIcons = boolean("showCardFilterIcons", false))
     }
 
     fun save(settings: PeqEditorSettings): Boolean {
@@ -61,7 +65,9 @@ class PeqEditorPreferences(context: Context) {
             .putBoolean("showInlineFilters", settings.showInlineFilters)
             .putBoolean("showMarkerPreviewStatus", settings.showMarkerPreviewStatus)
             .putBoolean("showMarkerGuides", settings.showMarkerGuides)
-            .putBoolean("allowLockedBandReorder", settings.allowLockedBandReorder).commit()
+            .putBoolean("allowLockedBandReorder", settings.allowLockedBandReorder)
+            .putBoolean("doubleTapUnlocksBand", settings.doubleTapUnlocksBand)
+            .putBoolean("showCardFilterIcons", settings.showCardFilterIcons).commit()
     }
 
     companion object { const val PREFERENCES = "peq_editor_display" }

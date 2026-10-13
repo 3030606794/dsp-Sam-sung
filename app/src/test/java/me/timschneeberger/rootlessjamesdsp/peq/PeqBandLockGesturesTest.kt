@@ -69,11 +69,12 @@ class PeqBandLockGesturesTest {
         assertEquals(listOf("master"), actions)
     }
 
-    @Test fun physicalDoubleTapUnlocksOnlyFieldsOnceWithoutAnyMasterCallback() {
+    @Test fun physicalDoubleTapActsOnSecondDownWithoutAnySingleCallbackOrConfirmationDelay() {
         tap()
         advance(80)
         event(MotionEvent.ACTION_DOWN)
-        assertTrue(actions.isEmpty())
+        assertEquals(listOf("fields"), actions)
+        assertTrue(button.isPressed)
         advance(20)
         event(MotionEvent.ACTION_UP)
         assertEquals(listOf("fields"), actions)
@@ -112,19 +113,21 @@ class PeqBandLockGesturesTest {
         assertEquals(listOf("master"), actions)
     }
 
-    @Test fun cancellingTheSecondTouchCannotBecomeEitherSingleOrDoubleAction() {
+    @Test fun cancellingAfterSecondDownDoesNotRepeatTheAlreadyCompletedDoubleAction() {
         tap()
         advance(80)
         event(MotionEvent.ACTION_DOWN)
+        assertEquals(listOf("fields"), actions)
         event(MotionEvent.ACTION_CANCEL)
         event(MotionEvent.ACTION_UP)
         awaitConfirmation()
-        assertTrue(actions.isEmpty())
+        assertEquals(listOf("fields"), actions)
         assertFalse(button.isPressed)
     }
 
     @Test fun movingOffTheButtonCancelsItsPendingLockAction() {
         event(MotionEvent.ACTION_DOWN)
+        assertTrue("The first down has immediate visual feedback even while confirmation waits", button.isPressed)
         event(MotionEvent.ACTION_MOVE, 700f, 200f)
         event(MotionEvent.ACTION_UP, 700f, 200f)
         awaitConfirmation()
@@ -155,6 +158,23 @@ class PeqBandLockGesturesTest {
         button.isEnabled = false
         assertFalse(button.performAccessibilityAction(action.id, null))
         assertEquals(listOf("fields"), actions)
+    }
+
+    @Test fun doubleCallbackCanCancelAndDisableItsViewWithoutLeavingASecondActionPending() {
+        gestures.cancel()
+        gestures = PeqBandLockGestures(button, { actions += "single" }, {
+            actions += "double"
+            gestures.cancel()
+            button.isEnabled = false
+        }, doubleTapActionLabel = "复制当前频段")
+        tap()
+        advance(80)
+        event(MotionEvent.ACTION_DOWN)
+        assertEquals(listOf("double"), actions)
+        assertFalse(button.isPressed)
+        event(MotionEvent.ACTION_UP)
+        awaitConfirmation()
+        assertEquals(listOf("double"), actions)
     }
 
     class HostActivity : FragmentActivity() {

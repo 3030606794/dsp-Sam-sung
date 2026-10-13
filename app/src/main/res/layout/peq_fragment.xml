@@ -28,18 +28,18 @@
                         style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp" android:layout_weight="1"
                         android:layout_height="36dp" android:minHeight="0dp" android:minWidth="0dp" android:paddingHorizontal="2dp"
                         android:insetTop="0dp" android:insetBottom="0dp"
-                        android:textSize="11sp" android:text="@string/peq_add_front" android:maxLines="1" />
+                        android:textSize="14sp" android:text="@string/peq_add_front" android:maxLines="1" />
                     <com.google.android.material.button.MaterialButton android:id="@+id/peq_edit_selection"
                         style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp"
                         android:layout_weight="1" android:layout_height="36dp" android:minHeight="0dp" android:minWidth="0dp"
                         android:insetTop="0dp" android:insetBottom="0dp"
-                        android:paddingHorizontal="2dp" android:textSize="12sp" android:maxLines="1"
+                        android:paddingHorizontal="2dp" android:textSize="14sp" android:maxLines="1"
                         android:text="@string/peq_edit_selection" />
                     <com.google.android.material.button.MaterialButton android:id="@+id/peq_add_back"
                         style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp" android:layout_weight="1"
                         android:layout_height="36dp" android:minHeight="0dp" android:minWidth="0dp" android:paddingHorizontal="2dp"
                         android:insetTop="0dp" android:insetBottom="0dp"
-                        android:textSize="11sp" android:text="@string/peq_add_back" android:maxLines="1" />
+                        android:textSize="14sp" android:text="@string/peq_add_back" android:maxLines="1" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.appbar.AppBarLayout>
@@ -94,12 +94,12 @@
             style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp"
             android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp"
             android:paddingHorizontal="2dp" android:text="@string/peq_settings"
-            android:textSize="12sp" android:maxLines="1"
+            android:textSize="14sp" android:maxLines="1"
             app:icon="@drawable/ic_tune_vertical_variant_24dp" app:iconSize="18dp" app:iconPadding="2dp" app:iconGravity="textStart" />
         <com.google.android.material.button.MaterialButton android:id="@+id/peq_reset"
             style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp"
             android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp"
-            android:paddingHorizontal="2dp" android:textSize="12sp" android:maxLines="1" android:text="@string/peq_reset" />
+            android:paddingHorizontal="2dp" android:textSize="14sp" android:maxLines="1" android:text="@string/peq_reset" />
         <androidx.appcompat.widget.AppCompatImageButton android:id="@+id/peq_power"
             android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp"
             android:padding="8dp" android:scaleType="fitCenter" android:background="@android:color/transparent"
@@ -109,10 +109,10 @@
         <com.google.android.material.button.MaterialButton android:id="@+id/peq_presets"
             style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp"
             android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp"
-            android:paddingHorizontal="2dp" android:textSize="12sp" android:maxLines="1" android:text="@string/peq_presets" />
+            android:paddingHorizontal="2dp" android:textSize="14sp" android:maxLines="1" android:text="@string/peq_presets" />
         <com.google.android.material.button.MaterialButton android:id="@+id/peq_parameters"
             style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp"
             android:layout_weight="1" android:layout_height="wrap_content" android:minWidth="0dp"
-            android:paddingHorizontal="2dp" android:textSize="12sp" android:maxLines="1" android:text="@string/peq_parameters" />
+            android:paddingHorizontal="2dp" android:textSize="14sp" android:maxLines="1" android:text="@string/peq_parameters" />
     </LinearLayout>
 </LinearLayout>
