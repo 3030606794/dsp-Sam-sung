@@ -54,30 +54,20 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginHorizontal="1dp">
-            <LinearLayout
+            <androidx.fragment.app.FragmentContainerView
+                android:id="@+id/card_eq"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-                <LinearLayout
-                    android:id="@+id/group_equalizers_content"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="56dp" android:gravity="center_vertical" android:orientation="horizontal" android:paddingHorizontal="12dp">
-                        <TextView android:id="@+id/eq_tab" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="@string/fusion_eq_title" android:textAppearance="?attr/textAppearanceTitleMedium" android:singleLine="true" android:drawableTop="@drawable/ic_baseline_equalizer_24dp" android:drawablePadding="3dp" android:drawableTint="?attr/colorOnSurface" android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true" />
-                        <TextView android:id="@+id/peq_tab" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center" android:text="@string/fusion_peq_title" android:textAppearance="?attr/textAppearanceTitleMedium" android:singleLine="true" android:drawableTop="@drawable/ic_baseline_chart_timeline_variant_24dp" android:drawablePadding="3dp" android:drawableTint="?attr/colorOnSurface" android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true" />
-                        <androidx.appcompat.widget.AppCompatImageButton android:id="@+id/eq_power" android:layout_width="48dp" android:layout_height="48dp" android:padding="8dp" android:background="@android:color/transparent" android:contentDescription="@string/power_button_alt" app:srcCompat="@drawable/ic_twotone_power_settings_24dp" />
-                    </LinearLayout>
-                    <androidx.fragment.app.FragmentContainerView
-                        android:id="@+id/card_eq"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content" />
-                    <androidx.fragment.app.FragmentContainerView
-                        android:id="@+id/card_geq"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content" />
-                </LinearLayout>
-            </LinearLayout>
+                android:layout_height="wrap_content" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="1dp">
+            <androidx.fragment.app.FragmentContainerView
+                android:id="@+id/card_geq"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView

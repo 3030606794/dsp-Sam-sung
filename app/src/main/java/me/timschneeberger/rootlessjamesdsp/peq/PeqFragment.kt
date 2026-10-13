@@ -228,7 +228,12 @@ class PeqFragment : Fragment() {
             val next = editorState.copy(bands = editorState.bands.map { if (it.id == edited.id) edited else it })
             editorState = next
             render(interactingBand = edited.id)
-            if (changesOnlyPower) renderRetainedFilterPreview()
+            if (changesOnlyPower) {
+                // Power is independent of parameter locks and a retained filter draft.
+                // Keep an open fine editor synchronized even when it is entirely locked.
+                syncInlineFilterDialog()
+                renderRetainedFilterPreview()
+            }
             if (!saveQueued) {
                 saveQueued = true
                 handler.postDelayed(pendingSave, 50)
@@ -1527,9 +1532,9 @@ class PeqFragment : Fragment() {
             val mainLocked = locks.isBandLocked(id)
             val bandEnabled = editorState.bands.firstOrNull { it.id == id }?.enabled == true
             titleUi.peqBandDialogPower.apply {
-                isEnabled = !mainLocked
+                isEnabled = !editingSelection
                 isSelected = bandEnabled
-                iconTint = ColorStateList.valueOf(if (bandEnabled && !mainLocked)
+                iconTint = ColorStateList.valueOf(if (bandEnabled)
                     android.graphics.Color.rgb(46, 170, 83) else android.graphics.Color.GRAY)
                 contentDescription = getString(if (bandEnabled) R.string.peq_disable_band else R.string.peq_enable_band)
             }
@@ -1628,7 +1633,7 @@ class PeqFragment : Fragment() {
             })
         fineLockGestures += lockGestures
         titleUi.peqBandDialogPower.setOnClickListener {
-            if (fineFilterDialog !== activeDialog || locks.isBandLocked(id)) return@setOnClickListener
+            if (fineFilterDialog !== activeDialog || editingSelection) return@setOnClickListener
             val current = editorState.bands.firstOrNull { it.id == id } ?: return@setOnClickListener
             // Like the card power control, this changes only the saved bypass state.
             // Unconfirmed filter/slider edits remain a separate visual/audio draft.

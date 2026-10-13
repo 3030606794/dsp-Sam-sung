@@ -10,6 +10,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.fragment.app.FragmentActivity
 import androidx.preference.PreferenceFragmentCompat
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.card.MaterialCardView
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.fragment.DspFragment
@@ -71,10 +72,10 @@ class GroupedDspUiTest {
     private fun dsp(host: Host) = host.supportFragmentManager.findFragmentByTag("dsp") as DspFragment
     private fun snapshot() = namespaces.associateWith { app.getSharedPreferences(it, Context.MODE_PRIVATE).all.toMap() }
 
-    @Test fun tenCardsContainAllTwentyThreeIndependentEffects() {
+    @Test fun elevenCardsContainAllTwentyThreeIndependentEffects() {
         val host = launch()
         val cards = host.findViewById<LinearLayout>(R.id.card_container)
-        assertEquals(10, cards.childCount)
+        assertEquals(11, cards.childCount)
         (0 until cards.childCount).forEach { assertTrue(cards.getChildAt(it) is MaterialCardView) }
         assertEquals(25, dsp(host).childFragmentManager.fragments.size)
         val bass = host.findViewById<View>(R.id.viper_effect_bass)
@@ -82,7 +83,7 @@ class GroupedDspUiTest {
         assertSame(bass.parent, dynamicBass.parent)
         assertSame(host.findViewById<View>(R.id.viper_effect_reverb).parent,
             host.findViewById<View>(R.id.card_reverb).parent)
-        assertSame(host.findViewById<View>(R.id.card_eq).parent,
+        assertNotSame(host.findViewById<View>(R.id.card_eq).parent,
             host.findViewById<View>(R.id.card_geq).parent)
         val children = dsp(host).childFragmentManager
         assertEquals(ViperParameters.PREFS,
@@ -91,17 +92,38 @@ class GroupedDspUiTest {
             (children.findFragmentById(R.id.card_bass) as PreferenceFragmentCompat).preferenceManager.sharedPreferencesName)
     }
 
-    @Test fun everyEffectSectionIsVisibleWithoutExpandingAndSurvivesRecreation() {
+    private fun groups(host: Host) = dsp(host).childFragmentManager.fragments
+        .filterIsInstance<PreferenceFragmentCompat>().mapNotNull {
+            it.preferenceScreen?.getPreference(0) as? SwitchPreferenceGroup
+        }
+
+    private fun layout(host: Host) {
+        idle()
+        host.findViewById<View>(android.R.id.content).apply {
+            measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.EXACTLY))
+            layout(0, 0, measuredWidth, measuredHeight)
+        }
+        idle()
+    }
+
+    private fun header(host: Host, container: Int): View {
+        layout(host)
+        val fragment = dsp(host).childFragmentManager.findFragmentById(container) as PreferenceFragmentCompat
+        return requireNotNull(fragment.listView.findViewHolderForAdapterPosition(0)).itemView
+    }
+
+    @Test fun everyEffectStartsCollapsedWithoutChangingItsSavedEnableState() {
         val host = launch()
         val before = snapshot()
-        val sections = listOf(R.id.group_equalizers_content, R.id.group_bass_content,
-            R.id.group_clarity_content, R.id.group_spatial_content, R.id.group_crossfeed_content,
-            R.id.group_reverb_content, R.id.group_analog_content, R.id.group_dynamics_content,
-            R.id.group_advanced_content)
-        sections.forEach { assertEquals(View.VISIBLE, host.findViewById<View>(it).visibility) }
+        assertEquals(23, groups(host).size)
+        groups(host).forEach { group ->
+            assertFalse(group.isExpanded)
+            (0 until group.preferenceCount).forEach { assertFalse(group.getPreference(it).isVisible) }
+        }
         controller!!.recreate()
         idle()
-        sections.forEach { assertEquals(View.VISIBLE, controller!!.get().findViewById<View>(it).visibility) }
+        groups(controller!!.get()).forEach { assertFalse(it.isExpanded) }
         assertEquals(before, snapshot())
         assertEquals(25, dsp(controller!!.get()).childFragmentManager.fragments.size)
     }
@@ -133,58 +155,65 @@ class GroupedDspUiTest {
         assertEquals(25, children.fragments.size)
     }
 
-    @Test fun eqTabsOnlyChangePresentationAndPowerControlsSelectedEngine() {
+    @Test fun equalizerHeadersExpandIndependentlyAndOnlyTheirRightSwitchesEnableSound() {
         val host = launch()
-        val eqTab = host.findViewById<android.widget.TextView>(R.id.eq_tab)
-        val peqTab = host.findViewById<android.widget.TextView>(R.id.peq_tab)
-        assertEquals(app.getString(R.string.fusion_eq_title), eqTab.text.toString())
-        assertEquals(app.getString(R.string.fusion_peq_title), peqTab.text.toString())
-        assertNotNull(eqTab.compoundDrawables[1])
-        assertNotNull(peqTab.compoundDrawables[1])
         val eq = app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
         val peq = app.getSharedPreferences(Constants.PREF_GEQ, Context.MODE_PRIVATE)
         val eqKey = app.getString(R.string.key_eq_enable)
         val peqKey = app.getString(R.string.key_geq_enable)
+        val eqGroup = (dsp(host).childFragmentManager.findFragmentById(R.id.card_eq)
+            as PreferenceFragmentCompat).findPreference<SwitchPreferenceGroup>(eqKey)!!
+        val peqGroup = (dsp(host).childFragmentManager.findFragmentById(R.id.card_geq)
+            as PreferenceFragmentCompat).findPreference<SwitchPreferenceGroup>(peqKey)!!
+        assertEquals(app.getString(R.string.fusion_eq_title), eqGroup.title)
+        assertEquals(app.getString(R.string.fusion_peq_title), peqGroup.title)
         val before = snapshot()
-        host.findViewById<View>(R.id.peq_tab).performClick()
-        idle()
+        header(host, R.id.card_eq).performClick()
+        layout(host)
+        assertTrue(eqGroup.isExpanded)
+        assertFalse(peqGroup.isExpanded)
         assertEquals(before, snapshot())
-        assertEquals(View.GONE, host.findViewById<View>(R.id.card_eq).visibility)
-        assertEquals(View.VISIBLE, host.findViewById<View>(R.id.card_geq).visibility)
-        host.findViewById<View>(R.id.eq_power).performClick()
-        idle()
+        header(host, R.id.card_geq).performClick()
+        layout(host)
+        assertTrue(eqGroup.isExpanded)
+        assertTrue(peqGroup.isExpanded)
+        assertEquals(before, snapshot())
+
+        header(host, R.id.card_geq).findViewById<MaterialSwitch>(R.id.switchWidget).performClick()
+        layout(host)
         assertTrue(peq.getBoolean(peqKey, false))
         assertFalse(eq.getBoolean(eqKey, false))
-        host.findViewById<View>(R.id.eq_tab).performClick()
-        host.findViewById<View>(R.id.eq_power).performClick()
-        idle()
+        header(host, R.id.card_geq).performClick()
+        layout(host)
+        assertFalse(peqGroup.isExpanded)
         assertTrue(peq.getBoolean(peqKey, false))
+        header(host, R.id.card_eq).findViewById<MaterialSwitch>(R.id.switchWidget).performClick()
+        layout(host)
         assertTrue(eq.getBoolean(eqKey, false))
-        host.findViewById<View>(R.id.eq_power).performClick()
-        idle()
+        assertTrue(peq.getBoolean(peqKey, false))
+        assertTrue(eqGroup.isExpanded)
+        header(host, R.id.card_eq).findViewById<MaterialSwitch>(R.id.switchWidget).performClick()
+        layout(host)
         assertFalse(eq.getBoolean(eqKey, true))
         assertTrue(peq.getBoolean(peqKey, false))
-        host.findViewById<View>(R.id.peq_tab).performClick()
-        controller!!.recreate()
-        idle()
-        assertTrue(controller!!.get().findViewById<View>(R.id.peq_tab).isSelected)
-        assertTrue(controller!!.get().findViewById<View>(R.id.eq_power).isSelected)
     }
 
-    @Test fun ordinaryAndAdvancedEffectsShowParametersWithoutSecondExpansion() {
+    @Test fun ordinaryAndAdvancedHeadersOnlyChangePresentationWhenClicked() {
         val host = launch()
-        val children = dsp(host).childFragmentManager
-        val viper = children.findFragmentById(R.id.viper_effect_bass) as ViperEffectPreferenceFragment
-        assertTrue(viper.effectHeader.isExpanded)
-        viper.effectHeader.setExpanded(false)
-        assertTrue(viper.effectHeader.isExpanded)
-        val james = children.findFragmentById(R.id.card_bass) as PreferenceFragmentCompat
-        assertTrue(james.findPreference<SwitchPreferenceGroup>(app.getString(R.string.key_bass_enable))!!.isExpanded)
-        val advanced = children.findFragmentById(R.id.card_liveprog) as PreferenceFragmentCompat
-        val advancedHeader = advanced.findPreference<SwitchPreferenceGroup>(app.getString(R.string.key_liveprog_enable))!!
-        assertTrue(advancedHeader.isExpanded)
-        advancedHeader.setExpanded(false)
-        assertTrue(advancedHeader.isExpanded)
+        val before = snapshot()
+        listOf(R.id.viper_effect_bass, R.id.card_bass, R.id.card_liveprog, R.id.card_fusion_tone).forEach { id ->
+            val fragment = dsp(host).childFragmentManager.findFragmentById(id) as PreferenceFragmentCompat
+            val group = fragment.preferenceScreen.getPreference(0) as SwitchPreferenceGroup
+            assertFalse(group.isExpanded)
+            header(host, id).performClick()
+            layout(host)
+            assertTrue(group.isExpanded)
+            assertEquals(before, snapshot())
+            header(host, id).performClick()
+            layout(host)
+            assertFalse(group.isExpanded)
+            assertEquals(before, snapshot())
+        }
     }
 
     @Test fun mainPowerIconHasTransparentBackgroundAndGreenGrayStates() {

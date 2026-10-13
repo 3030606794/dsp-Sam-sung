@@ -160,9 +160,7 @@ class ViperEffectPreferenceFragment : PreferenceFragmentCompat() {
                 isIconSpaceReserved = false
             })
         }
-        if (parentFragment is me.timschneeberger.rootlessjamesdsp.fragment.DspFragment)
-            effectHeader.showInlineParameters()
-        else effectHeader.setExpanded(savedInstanceState?.getBoolean(STATE_EXPANDED, false) ?: false)
+        effectHeader.setExpanded(savedInstanceState?.getBoolean(STATE_EXPANDED, false) ?: false)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

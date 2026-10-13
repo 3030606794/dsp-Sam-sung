@@ -17,8 +17,11 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
+import androidx.preference.Preference
+import com.google.android.material.materialswitch.MaterialSwitch
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.activity.SurroundActivity
+import me.timschneeberger.rootlessjamesdsp.preference.SwitchPreferenceGroup
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
 import me.timschneeberger.rootlessjamesdsp.utils.preferences.Preferences
@@ -115,29 +118,95 @@ class SurroundUiTest {
         val controller = Robolectric.buildActivity(Host::class.java).setup().visible()
         try {
             val host = controller.get()
-            idle()
-            val power = host.findViewById<View>(R.id.surround_power)
-            power.performClick()
-            idle()
+            layoutHome(host)
+            fun power() = host.findViewById<MaterialSwitch>(R.id.switchWidget)
+            power().performClick()
+            layoutHome(host)
             assertFalse(SurroundController.enabled(app))
-            assertFalse(power.isSelected)
+            assertFalse(power().isChecked)
+            assertEquals(app.getString(R.string.surround_driver_required),
+                org.robolectric.shadows.ShadowToast.getTextOfLatestToast().toString())
+            assertFalse((host.supportFragmentManager.fragments.single() as SurroundPreferenceFragment)
+                .findPreference<SwitchPreferenceGroup>(SurroundController.ENABLED)!!.isExpanded)
             SurroundController.publishCapabilities(app, 16)
-            idle()
-            power.performClick()
-            idle()
-            assertTrue(power.isSelected)
+            layoutHome(host)
+            power().performClick()
+            layoutHome(host)
+            assertTrue(power().isChecked)
+            assertFalse((host.supportFragmentManager.fragments.single() as SurroundPreferenceFragment)
+                .findPreference<SwitchPreferenceGroup>(SurroundController.ENABLED)!!.isExpanded)
             SurroundController.publishCapabilities(app, 0)
-            idle()
-            assertFalse(power.isSelected)
-            power.performClick()
+            layoutHome(host)
+            assertFalse(power().isChecked)
+            assertEquals(app.getString(R.string.surround_power_pending), power().contentDescription.toString())
+            power().performClick()
+            layoutHome(host)
             assertFalse(SurroundController.enabled(app))
             SurroundController.select(app, 5)
             app.sendLocalBroadcast(Intent(Constants.ACTION_PRESET_LOADED))
-            idle()
-            assertTrue(host.findViewById<TextView>(R.id.surround_editor_entry).text.contains("6"))
+            layoutHome(host)
+            val fragment = host.supportFragmentManager.fragments.single() as SurroundPreferenceFragment
+            val group = fragment.findPreference<SwitchPreferenceGroup>(SurroundController.ENABLED)!!
+            assertFalse(group.isExpanded)
+            fragment.listView.findViewHolderForAdapterPosition(0)!!.itemView.performClick()
+            layoutHome(host)
+            val entry = host.findViewById<View>(R.id.surround_editor_entry)
+            assertTrue(entry.findViewById<TextView>(android.R.id.title).text.contains("6"))
+            assertNotNull(host.findViewById<View>(R.id.surround_driver_status))
             host.findViewById<View>(R.id.surround_editor_entry).performClick()
             assertEquals(SurroundActivity::class.java.name, shadowOf(host).nextStartedActivity.component?.className)
         } finally { controller.pause().stop().destroy() }
+    }
+
+    @Test fun homepageHeaderOnlyExpandsTheEditorAndRestoresExpansionWithoutChangingSound() {
+        val controller = Robolectric.buildActivity(Host::class.java).setup().visible()
+        try {
+            var host = controller.get()
+            layoutHome(host)
+            fun fragment() = host.supportFragmentManager.fragments.single() as SurroundPreferenceFragment
+            fun group() = fragment().findPreference<SwitchPreferenceGroup>(SurroundController.ENABLED)!!
+            fun header() = fragment().listView.findViewHolderForAdapterPosition(0)!!.itemView
+            val before = SurroundController.preferences(app).all.toMap()
+            val otherBefore = app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE).all.toMap()
+            assertEquals(SurroundController.PREFS, fragment().preferenceManager.sharedPreferencesName)
+            assertFalse(group().isExpanded)
+            assertFalse(group().isChecked)
+            assertNotNull(group().icon)
+            assertNotNull(header().findViewById<MaterialSwitch>(R.id.switchWidget))
+            assertFalse(group().findPreference<Preference>("surround_editor")!!.isVisible)
+            header().performClick()
+            layoutHome(host)
+            assertTrue(group().isExpanded)
+            assertTrue(group().findPreference<Preference>("surround_editor")!!.isVisible)
+            assertNotNull(host.findViewById<View>(R.id.surround_editor_entry))
+            assertEquals(before, SurroundController.preferences(app).all)
+            assertEquals(otherBefore, app.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE).all)
+            assertFalse(SurroundController.enabled(app))
+            assertNull(shadowOf(host).nextStartedActivity)
+            header().performClick()
+            layoutHome(host)
+            assertFalse(group().isExpanded)
+            assertFalse(group().findPreference<Preference>("surround_editor")!!.isVisible)
+            header().performClick()
+            layoutHome(host)
+            controller.recreate()
+            host = controller.get()
+            layoutHome(host)
+            assertTrue(group().isExpanded)
+            assertFalse(group().isChecked)
+            assertFalse(SurroundController.enabled(app))
+            assertEquals(before, SurroundController.preferences(app).all)
+        } finally { controller.pause().stop().destroy() }
+    }
+
+    private fun layoutHome(host: Host) {
+        idle()
+        val root = host.window.decorView
+        val density = host.resources.displayMetrics.density
+        root.measure(View.MeasureSpec.makeMeasureSpec((411 * density).toInt(), View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec((820 * density).toInt(), View.MeasureSpec.EXACTLY))
+        root.layout(0, 0, root.measuredWidth, root.measuredHeight)
+        idle()
     }
 
     @Test fun editorRetainsParametersAndRejectsNonFiniteInput() {

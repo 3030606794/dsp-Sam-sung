@@ -117,11 +117,11 @@ class PeqFinePowerUiTest {
         assertFalse(prefs.getBoolean(app.getString(R.string.key_geq_enable), false))
     }
 
-    private fun assertPower(editor: AlertDialog, enabled: Boolean, locked: Boolean = false) {
+    private fun assertPower(editor: AlertDialog, enabled: Boolean) {
         val button = editor.findViewById<MaterialButton>(R.id.peq_band_dialog_power)!!
-        assertEquals(!locked, button.isEnabled)
+        assertTrue(button.isEnabled)
         assertEquals(enabled, button.isSelected)
-        assertEquals(if (enabled && !locked) Color.rgb(46, 170, 83) else Color.GRAY,
+        assertEquals(if (enabled) Color.rgb(46, 170, 83) else Color.GRAY,
             button.iconTint!!.defaultColor)
         assertEquals(app.getString(if (enabled) R.string.peq_disable_band else R.string.peq_enable_band),
             button.contentDescription.toString())
@@ -129,6 +129,7 @@ class PeqFinePowerUiTest {
 
     private fun assertCardPower(enabled: Boolean) {
         val button = card().findViewById<MaterialButton>(R.id.peq_band_power)
+        assertTrue(button.isEnabled)
         assertEquals(if (enabled) Color.rgb(46, 170, 83) else Color.GRAY, button.iconTint!!.defaultColor)
         assertEquals(app.getString(if (enabled) R.string.peq_disable_band else R.string.peq_enable_band),
             button.contentDescription.toString())
@@ -217,23 +218,29 @@ class PeqFinePowerUiTest {
         assertFalse(graph.isMarkerVisible)
     }
 
-    @Test fun masterLockGreysAndGuardsPowerWhileUnlockingRestoresItWithoutClearingFieldLocks() {
+    @Test fun masterLockKeepsPowerAvailableWithoutClearingFieldLocks() {
         locks.setFieldLocked("first", PeqEditField.GAIN, true)
         val original = launch(unlocked = false)
         val editor = precise()
-        assertPower(editor, enabled = true, locked = true)
+        assertPower(editor, enabled = true)
+        click(editor, R.id.peq_band_dialog_power)
+        assertSaved(withPower(original, false))
+        assertCardPower(false)
+        assertTrue(locks.isBandLocked("first"))
+        assertFalse(editor.findViewById<View>(R.id.peq_gain_slider)!!.isEnabled)
+        click(editor, R.id.peq_band_dialog_lock)
+        assertPower(editor, enabled = false)
+        assertFalse(locks.isBandLocked("first"))
+        assertTrue(locks.isFieldLocked("first", PeqEditField.GAIN))
         click(editor, R.id.peq_band_dialog_power)
         assertSaved(original)
         click(editor, R.id.peq_band_dialog_lock)
         assertPower(editor, enabled = true)
-        assertFalse(locks.isBandLocked("first"))
+        click(editor, R.id.peq_band_dialog_power)
+        assertSaved(withPower(original, false))
+        assertCardPower(false)
+        assertTrue(locks.isBandLocked("first"))
         assertTrue(locks.isFieldLocked("first", PeqEditField.GAIN))
-        click(editor, R.id.peq_band_dialog_power)
-        assertSaved(withPower(original, false))
-        click(editor, R.id.peq_band_dialog_lock)
-        assertPower(editor, enabled = false, locked = true)
-        click(editor, R.id.peq_band_dialog_power)
-        assertSaved(withPower(original, false))
         assertNull(PeqPreviewSession.current())
         click(editor, R.id.peq_band_dialog_lock)
         assertPower(editor, enabled = false)
@@ -241,6 +248,69 @@ class PeqFinePowerUiTest {
         assertPower(editor, enabled = true)
         assertSaved(original)
         assertTrue(locks.isFieldLocked("first", PeqEditField.GAIN))
+    }
+
+    @Test fun lockedCardAndOpenFineEditorImmediatelySynchronizePowerInBothDirections() {
+        PeqEditField.entries.forEach { locks.setFieldLocked("first", it, true) }
+        val original = launch(initial(enabled = false), unlocked = false)
+        val protectedLocks = app.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).all.toMap()
+        val editor = precise()
+        assertPower(editor, enabled = false)
+
+        // A card update can also come from the shared editor while the dialog is open.
+        // Exercise that route without dismiss/reopen and without a preview draft.
+        card().findViewById<View>(R.id.peq_band_power).performClick()
+        idle()
+        assertPower(editor, enabled = true)
+        assertCardPower(true)
+        assertSaved(withPower(original, true))
+
+        click(editor, R.id.peq_band_dialog_power)
+        assertPower(editor, enabled = false)
+        assertCardPower(false)
+        assertSaved(original)
+        card().findViewById<View>(R.id.peq_band_power).performClick()
+        idle()
+        assertPower(editor, enabled = true)
+        assertSaved(withPower(original, true))
+        assertEquals(protectedLocks,
+            app.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).all)
+        assertNull(PeqPreviewSession.current())
+
+        editor.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        layout()
+        assertSaved(withPower(original, true))
+        assertCardPower(true)
+        assertPower(precise(), enabled = true)
+    }
+
+    @Test fun changingLockedBandPowerCannotCommitParametersOrStartListening() {
+        PeqEditField.entries.forEach { locks.setFieldLocked("first", it, true) }
+        val original = launch(unlocked = false)
+        val editor = precise()
+        listOf(R.id.peq_frequency_slider, R.id.peq_gain_slider, R.id.peq_quality_slider,
+            R.id.peq_band_type, R.id.peq_band_monitor).forEach { id ->
+            assertFalse(editor.findViewById<View>(id)!!.isEnabled)
+        }
+        assertFalse(editor.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled)
+        editor.findViewById<EditText>(R.id.peq_frequency_input)!!.setText("4000")
+        editor.findViewById<EditText>(R.id.peq_gain_input)!!.setText("9")
+        editor.findViewById<EditText>(R.id.peq_quality_input)!!.setText("6")
+        click(editor, PeqFilterTypeDialog.buttonId(PeqFilterType.LOW_SHELF))
+        click(editor, R.id.peq_band_monitor)
+        click(editor, R.id.peq_band_dialog_power)
+        assertSaved(withPower(original, false))
+        assertCardPower(false)
+        assertTrue(locks.isBandLocked("first"))
+        PeqEditField.entries.forEach { assertTrue(locks.isFieldLocked("first", it)) }
+        assertNull(PeqPreviewSession.current())
+        editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        idle()
+        assertTrue(editor.isShowing)
+        assertSaved(withPower(original, false))
+        editor.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        layout()
+        assertSaved(withPower(original, false))
     }
 
     @Test fun confirmingTheParameterDraftKeepsThePowerStateThatWasExplicitlySaved() {

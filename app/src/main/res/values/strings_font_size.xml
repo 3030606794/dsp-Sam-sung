@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="key_appearance_font_scale" translatable="false">appearance_font_scale</string>
+    <integer name="default_appearance_font_scale">100</integer>
+    <string name="appearance_font_size">字体大小</string>
+    <string name="appearance_font_size_reset">恢复系统字号</string>
+    <string name="appearance_font_size_reset_summary" formatted="false">100% 跟随系统字体大小；滑杆可调整为 80%–150%，松手后立即应用。</string>
+</resources>

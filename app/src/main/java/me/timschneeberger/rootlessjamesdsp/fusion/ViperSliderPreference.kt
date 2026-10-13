@@ -61,7 +61,6 @@ class ViperSliderPreference(context: Context, val control: ViperParameters.Contr
         slider.setLabelFormatter { control.label(it.roundToInt()) }
         label.text = control.label(value)
 
-        var tracking = false
         fun acceptValue() {
             val next = slider.value.roundToInt().coerceIn(min, max)
             if (next != value && callChangeListener(next)) updateValue(next, false)
@@ -70,12 +69,15 @@ class ViperSliderPreference(context: Context, val control: ViperParameters.Contr
         }
         slider.addOnChangeListener { _, newValue, fromUser ->
             label.text = control.label(newValue.roundToInt())
-            if (fromUser && !tracking) acceptValue()
+            // Persist each actual user step so the existing preference broadcast
+            // reaches the driver while the finger is still on the slider.
+            if (fromUser) acceptValue()
         }
         slider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-            override fun onStartTrackingTouch(slider: Slider) { tracking = true }
+            override fun onStartTrackingTouch(slider: Slider) = Unit
             override fun onStopTrackingTouch(slider: Slider) {
-                tracking = false
+                // Keep the final-value check for release/cancel without generating
+                // another preference write when that step was already accepted.
                 acceptValue()
             }
         })

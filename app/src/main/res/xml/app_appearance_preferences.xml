@@ -31,6 +31,26 @@
             android:title="@string/appearance_show_icons"
             app:iconSpaceReserved="false" />
 
+        <me.timschneeberger.rootlessjamesdsp.preference.MaterialSeekbarPreference
+            android:key="@string/key_appearance_font_scale"
+            android:title="@string/appearance_font_size"
+            android:defaultValue="100"
+            app:minValue="80"
+            app:maxValue="150"
+            app:seekBarIncrement="5"
+            app:showSeekBarValue="true"
+            app:updatesContinuously="false"
+            app:precision="0"
+            app:unit="%"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="appearance_font_size_reset"
+            android:title="@string/appearance_font_size_reset"
+            android:summary="@string/appearance_font_size_reset_summary"
+            app:singleLineTitle="false"
+            app:iconSpaceReserved="false" />
+
     </PreferenceCategory>
 
     <PreferenceCategory

@@ -6,6 +6,8 @@ import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.model.preference.AppTheme
 import me.timschneeberger.rootlessjamesdsp.model.preference.ThemeMode
 import me.timschneeberger.rootlessjamesdsp.preference.ThemesPreference
+import me.timschneeberger.rootlessjamesdsp.preference.MaterialSeekbarPreference
+import me.timschneeberger.rootlessjamesdsp.utils.AppFontScale
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.isDynamicColorAvailable
 
@@ -18,6 +20,12 @@ class SettingsAppearanceFragment : SettingsBaseFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceManager.sharedPreferencesName = Constants.PREF_APP
         setPreferencesFromResource(R.xml.app_appearance_preferences, rootKey)
+
+        findPreference<Preference>("appearance_font_size_reset")?.setOnPreferenceClickListener {
+            findPreference<MaterialSeekbarPreference>(AppFontScale.KEY)
+                ?.setValue(AppFontScale.DEFAULT_PERCENT.toFloat())
+            true
+        }
 
         val appThemes = AppTheme.values().filter {
             val monetFilter = if (it == AppTheme.MONET) {
