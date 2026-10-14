@@ -41,7 +41,7 @@ object ViperParameters {
             Control("v_dynamic_strength", "低音动态强度", 65573, 0, 100, 0, scale = 20, offset = 100),
         ), "设备响应可选择预设，参数与原驱动一致。"),
         Group("v_tube", "电子管模拟器", 65583, emptyList()),
-        Group("v_bass", "ViPER 低音", 65574, listOf(
+        Group("v_bass", "低频增强（ViPER）", 65574, listOf(
             Control("v_bass_mode", "处理模式", 65575, 0, 2, 0, choices = listOf("自然低音", "Pure Bass+", "低音炮")),
             Control("v_bass_freq", "低音频率", 65576, 15, 150, 70, unit = " Hz"),
             Control("v_bass_amount", "增强强度", 65577, 0, 11, 0, scale = 50, offset = 50),

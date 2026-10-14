@@ -96,6 +96,8 @@ class BassProfessionalUiTest {
 
     @Test fun fineButtonsInputAndResetPersistRealStepsWithoutTurningEitherEffectOn() {
         launch()
+        assertEquals("低频增强（ViPER）", viper().effectHeader.title)
+        assertEquals("自适应低频增强", dynamic().effectHeader.title)
         viper().effectHeader.setExpanded(true)
         dynamic().effectHeader.setExpanded(true)
         layout()
@@ -291,6 +293,7 @@ class BassProfessionalUiTest {
         dynamicPrefs.edit().clear().putFloat(BassParameters.LEGACY_MAX_GAIN, 7.7f).commit()
         app.sendLocalBroadcast(Intent(Constants.ACTION_PRESET_LOADED))
         idle()
+        assertEquals(80, dynamicPrefs.getInt(BassParameters.MAX_GAIN, -1))
         assertEquals(80, dynamic().findPreference<BassNumericPreference>(BassParameters.MAX_GAIN)!!.value)
         assertFalse(dynamic().effectHeader.isChecked)
         assertFalse(dynamic().effectHeader.isExpanded)
@@ -322,6 +325,8 @@ class BassProfessionalUiTest {
         viper().effectHeader.setExpanded(true)
         dynamic().effectHeader.setExpanded(true)
         layout()
+        verifyTitle(row(viper(), "v_bass"), "低频增强（ViPER）")
+        verifyTitle(row(dynamic(), "bass_enable"), "自适应低频增强")
         listOf(viper(), dynamic()).forEach { fragment ->
             val keys = if (fragment is ViperEffectPreferenceFragment)
                 listOf(BassParameters.frequency.key, BassParameters.AMOUNT, BassParameters.naturalQ.key)
@@ -358,6 +363,17 @@ class BassProfessionalUiTest {
             }
             assertTrue(textLayout.height <= text.height - text.totalPaddingTop - text.totalPaddingBottom)
         }
+    }
+    private fun verifyTitle(row: View, expected: String) {
+        val title = row.findViewById<TextView>(android.R.id.title)
+        assertEquals(expected, title.text.toString())
+        val textLayout = requireNotNull(title.layout)
+        assertTrue(textLayout.lineCount in 1..2)
+        repeat(textLayout.lineCount) { line ->
+            assertEquals("The complete effect name remains readable", 0, textLayout.getEllipsisCount(line))
+            assertTrue(textLayout.getLineWidth(line) <= title.width - title.compoundPaddingLeft - title.compoundPaddingRight + 1f)
+        }
+        assertTrue(textLayout.height <= title.height - title.totalPaddingTop - title.totalPaddingBottom)
     }
     private fun capture(view: View, name: String) {
         assertTrue(view.width > 0 && view.height > 0)

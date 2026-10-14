@@ -41,7 +41,9 @@ class DynamicBassPreferenceFragment : PreferenceFragmentCompat() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Constants.ACTION_PRESET_LOADED) {
                 preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
-                preferences = BassController.preferences(context, false)
+                // Use the fragment's owning context. A broadcast dispatcher may retain another
+                // application context; the preference manager and controller must read one store.
+                preferences = BassController.preferences(requireContext(), false)
                 build(false)
                 preferences.registerOnSharedPreferenceChangeListener(preferenceListener)
             } else renderRuntime()

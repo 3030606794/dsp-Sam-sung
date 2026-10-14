@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="bass_reset_value">复位</string>
-    <string name="bass_driver_required">专业低音参数需要配套新版驱动；基础低音功能仍可使用。</string>
+    <string name="bass_driver_required">专业低频参数需要配套新版驱动；基础低频功能仍可使用。</string>
     <string name="bass_driver_legacy_gain">当前驱动最大增益按 1 dB 调节；更新配套模块后可按 0.1 dB 精调。</string>
     <string name="bass_subwoofer_help">深潜与冲击增益是在增强系数基础上的修正；0.0 dB 保留原有调音。带宽单位 oct 为倍频程。</string>
     <string name="bass_natural_help">频率决定增强范围；Q 越高，截止附近越突出。增强系数并非分贝。</string>
     <string name="bass_dynamic_help">按频谱追踪低频峰值。上升与回落控制增强量平滑，时间越短变化越快。实时频率是处理器的跟踪值。</string>
-    <string name="bass_runtime_title">实时低音</string>
-    <string name="bass_runtime_off">动态低音已关闭</string>
+    <string name="bass_runtime_title">实时低频增强</string>
+    <string name="bass_runtime_off">自适应低频增强已关闭</string>
     <string name="bass_runtime_idle">当前未处理音频</string>
     <string name="bass_runtime_unknown">等候音频处理数据</string>
     <string name="bass_runtime_multiple">多个音频会话正在处理</string>

@@ -106,7 +106,7 @@
     <string name="eq_preset_vocal">人声增强</string>
     <string name="geq_enable">参数均衡器</string>
     <string name="geq_nodes">幅度响应</string>
-    <string name="bass_enable">动态低音提升</string>
+    <string name="bass_enable">自适应低频增强</string>
     <string name="bass_max_gain">最大增益</string>
     <string name="reverb_enable">房间混响</string>
     <string name="reverb_room_type">场类型</string>
