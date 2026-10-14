@@ -19,13 +19,15 @@ class BassNumericPreference(context: Context, val control: BassParameters.Contro
     private var storedValue = initialValue.coerceIn(control.min, control.max)
     var value: Int
         get() = storedValue
-        set(value) {
-            val next = value.coerceIn(control.min, control.max)
-            val changed = storedValue != next
-            storedValue = next
-            persistInt(next)
-            if (changed) notifyChanged()
-        }
+        set(value) { updateValue(value, true) }
+
+    private fun updateValue(value: Int, notify: Boolean) {
+        val next = value.coerceIn(control.min, control.max)
+        val changed = storedValue != next
+        storedValue = next
+        persistInt(next)
+        if (changed && notify) notifyChanged()
+    }
 
     init {
         key = control.key
@@ -44,11 +46,13 @@ class BassNumericPreference(context: Context, val control: BassParameters.Contro
     override fun getSummary(): CharSequence = control.label(value)
 
     /** Returns false when a linked range rejects this edit; the slider then restores its last value. */
-    fun requestValue(candidate: Int): Boolean {
+    fun requestValue(candidate: Int): Boolean = acceptValue(candidate, true)
+
+    private fun acceptValue(candidate: Int, notify: Boolean): Boolean {
         if (!isEnabled || candidate !in control.min..control.max) return false
         if (candidate == value) return true
         if (!callChangeListener(candidate)) return false
-        value = candidate
+        updateValue(candidate, notify)
         return true
     }
 
@@ -73,12 +77,15 @@ class BassNumericPreference(context: Context, val control: BassParameters.Contro
         slider.setLabelFormatter { control.label(it.roundToInt()) }
         slider.contentDescription = control.title
         slider.isEnabled = isEnabled
-        number.text = control.label(value)
-        number.contentDescription = "${control.title}：${control.label(value)}，点击输入"
         number.isEnabled = isEnabled
-        minus.isEnabled = isEnabled && value > control.min
-        plus.isEnabled = isEnabled && value < control.max
         reset.isEnabled = isEnabled
+        fun renderValue() {
+            number.text = control.label(value)
+            number.contentDescription = "${control.title}：${control.label(value)}，点击输入"
+            minus.isEnabled = isEnabled && value > control.min
+            plus.isEnabled = isEnabled && value < control.max
+        }
+        renderValue()
         minus.contentDescription = "${control.title}减少 ${control.label(1)}"
         plus.contentDescription = "${control.title}增加 ${control.label(1)}"
         reset.contentDescription = "${control.title}恢复 ${control.label(control.default)}"
@@ -88,9 +95,10 @@ class BassNumericPreference(context: Context, val control: BassParameters.Contro
         reset.setOnClickListener { resetToDefault() }
         slider.addOnChangeListener { _, candidate, fromUser ->
             if (fromUser) {
-                requestValue(candidate.roundToInt())
+                // A drag must not recycle/rebind its own row between ACTION_MOVE events.
+                acceptValue(candidate.roundToInt(), false)
                 if (slider.value != value.toFloat()) slider.value = value.toFloat()
-                number.text = control.label(value)
+                renderValue()
             }
         }
     }

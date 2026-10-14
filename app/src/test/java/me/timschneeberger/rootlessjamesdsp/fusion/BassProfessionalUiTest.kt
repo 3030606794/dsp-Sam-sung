@@ -3,10 +3,13 @@ package me.timschneeberger.rootlessjamesdsp.fusion
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
 import android.os.Looper
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -17,6 +20,7 @@ import androidx.fragment.app.FragmentContainerView
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceGroupAdapter
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -158,6 +162,83 @@ class BassProfessionalUiTest {
         assertFalse(dialog.isShowing)
         assertEquals(173, viperPrefs.getInt(BassParameters.AMOUNT, -1))
         assertFalse(viper().effectHeader.isChecked)
+    }
+
+    private fun touch(slider: Slider, action: Int, downTime: Long, fraction: Float) {
+        val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action,
+            slider.trackSidePadding + slider.trackWidth * fraction, slider.height / 2f, 0)
+        try { assertTrue(slider.dispatchTouchEvent(event)) } finally { event.recycle() }
+    }
+
+    @Test fun bothRealSlidersCommitBeforeReleaseWithoutRebindingOrDuplicateWritesAndNeverEnableAnEffect() {
+        launch()
+        viper().effectHeader.setExpanded(true)
+        dynamic().effectHeader.setExpanded(true)
+        layout()
+        val cases: List<Triple<PreferenceFragmentCompat, BassParameters.Control, SharedPreferences>> = listOf(
+            Triple(viper(), BassParameters.amount, viperPrefs), Triple(dynamic(), BassParameters.maxGain, dynamicPrefs))
+        cases.forEach { (fragment, definition, prefs) ->
+            val bound = row(fragment, definition.key)
+            val slider = bound.findViewById<Slider>(R.id.seekbar)
+            var changes = 0
+            var rowChanges = 0
+            val observer = object : RecyclerView.AdapterDataObserver() {
+                override fun onItemRangeChanged(positionStart: Int, itemCount: Int) { rowChanges += itemCount }
+            }
+            fragment.listView.adapter!!.registerAdapterDataObserver(observer)
+            val packets = mutableListOf<Int>()
+            val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                if (key == definition.key) {
+                    changes++
+                    if (definition == BassParameters.amount) BassController.syncViper(app, 63) { id, words ->
+                        if (id == 65577) packets += words[0]
+                        true
+                    } else BassController.syncDynamic(app, 63) { id, words ->
+                        if (id == 1300) packets += words[0]
+                        true
+                    }
+                }
+            }
+            prefs.registerOnSharedPreferenceChangeListener(listener)
+            try {
+                val downTime = SystemClock.uptimeMillis()
+                touch(slider, MotionEvent.ACTION_DOWN, downTime, (slider.value - slider.valueFrom) / (slider.valueTo - slider.valueFrom))
+                touch(slider, MotionEvent.ACTION_MOVE, downTime, .55f)
+                idle()
+                val first = slider.value.toInt()
+                assertEquals(first, prefs.getInt(definition.key, -1))
+                assertEquals(first, packets.last())
+                assertEquals(definition.label(first), bound.findViewById<TextView>(R.id.seekbar_value).text.toString())
+                touch(slider, MotionEvent.ACTION_MOVE, downTime, .85f)
+                idle()
+                val second = slider.value.toInt()
+                assertTrue(second > first)
+                assertEquals(second, prefs.getInt(definition.key, -1))
+                assertEquals(second, packets.last())
+                val afterMove = changes
+                repeat(4) { touch(slider, MotionEvent.ACTION_MOVE, downTime, .85f); idle() }
+                touch(slider, MotionEvent.ACTION_UP, downTime, .85f)
+                idle()
+                assertEquals("Same position and release do not send the same value again", afterMove, changes)
+                assertEquals(second, fragment.findPreference<BassNumericPreference>(definition.key)!!.value)
+                val again = SystemClock.uptimeMillis()
+                touch(slider, MotionEvent.ACTION_DOWN, again, .85f)
+                touch(slider, MotionEvent.ACTION_MOVE, again, .65f)
+                idle()
+                val accepted = prefs.getInt(definition.key, -1)
+                val beforeCancel = changes
+                touch(slider, MotionEvent.ACTION_CANCEL, again, .65f)
+                idle()
+                assertEquals(beforeCancel, changes)
+                assertEquals(accepted, fragment.findPreference<BassNumericPreference>(definition.key)!!.value)
+                assertEquals("Dragging does not ask RecyclerView to rebind the active row", 0, rowChanges)
+                assertFalse(viper().effectHeader.isChecked)
+                assertFalse(dynamic().effectHeader.isChecked)
+            } finally {
+                prefs.unregisterOnSharedPreferenceChangeListener(listener)
+                fragment.listView.adapter!!.unregisterAdapterDataObserver(observer)
+            }
+        }
     }
 
     @Test fun switchesAndFoldStateAreIndependentAndEditingWhileOffNeverEnablesSound() {
