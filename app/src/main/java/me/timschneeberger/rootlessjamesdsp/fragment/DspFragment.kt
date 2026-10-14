@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.FragmentDspBinding
 import me.timschneeberger.rootlessjamesdsp.fusion.SurroundPreferenceFragment
+import me.timschneeberger.rootlessjamesdsp.fusion.DynamicBassPreferenceFragment
 import me.timschneeberger.rootlessjamesdsp.fusion.TonePreferenceFragment
 import me.timschneeberger.rootlessjamesdsp.fusion.ViperEffectPreferenceFragment
 import me.timschneeberger.rootlessjamesdsp.fusion.ViperParameters
@@ -109,10 +110,7 @@ class DspFragment : Fragment(), SharedPreferences.OnSharedPreferenceChangeListen
                 R.id.card_compressor, PreferenceGroupFragment.newInstance(Constants.PREF_COMPANDER,
                     R.xml.dsp_compander_preferences
                 ))
-            .addIfMissing(
-                R.id.card_bass, PreferenceGroupFragment.newInstance(Constants.PREF_BASS,
-                    R.xml.dsp_bass_preferences
-                ))
+            .addIfMissing(R.id.card_bass, DynamicBassPreferenceFragment())
             .addIfMissing(
                 R.id.card_eq, PreferenceGroupFragment.newInstance(Constants.PREF_EQ,
                     R.xml.dsp_equalizer_preferences

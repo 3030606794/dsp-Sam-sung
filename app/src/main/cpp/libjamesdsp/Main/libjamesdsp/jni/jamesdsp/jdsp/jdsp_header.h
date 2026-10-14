@@ -173,6 +173,9 @@ typedef struct
 	float boostdB;
 	double fs;
 	float gainSmoothingFactor, minusgainSmoothingFactor;
+	float minFreq, maxFreq, q, currentQ;
+	float trackingMs, riseMs, fallMs, fallSmoothingFactor;
+	int initialized, advanced, processed;
 	StateVariable2ndOrder svf[2];
 	integerDelayLine dL[2];
 } DBB;
@@ -605,6 +608,8 @@ extern void BassBoostEnable(JamesDSPLib *jdsp);
 extern void BassBoostDisable(JamesDSPLib *jdsp);
 extern void BassBoostConstructor(JamesDSPLib *jdsp);
 extern void BassBoostSetParam(JamesDSPLib *jdsp, float maxG);
+// Atomic seven-word bass packet; returns 0 for invalid input without any mutation.
+extern int BassBoostSetAdvanced(JamesDSPLib *jdsp, const int32_t values[7]);
 extern void BassBoostProcess(JamesDSPLib *jdsp, size_t n);
 // Reverb
 extern void Reverb_SetParam(JamesDSPLib *jdsp, int presets);

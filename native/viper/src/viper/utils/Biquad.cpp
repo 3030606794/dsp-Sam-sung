@@ -54,11 +54,8 @@ void Biquad::SetBandPassParameter(float frequency, uint32_t samplingRate, float 
     SetCoeffs(a0, a1, a2, b0, b1, b2);
 }
 
-void Biquad::SetCoeffs(double a0, double a1, double a2, double b0, double b1, double b2) {
-    this->x2 = 0.0;
-    this->x1 = 0.0;
-    this->y2 = 0.0;
-    this->y1 = 0.0;
+void Biquad::SetCoeffs(double a0, double a1, double a2, double b0, double b1, double b2, bool resetState) {
+    if (resetState) this->x2 = this->x1 = this->y2 = this->y1 = 0.0;
 
     this->a1 = -(a1 / a0);
     this->a2 = -(a2 / a0);
@@ -88,7 +85,7 @@ Biquad::SetHighPassParameter(float frequency, uint32_t samplingRate, double dbGa
     SetCoeffs(a0, a1, a2, b0, b1, b2);
 }
 
-void Biquad::SetLowPassParameter(float frequency, uint32_t samplingRate, float qFactor) {
+void Biquad::SetLowPassParameter(float frequency, uint32_t samplingRate, float qFactor, bool resetState) {
     double omega = (2.0 * M_PI * (double) frequency) / (double) samplingRate;
     double sinOmega = sin(omega);
     double cosOmega = cos(omega);
@@ -102,5 +99,5 @@ void Biquad::SetLowPassParameter(float frequency, uint32_t samplingRate, float q
     double b1 = 1.0 - cosOmega;
     double b2 = (1.0 - cosOmega) / 2.0;
 
-    SetCoeffs(a0, a1, a2, b0, b1, b2);
+    SetCoeffs(a0, a1, a2, b0, b1, b2, resetState);
 }

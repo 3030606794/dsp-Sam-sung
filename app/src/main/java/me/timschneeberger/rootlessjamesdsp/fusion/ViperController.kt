@@ -10,7 +10,7 @@ object ViperController {
     const val STATUS_PREFS = "fusion_runtime"
     const val STATUS_KEY = "driver_status"
 
-    fun sync(context: Context, sender: (Int, IntArray) -> Boolean): Boolean {
+    fun sync(context: Context, capabilities: Int = 0, sender: (Int, IntArray) -> Boolean): Boolean {
         val prefs = PreferenceCache.getPreferences(context, ViperParameters.PREFS)
         var success = true
         fun send(id: Int, data: IntArray) { success = sender(id, data) && success }
@@ -18,8 +18,10 @@ object ViperController {
         // Set coefficients before enabling a processor, including after device profile changes.
         ViperParameters.groups.forEach { group ->
             group.controls.forEach { control ->
-                val value = (prefs.all[control.key] as? Number)?.toInt() ?: control.default
-                send(control.parameter, control.packet(value))
+                if (control.key != BassParameters.LEGACY_AMOUNT) {
+                    val value = (prefs.all[control.key] as? Number)?.toInt() ?: control.default
+                    send(control.parameter, control.packet(value))
+                }
             }
         }
         val presetIndex = prefs.getString("v_dynamic_preset", "0")?.toIntOrNull() ?: 0
@@ -28,6 +30,7 @@ object ViperController {
         send(65570, intArrayOf(dynamic[0], dynamic[1]))
         send(65571, intArrayOf(dynamic[2], dynamic[3]))
         send(65572, intArrayOf(dynamic[4], dynamic[5]))
+        success = BassController.syncViper(context, capabilities, sender) && success
         ViperParameters.groups.forEach { group ->
             group.enableParameter?.let { send(it, intArrayOf(if (prefs.getBoolean(group.key, false)) 1 else 0)) }
         }

@@ -315,6 +315,21 @@ void ViPER::DispatchCommand(int param, int val1, int val2, int val3, int val4, u
             this->viperBass.SetBassFactor((float) val1 / 100.0f);
             break;
         } // 0x10029
+        case PARAM_FIDELITY_BASS_Q:
+            this->viperBass.SetQ(val1 / 100.f);
+            break;
+        case PARAM_FIDELITY_BASS_DEEP_FREQ:
+        case PARAM_FIDELITY_BASS_UPPER_FREQ:
+            this->viperBass.SetSubwooferTuning(param - PARAM_FIDELITY_BASS_DEEP_FREQ, static_cast<float>(val1));
+            break;
+        case PARAM_FIDELITY_BASS_DEEP_GAIN:
+        case PARAM_FIDELITY_BASS_UPPER_GAIN:
+            this->viperBass.SetSubwooferTuning(param - PARAM_FIDELITY_BASS_DEEP_FREQ, val1 / 10.f);
+            break;
+        case PARAM_FIDELITY_BASS_DEEP_BW:
+        case PARAM_FIDELITY_BASS_UPPER_BW:
+            this->viperBass.SetSubwooferTuning(param - PARAM_FIDELITY_BASS_DEEP_FREQ, val1 / 100.f);
+            break;
         case PARAM_FIDELITY_CLARITY_ENABLE: {
             this->viperClarity.SetEnable(val1 != 0);
             break;

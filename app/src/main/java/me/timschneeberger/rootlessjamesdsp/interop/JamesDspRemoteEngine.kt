@@ -10,6 +10,9 @@ import me.timschneeberger.rootlessjamesdsp.fusion.SurroundController
 import me.timschneeberger.rootlessjamesdsp.fusion.ToneController
 import me.timschneeberger.rootlessjamesdsp.fusion.ViperController
 import me.timschneeberger.rootlessjamesdsp.fusion.OutputRuntimeStatus
+import me.timschneeberger.rootlessjamesdsp.fusion.BassController
+import me.timschneeberger.rootlessjamesdsp.fusion.BassParameters
+import me.timschneeberger.rootlessjamesdsp.fusion.BassRuntimeStatus
 import me.timschneeberger.rootlessjamesdsp.peq.PeqController
 import me.timschneeberger.rootlessjamesdsp.interop.structure.EelVmVariable
 import me.timschneeberger.rootlessjamesdsp.model.ProcessorMessage
@@ -50,6 +53,7 @@ class JamesDspRemoteEngine(
 
     private val fusionPackets = mutableMapOf<Int, IntArray>()
     private var legacyCurveDisabled = false
+    private var legacyBassGain: Int? = null
     @Volatile private var graphicEqNeedsRetry = false
     @Volatile private var convolverFailure: String? = null
     private var fusionCapabilities = 0
@@ -88,11 +92,13 @@ class JamesDspRemoteEngine(
                     throw IllegalStateException("DSP音效 驱动协议不匹配，请安装与 APK 同一版本的融合模块。")
                 }
                 fusionCapabilities = capabilities
+                BassController.publishCapabilities(context, capabilities)
                 SurroundController.publishCapabilities(context, capabilities)
                 ViperController.publishStatus(context, "已连接 DSP音效：参数均衡器 + JamesDSP + MSEB + ViPER")
             }
         } catch (e: Exception) {
             fusionCapabilities = 0
+            BassController.publishCapabilities(context, 0)
             SurroundController.publishCapabilities(context, 0)
             ViperController.publishStatus(context, "连接失败：请安装 DSP音效 融合模块并重启手机。旧 JamesDSP / ViPER 模块不能驱动本应用。")
             Timber.e("Failed to create DSP音效 effect")
@@ -121,6 +127,7 @@ class JamesDspRemoteEngine(
             effect?.release()
             fusionPackets.clear()
             legacyCurveDisabled = false
+            legacyBassGain = null
             clearCache()
             effect = createEffect()
             effect?.enabled = wasEnabled
@@ -172,16 +179,29 @@ class JamesDspRemoteEngine(
     }
 
     @Synchronized
+    private fun syncLegacyBassGain(): Boolean {
+        val precise = BassParameters.value(BassController.preferences(context, false).all, BassParameters.maxGain)
+        val wholeDb = (precise / 10.0).roundToInt()
+        if (legacyBassGain == wholeDb) return true
+        val success = effect.setParameter(112, wholeDb.toShort()) == AudioEffect.SUCCESS
+        legacyBassGain = if (success) wholeDb else null
+        return success
+    }
+
+    @Synchronized
     private fun syncFusionPreferences(): Boolean {
         // Avoid resetting unchanged processors when another control is adjusted.
-        val viperOk = ViperController.sync(context, ::sendFusionParameter)
+        val viperOk = ViperController.sync(context, fusionCapabilities, ::sendFusionParameter)
+        val bassOk = if (fusionCapabilities and BassController.CAPABILITY != 0)
+            BassController.syncDynamic(context, fusionCapabilities, ::sendFusionParameter)
+        else syncLegacyBassGain()
         val toneOk = ToneController.sync(context, ::sendFusionParameter)
         val surroundOk = SurroundController.sync(context, fusionCapabilities, ::sendFusionParameter)
         val peqOk = syncParametricEq()
         val output = PreferenceCache.getPreferences(context, Constants.PREF_OUTPUT)
         val balance = (output.all["balance"] as? Number)?.toInt()?.coerceIn(-100, 100) ?: 0
         val balanceOk = sendFusionParameter(FUSION_BALANCE, intArrayOf(balance))
-        ViperController.publishStatus(context, convolverFailure ?: if (viperOk && toneOk && peqOk && balanceOk && surroundOk)
+        ViperController.publishStatus(context, convolverFailure ?: if (viperOk && toneOk && peqOk && balanceOk && surroundOk && bassOk)
             "参数已同步：参数均衡器 → 环绕 → JamesDSP → MSEB → ViPER"
         else if (!surroundOk && fusionCapabilities and SurroundController.CAPABILITY == 0)
             "环绕需要新版驱动：请安装配套环绕模块并重启手机。"
@@ -236,8 +256,10 @@ class JamesDspRemoteEngine(
 
     override fun setBassBoost(enable: Boolean, maxGain: Float): Boolean {
         var ret = true
-        if (enable)
-            ret = effect.setParameter(112, maxGain.roundToInt().toShort()) == AudioEffect.SUCCESS
+        // SET 1300 already supplied the precise gain. A later legacy write would overwrite it.
+        if (enable && fusionCapabilities and BassController.CAPABILITY == 0) {
+            ret = syncLegacyBassGain()
+        }
         return ret and (effect.setParameter(1201, enable.toShort()) == AudioEffect.SUCCESS)
     }
 
@@ -374,6 +396,16 @@ class JamesDspRemoteEngine(
         val frames = if (diagnosticsAvailable == true) liveEffect.getParameterInt(131083) else null
         return OutputRuntimeStatus.Session(liveEffect, liveEffect.enabled,
             rate?.takeIf { it in 8000..192000 }, frames?.takeIf { it >= 0 })
+    }
+
+    /** Called from the existing background status poll; unsupported drivers are never queried. */
+    fun bassRuntimeReading(session: OutputRuntimeStatus.Session): BassRuntimeStatus.Reading? {
+        val liveEffect = effect ?: return null
+        if (session.identity !== liveEffect) return null
+        val supported = fusionCapabilities and BassController.CAPABILITY != 0
+        return BassRuntimeStatus.Reading(liveEffect, session.enabled, supported, session.processedFrames,
+            if (supported && session.enabled) liveEffect.getParameterInt(BassController.FREQUENCY_QUERY) else null,
+            if (supported && session.enabled) liveEffect.getParameterInt(BassController.GAIN_QUERY) else null)
     }
 
     val pid: Int

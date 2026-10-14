@@ -85,14 +85,17 @@ class ViperSliderPreference(context: Context, val control: ViperParameters.Contr
 
     override fun onClick() {
         if (control.choices.isNotEmpty()) {
-            MaterialAlertDialogBuilder(context)
+            val builder = MaterialAlertDialogBuilder(context)
                 .setTitle(title)
                 .setSingleChoiceItems(control.choices.toTypedArray(), value) { dialog, which ->
                     if (callChangeListener(which)) value = which
                     dialog.dismiss()
                 }
                 .setNegativeButton(android.R.string.cancel, null)
-                .show()
+            if (control.key == "v_bass_mode") builder.setNeutralButton(R.string.bass_reset_value) { _, _ ->
+                if (callChangeListener(control.default)) value = control.default
+            }
+            builder.show()
             return
         }
         val content = DialogTextinputBinding.inflate(LayoutInflater.from(context))

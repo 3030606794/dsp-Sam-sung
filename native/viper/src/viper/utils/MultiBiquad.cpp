@@ -30,7 +30,7 @@ double MultiBiquad::ProcessSample(double sample) {
 }
 
 void
-MultiBiquad::RefreshFilter(FilterType type, float gainAmp, float frequency, uint32_t samplingRate, float qFactor, bool param_7) {
+MultiBiquad::RefreshFilter(FilterType type, float gainAmp, float frequency, uint32_t samplingRate, float qFactor, bool param_7, bool resetState) {
     double gain;
 
     if (type == FilterType::PEAK || type == FilterType::LOW_SHELF || type == HIGH_SHELF) {
@@ -143,10 +143,7 @@ MultiBiquad::RefreshFilter(FilterType type, float gainAmp, float frequency, uint
         }
     }
 
-    this->x1 = 0.0;
-    this->x2 = 0.0;
-    this->y1 = 0.0;
-    this->y2 = 0.0;
+    if (resetState) this->x1 = this->x2 = this->y1 = this->y2 = 0.0;
 
     this->a1 = -(a1 / a0);
     this->a2 = -(a2 / a0);

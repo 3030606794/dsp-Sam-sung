@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.system.ErrnoException
 import me.timschneeberger.rootlessjamesdsp.BuildConfig
+import me.timschneeberger.rootlessjamesdsp.fusion.BassParameters
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.backup.BackupManager
 import me.timschneeberger.rootlessjamesdsp.liveprog.EelParser
@@ -67,9 +68,8 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                     META_APP_VERSION to BuildConfig.VERSION_NAME,
                     META_APP_FLAVOR to BuildConfig.FLAVOR,
                     META_LIVEPROG_INCLUDED to false.toString(),
-                    // Preserve surround slots instead of silently dropping them in older apps.
-                    META_MIN_VERSION_CODE to if (ctx.getSharedPreferences(
-                        "dsp_fusion_surround", Context.MODE_PRIVATE).all.isNotEmpty()) "1013" else "1010"
+                    // Older APKs cannot represent the fine bass keys and must not silently discard them.
+                    META_MIN_VERSION_CODE to minimumVersionCode(ctx)
                 )
 
                 currentPath(ctx)
@@ -118,6 +118,13 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
         const val META_LIVEPROG_INCLUDED = "liveprog_included" /* version 2+ */
         const val META_MIN_VERSION_CODE = "min_version_code" /* version 3+ */
 
+        internal fun minimumVersionCode(context: Context): String = when {
+            BassParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_viper", Context.MODE_PRIVATE).all,
+                context.getSharedPreferences(Constants.PREF_BASS, Context.MODE_PRIVATE).all) -> "1027"
+            context.getSharedPreferences("dsp_fusion_surround", Context.MODE_PRIVATE).all.isNotEmpty() -> "1013"
+            else -> "1010"
+        }
+
         private fun currentPath(ctx: Context) = File(ctx.applicationInfo.dataDir + "/shared_prefs")
         private fun isKnownEntry(n: String) = (n.startsWith("dsp_") && n.endsWith("xml")) || n == FILE_LIVEPROG
 
@@ -158,7 +165,7 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
 
             // Missing processor namespaces must not retain PEQ/tone/ViPER/surround settings
             // from the preceding device profile underneath an older preset.
-            arrayOf("dsp_fusion_viper", "dsp_fusion_tone", "dsp_fusion_surround", Constants.PREF_GEQ).forEach { namespace ->
+            arrayOf("dsp_fusion_viper", "dsp_fusion_tone", "dsp_fusion_surround", Constants.PREF_GEQ, Constants.PREF_BASS).forEach { namespace ->
                 if (files.none { it.name == "$namespace.xml" }) {
                     ctx.getSharedPreferences(namespace, Context.MODE_PRIVATE).edit().clear().commit()
                 }

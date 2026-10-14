@@ -7,6 +7,8 @@ import me.timschneeberger.rootlessjamesdsp.utils.Constants
 /** Also runs after importing old presets, so removed controls cannot reappear. */
 object FusionPreferenceMigration {
     fun migrate(context: Context) {
+        BassParameters.migrate(BassController.preferences(context, true), true)
+        BassParameters.migrate(BassController.preferences(context, false), false)
         val old = PreferenceCache.getPreferences(context, "dsp_fusion_viper")
         val output = PreferenceCache.getPreferences(context, Constants.PREF_OUTPUT)
         val values = old.all

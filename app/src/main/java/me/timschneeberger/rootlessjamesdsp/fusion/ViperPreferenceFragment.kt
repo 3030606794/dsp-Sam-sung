@@ -130,6 +130,7 @@ class ViperPreferenceFragment : Fragment() {
 }
 
 class ViperEffectPreferenceFragment : PreferenceFragmentCompat() {
+    private var bassEditor: ViperBassEditor? = null
     lateinit var effectHeader: SwitchPreferenceGroup
         private set
 
@@ -148,7 +149,10 @@ class ViperEffectPreferenceFragment : PreferenceFragmentCompat() {
             setDefaultValue(false)
         }
         preferenceScreen.addPreference(effectHeader)
-        group.controls.forEach { effectHeader.addPreference(ViperSliderPreference(ctx, it)) }
+        group.controls.filter { group.key != "v_bass" || it.key == "v_bass_mode" }.forEach {
+            effectHeader.addPreference(ViperSliderPreference(ctx, it).apply { if (group.key == "v_bass") order = 0 })
+        }
+        if (group.key == "v_bass") bassEditor = ViperBassEditor(ctx, effectHeader)
         if (group.key == "v_dynamic") {
             effectHeader.addPreference(ListPreference(ctx).apply {
                 key = "v_dynamic_preset"
@@ -166,6 +170,12 @@ class ViperEffectPreferenceFragment : PreferenceFragmentCompat() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(STATE_EXPANDED, effectHeader.isExpanded)
         super.onSaveInstanceState(outState)
+    }
+
+    override fun onDestroy() {
+        bassEditor?.close()
+        bassEditor = null
+        super.onDestroy()
     }
 
     override fun onCreateRecyclerView(inflater: LayoutInflater, parent: ViewGroup, state: Bundle?): RecyclerView =

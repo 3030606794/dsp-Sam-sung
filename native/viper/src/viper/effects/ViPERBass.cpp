@@ -1,5 +1,6 @@
 #include "ViPERBass.h"
 #include "../constants.h"
+#include <cmath>
 
 // Iscle: Verified with the latest version at 13/12/2022
 
@@ -39,8 +40,9 @@ void ViPERBass::Process(float *samples, uint32_t size) {
     switch (this->processMode) {
         case ProcessMode::NATURAL_BASS: {
             for (uint32_t i = 0; i < size * 2; i += 2) {
-                samples[i] += (float) this->biquad[0].ProcessSample(samples[i]) * this->bassFactor;
-                samples[i + 1] += (float) this->biquad[1].ProcessSample(samples[i + 1]) * this->bassFactor;
+                AdvanceTuning();
+                samples[i] += (float) this->biquad[0].ProcessSample(samples[i]) * this->currentFactor;
+                samples[i + 1] += (float) this->biquad[1].ProcessSample(samples[i + 1]) * this->currentFactor;
             }
             break;
         }
@@ -50,14 +52,15 @@ void ViPERBass::Process(float *samples, uint32_t size) {
                 uint32_t bufferOffset = this->waveBuffer.GetBufferOffset();
 
                 for (uint32_t i = 0; i < size * 2; i += 2) {
-                    buffer[(bufferOffset - size) * 2 + i] = (float) this->biquad[0].ProcessSample(samples[i]);
-                    buffer[(bufferOffset - size) * 2 + i + 1] = (float) this->biquad[1].ProcessSample(samples[i + 1]);
+                    AdvanceTuning();
+                    buffer[(bufferOffset - size) * 2 + i] = (float) this->biquad[0].ProcessSample(samples[i]) * this->currentFactor;
+                    buffer[(bufferOffset - size) * 2 + i + 1] = (float) this->biquad[1].ProcessSample(samples[i + 1]) * this->currentFactor;
                 }
 
                 if (this->polyphase.Process(samples, size) == size) {
                     for (uint32_t i = 0; i < size * 2; i += 2) {
-                        samples[i] += buffer[i] * this->bassFactor;
-                        samples[i + 1] += buffer[i + 1] * this->bassFactor;
+                        samples[i] += buffer[i];
+                        samples[i + 1] += buffer[i + 1];
                     }
                     this->waveBuffer.PopSamples(size, true);
                 }
@@ -72,18 +75,26 @@ void ViPERBass::Process(float *samples, uint32_t size) {
 }
 
 void ViPERBass::Reset() {
+    currentFrequency = static_cast<float>(speaker);
+    currentQ = q;
+    currentFactor = bassFactor;
+    tuningTick = 0;
+    factorSmoothing = -std::expm1(-1.f / (.015f * samplingRate));
+    filterSmoothing = -std::expm1(-16.f / (.015f * samplingRate));
     this->polyphase.SetSamplingRate(this->samplingRate);
     this->polyphase.Reset();
     this->waveBuffer.Reset();
     this->waveBuffer.PushZeros(this->polyphase.GetLatency());
     this->subwoofer.SetBassGain(this->samplingRate, this->bassFactor * 2.5f);
-    this->biquad[0].SetLowPassParameter((float) this->speaker, this->samplingRate, 0.53);
-    this->biquad[1].SetLowPassParameter((float) this->speaker, this->samplingRate, 0.53);
+    this->subwoofer.Reset();
+    this->biquad[0].SetLowPassParameter(currentFrequency, this->samplingRate, q);
+    this->biquad[1].SetLowPassParameter(currentFrequency, this->samplingRate, q);
     this->samplingRatePeriod = 1.0f / (float) this->samplingRate;
     this->antiPop = 0.0f;
 }
 
 void ViPERBass::SetBassFactor(float bassFactor) {
+    if (!std::isfinite(bassFactor) || bassFactor < 0.f) return;
     if (this->bassFactor != bassFactor) {
         this->bassFactor = bassFactor;
         this->subwoofer.SetBassGain(this->samplingRate, this->bassFactor * 2.5f);
@@ -107,10 +118,12 @@ void ViPERBass::SetProcessMode(ProcessMode processMode) {
 void ViPERBass::SetSamplingRate(uint32_t samplingRate) {
     if (this->samplingRate != samplingRate) {
         this->samplingRate = samplingRate;
+        factorSmoothing = -std::expm1(-1.f / (.015f * samplingRate));
+        filterSmoothing = -std::expm1(-16.f / (.015f * samplingRate));
         this->samplingRatePeriod = 1.0f / (float) samplingRate;
         this->polyphase.SetSamplingRate(this->samplingRate);
-        this->biquad[0].SetLowPassParameter((float) this->speaker, this->samplingRate, 0.53);
-        this->biquad[1].SetLowPassParameter((float) this->speaker, this->samplingRate, 0.53);
+        this->biquad[0].SetLowPassParameter(currentFrequency, this->samplingRate, currentQ, false);
+        this->biquad[1].SetLowPassParameter(currentFrequency, this->samplingRate, currentQ, false);
         this->subwoofer.SetBassGain(this->samplingRate, this->bassFactor * 2.5f);
     }
 }
@@ -118,7 +131,26 @@ void ViPERBass::SetSamplingRate(uint32_t samplingRate) {
 void ViPERBass::SetSpeaker(uint32_t speaker) {
     if (this->speaker != speaker) {
         this->speaker = speaker;
-        this->biquad[0].SetLowPassParameter((float) this->speaker, this->samplingRate, 0.53);
-        this->biquad[1].SetLowPassParameter((float) this->speaker, this->samplingRate, 0.53);
     }
+}
+
+void ViPERBass::SetQ(float value) {
+    if (std::isfinite(value) && value >= .3f && value <= 2.f) q = value;
+}
+
+void ViPERBass::SetSubwooferTuning(unsigned parameter, float value) {
+    subwoofer.SetTuning(parameter, value);
+}
+
+void ViPERBass::AdvanceTuning() {
+    const float previousFactor = currentFactor;
+    currentFactor += factorSmoothing * (bassFactor - currentFactor);
+    if (currentFactor == previousFactor) currentFactor = bassFactor;
+    if (tuningTick++ % 16 != 0 || (currentFrequency == speaker && currentQ == q)) return;
+    const float previousFrequency = currentFrequency, previousQ = currentQ;
+    currentFrequency += filterSmoothing * (speaker - currentFrequency);
+    currentQ += filterSmoothing * (q - currentQ);
+    if (currentFrequency == previousFrequency || std::abs(speaker - currentFrequency) < 1.e-4f) currentFrequency = static_cast<float>(speaker);
+    if (currentQ == previousQ || std::abs(q - currentQ) < 1.e-5f) currentQ = q;
+    for (auto &filter : biquad) filter.SetLowPassParameter(currentFrequency, samplingRate, currentQ, false);
 }

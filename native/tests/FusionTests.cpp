@@ -43,8 +43,60 @@ int process(effect_handle_t h,void* in,void* out,size_t frames) {
     audio_buffer_t a{},b{};a.frameCount=b.frameCount=frames;a.raw=in;b.raw=out;
     return (*h)->process(h,&a,&b);
 }
+void bassBridgeTests() {
+    effect_handle_t h=nullptr;assert(AELI.create_effect(&uuid,0,0,&h)==0);
+    assert(get(h,131081)==63 && get(h,131080)==5);
+    assert(get(h,131084)==0 && get(h,131085)==0);
+    auto setup=config(48000);assert(cmd(h,EFFECT_CMD_SET_CONFIG,sizeof(setup),&setup)==0);
+    const std::array<int32_t,7> defaults{50,0,250,200,48,192,192};
+    assert(setRaw(h,1300,defaults.data(),sizeof(defaults))==0);
+    assert(setRaw(h,1300,defaults.data(),sizeof(defaults)-4)==-EINVAL);
+    const int32_t low[7]={0,0,1,50,5,5,5},high[7]={150,249,250,400,1000,2000,5000};
+    for(size_t i=0;i<7;++i) for(int32_t invalid:{low[i]-1,high[i]+1}) {
+        auto values=defaults;values[i]=invalid;
+        assert(setRaw(h,1300,values.data(),sizeof(values))==-EINVAL);
+    }
+    auto invalid=defaults;invalid[1]=invalid[2];assert(setRaw(h,1300,invalid.data(),sizeof(invalid))==-EINVAL);
+    const int32_t vl[7]={30,20,60,-120,-120,10,10},vh[7]={200,80,160,120,120,200,200};
+    const int32_t vd[7]={53,44,80,0,0,75,20};
+    for(uint32_t i=0;i<7;++i) {
+        assert(set(h,65590+i,vl[i])==0 && set(h,65590+i,vh[i])==0);
+        assert(set(h,65590+i,vl[i]-1)==-EINVAL && set(h,65590+i,vh[i]+1)==-EINVAL);
+        int16_t shortValue=vd[i];assert(setRaw(h,65590+i,&shortValue,sizeof(shortValue))==-EINVAL);
+        assert(set(h,65590+i,vd[i])==0);
+    }
+    assert(set(h,131073,0)==0);
+    int16_t on=1,off=0;
+    assert(setRaw(h,1201,&on,2)==0 && cmd(h,EFFECT_CMD_ENABLE)==0);
+    assert(get(h,131084)==0 && get(h,131085)==0);
+    std::array<float,512> input{},output{};size_t position=0;
+    const auto render=[&](int blocks) {
+        for(int block=0;block<blocks;++block) {
+            for(size_t i=0;i<256;++i) input[2*i]=input[2*i+1]=.005f*std::sin(2*3.141592653589793*62.5*(position+i)/48000);
+            assert(process(h,input.data(),output.data(),256)==0);position+=256;
+            for(float x:output) assert(std::isfinite(x));
+        }
+    };
+    render(600);
+    assert(get(h,131084)>6200 && get(h,131084)<6300);
+    assert(get(h,131085)>=499 && get(h,131085)<=500);
+    auto precise=defaults;precise[0]=51;assert(setRaw(h,1300,precise.data(),sizeof(precise))==0);
+    render(400);assert(get(h,131085)>=509 && get(h,131085)<=510);
+    assert(setRaw(h,1201,&off,2)==0 && get(h,131084)==0 && get(h,131085)==0);
+    assert(setRaw(h,1201,&on,2)==0);render(40);assert(get(h,131085)>0);
+    assert(cmd(h,EFFECT_CMD_DISABLE)==0 && get(h,131084)==0 && get(h,131085)==0);
+    assert(cmd(h,EFFECT_CMD_ENABLE)==0 && get(h,131084)==0 && get(h,131085)==0);
+    render(20);assert(get(h,131085)>0);
+    assert(set(h,131072,0)==0 && get(h,131084)==0 && get(h,131085)==0);
+    assert(set(h,131072,1)==0);render(20);
+    assert(cmd(h,EFFECT_CMD_RESET)==0 && get(h,131084)==0 && get(h,131085)==0);
+    assert(set(h,131084,0)==-EINVAL && set(h,131085,0)==-EINVAL);
+    AELI.release_effect(h);
+    std::puts("Bass bridge passed: strict packet/range validation, capability 32, real centi-Hz/centi-dB readings, disabled/reset invalidation.");
+}
 int main() {
     runStreamingTests();
+    bassBridgeTests();
     {
         effect_handle_t statusHandle=nullptr;
         assert(AELI.create_effect(&uuid,0,0,&statusHandle)==0);
@@ -85,7 +137,7 @@ int main() {
     effect_descriptor_t instanceDescriptor{};
     assert((*h)->get_descriptor(h,&instanceDescriptor)==0);
     assert(instanceDescriptor.memoryUsage==descriptor.memoryUsage);
-    assert(get(h,131080)==5 && get(h,131081)==31);
+    assert(get(h,131080)==5 && get(h,131081)==63);
     assert(get(h,20002)>0 && get(h,20001)==48000);
     assert(set(h,131072,0)==0 && set(h,131073,0)==0);
     assert(cmd(h,EFFECT_CMD_ENABLE)==0);

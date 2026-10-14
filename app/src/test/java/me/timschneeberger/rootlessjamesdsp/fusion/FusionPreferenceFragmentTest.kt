@@ -91,11 +91,17 @@ class FusionPreferenceFragmentTest {
             assertNull("Removed controls must not appear on screen", viper.findPreference<Preference>(it))
         }
 
-        ViperParameters.groups.flatMap { it.controls }.forEach { definition ->
+        ViperParameters.groups.flatMap { it.controls }.filter { it.key !in setOf("v_bass_freq", BassParameters.LEGACY_AMOUNT) }.forEach { definition ->
             val control = viper.findPreference<ViperSliderPreference>(definition.key)!!
             assertNotNull("Preference must be attached before consulting its manager", control.preferenceManager)
             assertEquals(definition.min, control.min)
             assertEquals(definition.max, control.max)
+            assertEquals(definition.default, control.value)
+            assertEquals(definition.label(definition.default), control.summary.toString())
+        }
+        listOf(BassParameters.frequency, BassParameters.amount, BassParameters.naturalQ).forEach { definition ->
+            val control = viper.findPreference<BassNumericPreference>(definition.key)!!
+            assertNotNull(control.preferenceManager)
             assertEquals(definition.default, control.value)
             assertEquals(definition.label(definition.default), control.summary.toString())
         }

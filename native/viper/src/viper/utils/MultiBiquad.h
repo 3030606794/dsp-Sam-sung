@@ -18,7 +18,7 @@ public:
     MultiBiquad();
 
     double ProcessSample(double sample);
-    void RefreshFilter(FilterType type, float gainAmp, float frequency, uint32_t samplingRate, float qFactor, bool param_7);
+    void RefreshFilter(FilterType type, float gainAmp, float frequency, uint32_t samplingRate, float qFactor, bool param_7, bool resetState = true);
 
 private:
     double x1;

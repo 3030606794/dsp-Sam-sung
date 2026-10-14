@@ -1,6 +1,6 @@
 id=dsp_fusion
 name=DSP音效
-version=0.1.0-alpha12-surround1
-versionCode=1013
+version=0.1.0-alpha12-bass1
+versionCode=1027
 author=DSP-mobile-version contributors
-description=Samsung alpha12 with RACE surround, 8 editable presets, PEQ, JamesDSP, tone controls and ViPER. Protocol 5; capabilities 31. Update this driver and reboot to enable surround.
+description=Samsung alpha12 with professional bass controls, RACE surround, PEQ, JamesDSP, tone controls and ViPER. Protocol 5; capabilities 63 (professional bass adds bit 32). Update this driver and reboot to enable professional bass.

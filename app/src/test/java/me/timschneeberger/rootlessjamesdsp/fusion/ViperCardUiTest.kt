@@ -15,6 +15,7 @@ import android.widget.TextView
 import androidx.core.view.children
 import androidx.fragment.app.FragmentActivity
 import androidx.preference.ListPreference
+import androidx.preference.Preference
 import androidx.preference.PreferenceGroupAdapter
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -107,7 +108,8 @@ class ViperCardUiTest {
             assertEquals(definition.title, headerView.findViewById<TextView>(android.R.id.title).text)
             assertNotNull(headerView.findViewById<MaterialSwitch>(R.id.switchWidget))
             definition.controls.forEach {
-                assertFalse(host.findPreference<ViperSliderPreference>(it.key)!!.isVisible)
+                val key = if (it.key == BassParameters.LEGACY_AMOUNT) BassParameters.AMOUNT else it.key
+                assertFalse(host.findPreference<Preference>(key)!!.isVisible)
             }
         }
         assertTrue(host.effectFragment("v_reverb")!!.effectHeader.isChecked)
@@ -211,7 +213,8 @@ class ViperCardUiTest {
         assertEquals(10, host.childFragmentManager.fragments.size)
         assertFalse(host.effectFragment("v_reverb")!!.effectHeader.isExpanded)
         assertTrue(host.effectFragment("v_bass")!!.effectHeader.isChecked)
-        assertEquals(38, host.findPreference<ViperSliderPreference>("v_bass_freq")!!.value)
+        assertNull("The frequency is inactive in subwoofer mode", host.findPreference<Preference>("v_bass_freq"))
+        assertEquals(38, preferences.getInt("v_bass_freq", -1))
         assertEquals("低音炮", host.findPreference<ViperSliderPreference>("v_bass_mode")!!.summary)
         assertEquals(41, host.findPreference<ViperSliderPreference>("v_reverb_wet")!!.value)
         assertEquals("3", host.findPreference<ListPreference>("v_dynamic_preset")!!.value)

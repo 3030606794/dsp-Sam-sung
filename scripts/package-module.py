@@ -1,24 +1,28 @@
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 import hashlib
-import shutil
+import re
 
 root = Path(__file__).resolve().parents[1]
-stage = root / 'build/module-package'
-stage.mkdir(parents=True, exist_ok=True)
-shutil.copytree(root / 'module', stage, dirs_exist_ok=True)
+properties = dict(line.split('=', 1) for line in
+                  (root / 'module/module.prop').read_text(encoding='utf-8').splitlines()
+                  if line and not line.startswith('#'))
+version = properties['version']
+if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+-]*', version):
+    raise ValueError(f'Invalid module version: {version!r}')
+files = {file.relative_to(root / 'module').as_posix(): file
+         for file in (root / 'module').rglob('*') if file.is_file()}
 for abi, libdir in [('arm64-v8a', 'lib64'), ('armeabi-v7a', 'lib')]:
     candidates = list((root / f'build/driver-{abi}').rglob('libdspfusion.so'))
     if len(candidates) != 1:
         raise RuntimeError(f'Expected one driver for {abi}: {candidates}')
-    destination = stage / f'system/vendor/{libdir}/soundfx/libdspfusion.so'
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(candidates[0], destination)
-shutil.copy2(root / 'docs/THIRD-PARTY.md', stage / 'THIRD-PARTY.md')
+    files[f'system/vendor/{libdir}/soundfx/libdspfusion.so'] = candidates[0]
+files['THIRD-PARTY.md'] = root / 'docs/THIRD-PARTY.md'
 (root / 'dist').mkdir(exist_ok=True)
-output = root / 'dist/DSP-Audio-Driver-0.1.0-alpha12-surround1.zip'
+output = root / f'dist/DSP-Audio-Driver-{version}.zip'
 with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
-    for file in sorted(stage.rglob('*')):
-        if file.is_file():
-            archive.write(file, file.relative_to(stage))
-print(f'{output.name}: {hashlib.sha256(output.read_bytes()).hexdigest()}')
+    for name, file in sorted(files.items()):
+        archive.write(file, name)
+digest = hashlib.sha256(output.read_bytes()).hexdigest()
+(root / 'dist/SHA256SUMS.txt').write_text(f'{digest}  {output.name}\n', encoding='utf-8')
+print(f'{output.name}: {digest}')

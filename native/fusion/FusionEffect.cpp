@@ -31,6 +31,7 @@ constexpr uint32_t kProtocol=131080, kCapabilities=131081, kTone=196608;
 constexpr uint32_t kSurround=196609;
 // Optional protocol-5 diagnostics. Unlike James GET 20001, this is the host I/O rate.
 constexpr uint32_t kHostRate=131082, kProcessedFrames=131083;
+constexpr uint32_t kBassFrequency=131084, kBassGain=131085;
 constexpr uint32_t kPeq=1250;
 // Retain the upstream engines' nominal policy charges (1 KB each). This legacy
 // descriptor field is admission accounting, not measured process RSS: a 1024 KB
@@ -96,6 +97,7 @@ struct Fusion {
     std::atomic<uint32_t> ioFormat{AUDIO_FORMAT_PCM_FLOAT | (AUDIO_FORMAT_PCM_FLOAT<<8)};
     std::atomic<bool> enabled{false};
     std::atomic<uint32_t> hostRate{0}, processedFrames{0};
+    std::atomic<int32_t> bassFrequency{0}, bassGain{0};
     bool jamesEnabled=true, viperEnabled=true, configured=false;
     int32_t balance=0;
     float balanceCurrent=0.f, balanceSmoothing=.002f;
@@ -146,6 +148,7 @@ int32_t setConfig(Fusion& f,const effect_config_t& cfg) {
     f.config=next;
     f.ioFormat.store(in.format | (uint32_t(out.format)<<8) | (uint32_t(out.accessMode==EFFECT_BUFFER_ACCESS_ACCUMULATE)<<16));
     f.configured=true;
+    f.bassFrequency.store(0); f.bassGain.store(0);
     // Reserve upstream James block memory at configuration time, not its first
     // callback. The fixed wrapper work buffers are allocated with the instance.
     std::fill(f.first.begin(),f.first.end(),0.f);
@@ -170,6 +173,13 @@ template<class T> T valueAt(const void* bytes,size_t index=0) {
 // strict effect_param_t validation. These checks also prevent partial transfers
 // from being committed and make shared DDC/IR/LiveProg uploads deterministic.
 int validateJames(Fusion& f,uint32_t id,const uint8_t* data,uint32_t n) {
+    if(id==1300) {
+        if(n!=28) return -EINVAL;
+        const int32_t lower[7]={0,0,1,50,5,5,5}, upper[7]={150,249,250,400,1000,2000,5000};
+        for(size_t i=0;i<7;++i)
+            if(valueAt<int32_t>(data,i)<lower[i] || valueAt<int32_t>(data,i)>upper[i]) return -EINVAL;
+        return valueAt<int32_t>(data,1)<valueAt<int32_t>(data,2)?0:-EINVAL;
+    }
     if(id==8888) {
         if(n!=8) return -EINVAL;
         int32_t count=valueAt<int32_t>(data),unit=valueAt<int32_t>(data,1);
@@ -259,6 +269,11 @@ int validateViper(uint32_t id,const uint8_t* data,uint32_t n) {
         case 65573: case 65577: case 65580: return v>=0 && v<=2100 ? 0 : -EINVAL;
         case 65575: case 65579: case 65582: case 65585: return v>=0 && v<=2 ? 0 : -EINVAL;
         case 65576: return v>=15 && v<=500 ? 0 : -EINVAL;
+        case 65590: return v>=30 && v<=200 ? 0 : -EINVAL;
+        case 65591: return v>=20 && v<=80 ? 0 : -EINVAL;
+        case 65592: return v>=60 && v<=160 ? 0 : -EINVAL;
+        case 65593: case 65594: return v>=-120 && v<=120 ? 0 : -EINVAL;
+        case 65595: case 65596: return v>=10 && v<=200 ? 0 : -EINVAL;
         default: return -EINVAL;
     }
 }
@@ -271,10 +286,15 @@ int32_t parameter(Fusion& f,bool set,uint32_t size,void* data,uint32_t* replySiz
     const auto* values=reinterpret_cast<const uint8_t*>(packet->data+4);
     if(set) {
         if(packet->vsize>size-sizeof(effect_param_t)-4 || *replySize<4) return -EINVAL;
+        if((id==1300 || (id>=65590 && id<=65596)) && size!=sizeof(effect_param_t)+4+packet->vsize)
+            return statusReply(replySize,reply,-EINVAL);
         int32_t status=0;
         if(id==kJamesEnable || id==kViperEnable) {
             if(packet->vsize!=4 || (valueAt<int32_t>(values)!=0 && valueAt<int32_t>(values)!=1)) status=-EINVAL;
-            else if(id==kJamesEnable) f.jamesEnabled=valueAt<int32_t>(values)!=0;
+            else if(id==kJamesEnable) {
+                f.jamesEnabled=valueAt<int32_t>(values)!=0;
+                if(!f.jamesEnabled) { f.bassFrequency.store(0); f.bassGain.store(0); }
+            }
             else f.viperEnabled=valueAt<int32_t>(values)!=0;
         } else if(id==kBalance) {
             if(packet->vsize!=4 || valueAt<int32_t>(values)<-100 || valueAt<int32_t>(values)>100) status=-EINVAL;
@@ -308,18 +328,23 @@ int32_t parameter(Fusion& f,bool set,uint32_t size,void* data,uint32_t* replySiz
                 auto handle=isViper?f.viper:f.james;
                 int32_t result=(*handle)->command(handle,EFFECT_CMD_SET_PARAM,size,data,&childReplySize,&status);
                 if(result) status=result;
+                if(!status && id==1201 && valueAt<int16_t>(values)==0) {
+                    f.bassFrequency.store(0); f.bassGain.store(0);
+                }
             }
         }
         return statusReply(replySize,reply,status);
     }
     if(packet->vsize!=4 || *replySize<sizeof(effect_param_t)+8) return -EINVAL;
     if(id==kProtocol || id==kCapabilities || id==kJamesEnable || id==kViperEnable || id==kBalance ||
-       id==kHostRate || id==kProcessedFrames) {
+        id==kHostRate || id==kProcessedFrames || id==kBassFrequency || id==kBassGain) {
         auto* result=static_cast<effect_param_t*>(reply);
         result->status=0; result->psize=result->vsize=4;
-        int32_t value=id==kHostRate?static_cast<int32_t>(f.hostRate.load()):
+        int32_t value=id==kBassFrequency?(f.enabled.load()?f.bassFrequency.load():0):
+            (id==kBassGain?(f.enabled.load()?f.bassGain.load():0):
+            (id==kHostRate?static_cast<int32_t>(f.hostRate.load()):
             (id==kProcessedFrames?static_cast<int32_t>(f.processedFrames.load()&0x7fffffffu):
-            (id==kProtocol?5:(id==kCapabilities?31:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)))));
+            (id==kProtocol?5:(id==kCapabilities?63:(id==kBalance?f.balance:(id==kJamesEnable?f.jamesEnabled:f.viperEnabled)))))));
         std::memcpy(result->data,&id,4); std::memcpy(result->data+4,&value,4);
         *replySize=sizeof(effect_param_t)+8; return 0;
     }
@@ -377,6 +402,15 @@ int32_t process(effect_handle_t self,audio_buffer_t* in,audio_buffer_t* out) {
             writeSample(out->raw,(offset+frame)*2+1,outputFormat,std::clamp(clean(current[frame*2+1])*right,-1.f,1.f),accumulate);
         }
     }
+    // Snapshot the child while owning its process lock. UI polling only reads atomics.
+    for(uint32_t id:{kBassFrequency,kBassGain}) {
+        std::array<uint32_t,5> request{0,4,4,id,0},response{};
+        uint32_t bytes=sizeof(response);
+        int32_t value=0;
+        if(f.jamesEnabled && !(*f.james)->command(f.james,EFFECT_CMD_GET_PARAM,16,request.data(),&bytes,response.data()) &&
+            bytes==sizeof(response) && response[0]==0) value=static_cast<int32_t>(response[4]);
+        (id==kBassFrequency?f.bassFrequency:f.bassGain).store(value,std::memory_order_relaxed);
+    }
     f.processedFrames.fetch_add(static_cast<uint32_t>(in->frameCount),std::memory_order_relaxed);
     return 0;
 }
@@ -387,7 +421,7 @@ int32_t commandInternal(effect_handle_t self,uint32_t code,uint32_t size,void* d
     if(code==EFFECT_CMD_GET_PARAM && data && size>=sizeof(effect_param_t)+4) {
         const auto* packet=static_cast<const effect_param_t*>(data);
         const auto id=valueAt<uint32_t>(packet->data);
-        if(packet->psize==4 && (id==kHostRate || id==kProcessedFrames))
+        if(packet->psize==4 && (id==kHostRate || id==kProcessedFrames || id==kBassFrequency || id==kBassGain))
             return parameter(f,false,size,data,replySize,reply);
     }
     // PEQ and surround own pending-snapshot locks. Preparing new filters must
@@ -412,8 +446,10 @@ int32_t commandInternal(effect_handle_t self,uint32_t code,uint32_t size,void* d
             std::memcpy(reply,&f.config,sizeof(f.config)); *replySize=sizeof(f.config); return 0;
         case EFFECT_CMD_ENABLE: case EFFECT_CMD_DISABLE:
             if(!replySize || !reply || *replySize<4) return -EINVAL;
+            if(code==EFFECT_CMD_DISABLE) { f.bassFrequency.store(0); f.bassGain.store(0); }
             f.enabled.store(code==EFFECT_CMD_ENABLE); return statusReply(replySize,reply,0);
         case EFFECT_CMD_RESET:
+            f.bassFrequency.store(0); f.bassGain.store(0);
             childCommand(f.james,EFFECT_CMD_RESET); childCommand(f.viper,EFFECT_CMD_RESET); f.tone.reset();f.peq.reset();f.surround.reset();
             return replySize && reply ? statusReply(replySize,reply,0) : 0;
         case EFFECT_CMD_SET_PARAM: case EFFECT_CMD_GET_PARAM:

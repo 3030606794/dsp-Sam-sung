@@ -164,6 +164,18 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 		if (cep->psize == 4 && cep->vsize == 4)
 		{
 			int32_t cmd = ((int32_t *)cep)[3];
+			if (cmd == 131084 || cmd == 131085)
+			{
+				reply1x4_1x4_t *replyData = (reply1x4_1x4_t *)pReplyData;
+				replyData->status = 0;
+				replyData->psize = replyData->vsize = 4;
+				replyData->cmd = cmd;
+				const DBB *dbb = &dspmain->jdsp.dbb;
+				const float value = cmd == 131084 ? dbb->smoothMaxFreq : dbb->boostdB;
+				replyData->data = dspmain->jdsp.bassBoostEnabled && dbb->processed && isfinite(value) ? (int32_t)lroundf(value * 100.f) : 0;
+				*replySize = sizeof(reply1x4_1x4_t);
+				return 0;
+			}
 			if (cmd == 19998)
 			{
 				reply1x4_1x4_t *replyData = (reply1x4_1x4_t *)pReplyData;
@@ -269,6 +281,14 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 	{
 		effect_param_t *cep = (effect_param_t *)pCmdData;
 		int32_t *replyData = (int32_t *)pReplyData;
+		if (cep->psize == 4 && cmdSize >= sizeof(effect_param_t) + 4 && ((int32_t *)cep)[3] == 1300)
+		{
+			if (cep->vsize != 28 || cmdSize != sizeof(effect_param_t) + 32)
+				*replyData = -EINVAL;
+			else
+				*replyData = BassBoostSetAdvanced(&dspmain->jdsp, (const int32_t *)(cep->data + 4)) ? 0 : -EINVAL;
+			return 0;
+		}
 		if (cep->psize == 4 && cep->vsize == 2)
 		{
 			int32_t cmd = ((int32_t *)cep)[3];

@@ -23,6 +23,8 @@ import com.google.android.material.slider.Slider
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.MainApplication
 import me.timschneeberger.rootlessjamesdsp.fusion.OutputRuntimeStatus
+import me.timschneeberger.rootlessjamesdsp.fusion.BassController
+import me.timschneeberger.rootlessjamesdsp.fusion.BassRuntimeStatus
 import me.timschneeberger.rootlessjamesdsp.model.root.RemoteEffectSession
 import me.timschneeberger.rootlessjamesdsp.utils.RoutingObserver
 import me.timschneeberger.rootlessjamesdsp.utils.preferences.Preferences
@@ -48,6 +50,7 @@ class OutputControlFragment : Fragment(R.layout.fragment_output_control), Routin
     private val routingObserver: RoutingObserver by inject()
     private val appPreferences: Preferences.App by inject()
     private val runtimeTracker = OutputRuntimeStatus.Tracker()
+    private val bassRuntimeTracker = BassRuntimeStatus.Tracker()
     private val appPreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> renderRoute() }
 
     private data class Control(
@@ -102,14 +105,20 @@ class OutputControlFragment : Fragment(R.layout.fragment_output_control), Routin
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 // Snapshot the session map on the main thread; native reads run off the UI thread.
                 runtimeTracker.clear()
+                bassRuntimeTracker.clear()
                 while (true) {
                     val app = context?.applicationContext as? MainApplication
                     val engines = app?.rootSessionDatabase?.sessionList?.values
                         ?.mapNotNull { (it as? RemoteEffectSession)?.effect }.orEmpty()
-                    val sessions = withContext(Dispatchers.IO) {
-                        engines.mapNotNull { engine -> runCatching { engine.outputRuntimeSession() }.getOrNull() }
+                    val readings = withContext(Dispatchers.IO) {
+                        engines.mapNotNull { engine -> runCatching {
+                            engine.outputRuntimeSession()?.let { it to engine.bassRuntimeReading(it) }
+                        }.getOrNull() }
                     }
-                    renderRuntimeStatus(runtimeTracker.update(sessions))
+                    renderRuntimeStatus(runtimeTracker.update(readings.map { it.first }))
+                    val bassEnabled = BassController.preferences(requireContext(), false)
+                        .getBoolean(getString(R.string.key_bass_enable), false)
+                    BassController.publishRuntime(requireContext(), bassRuntimeTracker.update(readings.mapNotNull { it.second }, bassEnabled))
                     delay(1000)
                 }
             }
@@ -253,10 +262,17 @@ class OutputControlFragment : Fragment(R.layout.fragment_output_control), Routin
         dialog.show()
     }
 
+    override fun onPause() {
+        BassController.publishRuntime(requireContext(), BassRuntimeStatus.Snapshot(BassRuntimeStatus.State.UNKNOWN))
+        super.onPause()
+    }
+
     override fun onDestroyView() {
         routingObserver.unregisterOnRoutingChangeListener(this)
         appPreferences.unregisterOnSharedPreferenceChangeListener(appPreferenceListener)
         runtimeTracker.clear()
+        bassRuntimeTracker.clear()
+        BassController.publishRuntime(requireContext(), BassRuntimeStatus.Snapshot(BassRuntimeStatus.State.UNKNOWN))
         preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         requireContext().unregisterLocalReceiver(presetReceiver)
         controls.clear()
