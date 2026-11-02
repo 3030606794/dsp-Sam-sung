@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menu A proposal: native 24-unit geometry, existing theme tint only. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.1"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M2.5,2.5 L2.5,21.5 L22,21.5" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M7,21.5 L7,20.3" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M12,21.5 L12,20.3" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M17,21.5 L17,20.3" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M2.5,7 L3.7,7" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M2.5,12 L3.7,12" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M2.5,17 L3.7,17" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.55"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M3.4,14.8042 L3.648,14.6987 L3.896,14.5504 L4.144,14.3495 L4.392,14.0872 L4.64,13.7581 L4.888,13.3616 L5.136,12.904 L5.384,12.4 L5.632,11.8728 L5.88,11.3534 L6.128,10.8777 L6.376,10.4828 L6.624,10.2031 L6.872,10.0651 L7.12,10.0844 L7.368,10.2633 L7.616,10.5911 L7.864,11.0455 L8.112,11.5967 L8.36,12.2113 L8.608,12.8564 L8.856,13.5037 L9.104,14.1308 L9.352,14.7228 L9.6,15.271 L9.848,15.7718 L10.096,16.2244 L10.344,16.6291 L10.592,16.9859 L10.84,17.2935 L11.088,17.5494 L11.336,17.7499 L11.584,17.8913 L11.832,17.9706 L12.08,17.9866 L12.328,17.9399 L12.576,17.8339 L12.824,17.674 L13.072,17.4672 L13.32,17.2211 L13.568,16.9428 L13.816,16.6377 L14.064,16.3087 L14.312,15.9552 L14.56,15.573 L14.808,15.1551 L15.056,14.6925 L15.304,14.1763 L15.552,13.5999 L15.8,12.9617 L16.048,12.2677 L16.296,11.5329 L16.544,10.7818 L16.792,10.0482 L17.04,9.3716 L17.288,8.7943 L17.536,8.3558 L17.784,8.0879 L18.032,8.0105 L18.28,8.1288 L18.528,8.4321 L18.776,8.8954 L19.024,9.4824 L19.272,10.1504 L19.52,10.8549 L19.768,11.5546 L20.016,12.2149 L20.264,12.8107 L20.512,13.3263 L20.76,13.7557 L21.008,14.1004 L21.256,14.3675 L21.504,14.5675 L21.752,14.7124 L22,14.814" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M6,9.05495 H8 V11.05495 H6 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M11,16.98835 H13 V18.98835 H11 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M17,7.00945 H19 V9.00945 H17 Z" />
+</vector>

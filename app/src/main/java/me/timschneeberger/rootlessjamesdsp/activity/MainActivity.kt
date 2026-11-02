@@ -16,7 +16,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.PersistableBundle
-import android.view.HapticFeedbackConstants
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import androidx.activity.result.ActivityResultLauncher
@@ -25,15 +24,17 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.DialogPreference.TargetFragment
 import androidx.preference.Preference
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import me.timschneeberger.rootlessjamesdsp.ui.glass.GlassAlertDialogBuilder as MaterialAlertDialogBuilder
 import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.timschneeberger.rootlessjamesdsp.BuildConfig
 import me.timschneeberger.rootlessjamesdsp.MainApplication
 import me.timschneeberger.rootlessjamesdsp.R
@@ -45,6 +46,7 @@ import me.timschneeberger.rootlessjamesdsp.fragment.LibraryLoadErrorFragment
 import me.timschneeberger.rootlessjamesdsp.interop.JamesDspRemoteEngine
 import me.timschneeberger.rootlessjamesdsp.interop.JamesDspWrapper
 import me.timschneeberger.rootlessjamesdsp.model.ProcessorMessage
+import me.timschneeberger.rootlessjamesdsp.model.root.RemoteEffectSession
 import me.timschneeberger.rootlessjamesdsp.model.preset.Preset
 import me.timschneeberger.rootlessjamesdsp.preference.FileLibraryPreference
 import me.timschneeberger.rootlessjamesdsp.service.BaseAudioProcessorService
@@ -74,6 +76,8 @@ import me.timschneeberger.rootlessjamesdsp.utils.isRootless
 import me.timschneeberger.rootlessjamesdsp.utils.sdkAbove
 import me.timschneeberger.rootlessjamesdsp.utils.storage.StorageUtils
 import me.timschneeberger.rootlessjamesdsp.view.FloatingToggleButton
+import me.timschneeberger.rootlessjamesdsp.ui.MainControlMotion
+import me.timschneeberger.rootlessjamesdsp.ui.HomeQuickActionsMenu
 import org.koin.core.component.inject
 import timber.log.Timber
 import java.io.File
@@ -85,6 +89,8 @@ class MainActivity : BaseActivity() {
     /* UI bindings */
     lateinit var binding: ActivityDspMainBinding
     private lateinit var dspFragment: DspFragment
+    private var mainControlMotion: MainControlMotion?=null
+    private var homeQuickActions: HomeQuickActionsMenu? = null
 
     /* Rootless version */
     private lateinit var mediaProjectionManager: MediaProjectionManager
@@ -194,63 +200,23 @@ class MainActivity : BaseActivity() {
             return
         }
 
-        // Inflate bottom left menu
-        menuInflater.inflate(R.menu.menu_main_bottom_left, binding.leftMenu.menu)
-        binding.leftMenu.setOnMenuItemClickListener { arg0 ->
-            if (arg0.itemId == R.id.action_settings) {
-                startActivity(Intent(this, SettingsActivity::class.java))
-                true
+        // Keep the central power button separate from the two compact corner controls.
+        binding.bar.menu.clear()
+        homeQuickActions = HomeQuickActionsMenu(
+            binding.homeMoreButton,
+            ::openPresetLibrary,
+            { startActivity(Intent(this, BlocklistActivity::class.java)) },
+            { startActivity(Intent(this, AllowlistActivity::class.java)) }
+        ) {
+            showYesNoAlert(R.string.revert_confirmation_title, R.string.revert_confirmation) {
+                if (it) restoreDspSettings()
             }
-            else
-                false
         }
-
-        // Inflate bottom right menu
-        binding.bar.inflateMenu(R.menu.menu_main_bottom)
-
-        if(isPlugin() || (isRoot() && !app.isEnhancedProcessing))
-            binding.bar.menu.removeItem(R.id.action_blocklist)
-
-        binding.bar.setOnMenuItemClickListener { arg0 ->
-            when (arg0.itemId) {
-                R.id.action_blocklist -> {
-                    if(!app.isEnhancedProcessing && isRoot()) {
-                        showAlert(
-                            R.string.enhanced_processing_feature_unavailable,
-                            R.string.enhanced_processing_feature_unavailable_content
-                        )
-                    }
-                    else
-                        startActivity(Intent(this, BlocklistActivity::class.java))
-                    true
-                }
-                R.id.action_presets -> {
-                    if (presetDialogHost == null) {
-                        Timber.d("Initialize preset dialog host")
-                        presetDialogHost = FakePresetFragment.newInstance()
-                        supportFragmentManager.beginTransaction()
-                            .add(R.id.dsp_fragment_container, presetDialogHost!!)
-                            .commitNow()
-                    }
-                    presetDialogHost?.pref?.refresh()
-
-                    val dialogFragment = FileLibraryDialogFragment.newInstance("presets")
-                    @Suppress("DEPRECATION")
-                    dialogFragment.setTargetFragment(presetDialogHost, 0)
-                    dialogFragment.show(supportFragmentManager, null)
-                    true
-                }
-                R.id.action_revert -> {
-                    this.showYesNoAlert(
-                        R.string.revert_confirmation_title,
-                        R.string.revert_confirmation
-                    ) {
-                        if(it)
-                            restoreDspSettings()
-                    }
-                    true
-                }
-                else -> false
+        binding.homeMoreButton.setOnClickListener { homeQuickActions?.show() }
+        mainControlMotion=MainControlMotion(binding.settingsButton)
+        binding.settingsButton.setOnClickListener {
+            mainControlMotion?.openSettings {
+                if(!isFinishing && !isDestroyed)startActivity(Intent(this,SettingsActivity::class.java))
             }
         }
 
@@ -265,15 +231,6 @@ class MainActivity : BaseActivity() {
         binding.powerToggle.toggleOnClick = false
         binding.powerToggle.setOnToggleClickListener(object : FloatingToggleButton.OnToggleClickListener{
             override fun onClick() {
-                sdkAbove(Build.VERSION_CODES.R) {
-                    binding.powerToggle.performHapticFeedback(
-                        if(binding.powerToggle.isToggled)
-                            HapticFeedbackConstants.CONFIRM
-                        else
-                            HapticFeedbackConstants.REJECT
-                    )
-                }
-
                 if(SdkCheck.isQ && isRootless()) {
                     if (binding.powerToggle.isToggled) {
                         // Currently on, let's turn it off
@@ -285,18 +242,7 @@ class MainActivity : BaseActivity() {
                     }
                 }
                 else if (isRoot()) {
-                    when(JamesDspRemoteEngine.isPluginInstalled()) {
-                        JamesDspRemoteEngine.PluginState.Available -> {
-                            binding.powerToggle.isToggled = !binding.powerToggle.isToggled
-                            prefsApp.set(R.string.key_powered_on, binding.powerToggle.isToggled)
-                        }
-                        JamesDspRemoteEngine.PluginState.Unsupported -> {
-                            toast(getString(R.string.version_mismatch_root_toast))
-                        }
-                        JamesDspRemoteEngine.PluginState.Unavailable -> {
-                            toast(getString(R.string.load_fail_header))
-                        }
-                    }
+                    toggleRootPower()
                 }
                 else if(isPlugin()) {
                     binding.powerToggle.isToggled = !binding.powerToggle.isToggled
@@ -328,20 +274,27 @@ class MainActivity : BaseActivity() {
 
         // Root: show error if plugin unavailable
         if(isRoot()) {
-            when(JamesDspRemoteEngine.isPluginInstalled()) {
-                JamesDspRemoteEngine.PluginState.Unavailable -> showLibraryLoadError()
-                JamesDspRemoteEngine.PluginState.Unsupported -> {
-                    prefsApp.set(R.string.key_powered_on, false)
-                    showYesNoAlert(
-                        getString(R.string.version_mismatch_root),
-                        getString(R.string.version_mismatch_root_description)
-                    ) {
-                        if(it) {
-                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/3030606794/DSP-mobile-version/releases")))
+            lifecycleScope.launch {
+                var state = withContext(Dispatchers.IO) { JamesDspRemoteEngine.isPluginInstalled(this@MainActivity) }
+                if (state == JamesDspRemoteEngine.PluginState.NotReady) {
+                    delay(200)
+                    state = withContext(Dispatchers.IO) { JamesDspRemoteEngine.isPluginInstalled(this@MainActivity) }
+                }
+                when(state) {
+                    JamesDspRemoteEngine.PluginState.Unavailable -> showLibraryLoadError()
+                    JamesDspRemoteEngine.PluginState.Unsupported -> {
+                        prefsApp.set(R.string.key_powered_on, false)
+                        showYesNoAlert(
+                            getString(R.string.version_mismatch_root),
+                            getString(R.string.version_mismatch_root_description)
+                        ) {
+                            if(it) {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/3030606794/DSP-mobile-version/releases")))
+                            }
                         }
                     }
+                    else -> {}
                 }
-                else -> {}
             }
         }
 
@@ -369,17 +322,7 @@ class MainActivity : BaseActivity() {
 
         sendLocalBroadcast(Intent(Constants.ACTION_PREFERENCES_UPDATED))
 
-        if(isRoot() && app.isEnhancedProcessing) {
-            if(!hasDumpPermission()) {
-                Timber.e("Dump permission for enhanced processing lost")
-                toast(getString(R.string.enhanced_processing_missing_perm))
-                prefsApp.set(R.string.key_audioformat_enhanced_processing, false)
-            }
-            else {
-                Timber.d("Launching service due to enhanced processing")
-                RootAudioProcessorService.startServiceEnhanced(this)
-            }
-        }
+        if(isRoot())RootAudioProcessorService.refreshProcessingMode(this)
 
         showAndroid15Alert()
 
@@ -390,7 +333,43 @@ class MainActivity : BaseActivity() {
         }
     }
 
+    private fun toggleRootPower() {
+        val target = !binding.powerToggle.isToggled
+        val connected = (application as MainApplication).rootSessionDatabase.sessionList.values.any {
+            (it as? RemoteEffectSession)?.effect?.effect != null
+        }
+        fun applyToggle() {
+            binding.powerToggle.commitUserToggle(target) {
+                prefsApp.set(R.string.key_powered_on, target)
+            }
+        }
+        // A verified live effect needs no second AIDL queue. Turning power off
+        // always remains available, including while the audio service restarts.
+        if (!target || connected) {
+            applyToggle()
+            return
+        }
+        binding.powerToggle.isEnabled = false
+        lifecycleScope.launch {
+            try {
+                when (withContext(Dispatchers.IO) { JamesDspRemoteEngine.isPluginInstalled(this@MainActivity) }) {
+                    JamesDspRemoteEngine.PluginState.Available -> applyToggle()
+                    JamesDspRemoteEngine.PluginState.Unsupported -> toast(getString(R.string.version_mismatch_root_toast))
+                    JamesDspRemoteEngine.PluginState.NotReady -> toast("驱动暂未就绪，请稍后重试连接。")
+                    JamesDspRemoteEngine.PluginState.Unavailable -> toast(getString(R.string.load_fail_header))
+                }
+            } finally {
+                binding.powerToggle.isEnabled = true
+            }
+        }
+    }
+
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        if (key == null || key == getString(R.string.key_audioformat_processing) ||
+            key == getString(R.string.key_audioformat_enhanced_processing) ||
+            key == getString(R.string.key_audioformat_usb_rate_follow)) {
+            homeQuickActions?.refreshProcessingMode()
+        }
         if(key == getString(R.string.key_appearance_nav_hide)) {
             binding.bar.hideOnScroll = prefsApp.get(R.string.key_appearance_nav_hide)
         }
@@ -418,11 +397,15 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onPause() {
+        homeQuickActions?.dismiss()
+        if (::binding.isInitialized) binding.powerToggle.setMotionResumed(false)
         super.onPause()
         prefsVar.set(R.string.key_is_activity_active, false)
     }
 
     override fun onDestroy() {
+        mainControlMotion?.close()
+        mainControlMotion=null
         unregisterLocalReceiver(broadcastReceiver)
         unregisterLocalReceiver(processorMessageReceiver)
 
@@ -441,6 +424,7 @@ class MainActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (::binding.isInitialized) binding.powerToggle.setMotionResumed(true)
         prefsVar.set(R.string.key_is_activity_active, true)
 
         if(isRootless())
@@ -627,7 +611,7 @@ class MainActivity : BaseActivity() {
                 key = R.string.key_liveprog_file
                 keyEnable = R.string.key_liveprog_enable
             }
-            name.endsWith(".vdc") -> {
+            name.endsWith(".vdc",ignoreCase=true) -> {
                 titleRes = R.string.intent_import_vdc
                 subDir = "DDC"
                 namespace = Constants.PREF_DDC
@@ -724,12 +708,26 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private var presetDialogHost: FakePresetFragment? = null
+    private fun openPresetLibrary() {
+        val manager = supportFragmentManager
+        if (manager.isStateSaved || manager.findFragmentByTag(HOME_PRESET_DIALOG) != null) return
+        val host = manager.findFragmentByTag(HOME_PRESET_HOST) as? FakePresetFragment
+            ?: FakePresetFragment.newInstance().also {
+                manager.beginTransaction().add(it, HOME_PRESET_HOST).commitNow()
+            }
+        host.pref.refresh()
+        val dialog = FileLibraryDialogFragment.newInstance("presets")
+        @Suppress("DEPRECATION")
+        dialog.setTargetFragment(host, 0)
+        dialog.showNow(manager, HOME_PRESET_DIALOG)
+    }
 
     companion object {
         const val EXTRA_FORCE_SHOW_CAPTURE_PROMPT = "ForceShowCapturePrompt"
 
         private val DEBUG_IGNORE_MISSING_LIBRARY = BuildConfig.DEBUG
         private const val STATE_LOAD_FAILED = "LoadFailed"
+        private const val HOME_PRESET_HOST = "HomePresetLibraryHost"
+        private const val HOME_PRESET_DIALOG = "HomePresetLibraryDialog"
     }
 }

@@ -57,10 +57,16 @@ internal object BuiltinLiveprogMetadata {
     private fun digest(text: String): String = MessageDigest.getInstance("SHA-256")
         .digest(text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
-    private fun fingerprint(contents: String): String {
+    private fun fingerprint(contents: String, legacy: Boolean = false): String {
         var source = normalized(contents)
-        annotation.findAll(source).map { it.groupValues[1] }.distinct().toList().forEach { key ->
-            source = EelNumberRangeProperty.replaceVariable(key, "VALUE", source) ?: source
+        val declarations = if (legacy) Regex("""(\w+):-?\d*\.?\d*<""") else annotation
+        declarations.findAll(source).map { it.groupValues[1] }.distinct().toList().forEach { key ->
+            source = if (legacy) {
+                // Published identities used permissive annotations and the first literal assignment.
+                // Preserve that historical hash algorithm only for identity compatibility.
+                val range = Regex("""$key\s*=\s*(-?\d+\.?\d*)\s*;""").find(source)?.groups?.get(1)?.range
+                range?.let { source.replaceRange(it, "VALUE") } ?: source
+            } else EelNumberRangeProperty.replaceVariable(key, "VALUE", source) ?: source
         }
         source = Regex("""(?m)^(dBassGain:)(?:100|60|5)(<)""").replace(source) {
             "${it.groupValues[1]}DEFAULT${it.groupValues[2]}"
@@ -70,10 +76,10 @@ internal object BuiltinLiveprogMetadata {
 
     fun identifiedTitle(fileName: String, contents: String): String? {
         val builtin = builtins[fileName] ?: return null
-        return builtin.title.takeIf { builtin.fingerprint == fingerprint(contents) }
+        return builtin.title.takeIf { builtin.fingerprint == fingerprint(contents) || builtin.fingerprint == fingerprint(contents, legacy = true) }
     }
 
-    private val annotation = Regex("""(\w+):-?\d*\.?\d*<""")
+    private val annotation = Regex("""(?m)^[ \t]*([A-Za-z_][A-Za-z_0-9]*):(?:[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)?<""")
     fun isParameterLine(line: String): Boolean = '<' in line && annotation.containsMatchIn(line)
 
     /** Exact old stock files only. Saved values or edited scripts are left byte-for-byte intact. */

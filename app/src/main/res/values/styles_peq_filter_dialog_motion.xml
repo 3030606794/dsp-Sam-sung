@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="PeqFilterDialogWindowAnimation" parent="@android:style/Animation.Dialog">
+        <item name="android:windowEnterAnimation">@anim/peq_filter_dialog_enter</item>
+        <item name="android:windowExitAnimation">@anim/peq_filter_dialog_exit</item>
+    </style>
+</resources>

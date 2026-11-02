@@ -1,23 +1,10 @@
 <PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <me.timschneeberger.rootlessjamesdsp.preference.AppIconPreference
+    <me.timschneeberger.rootlessjamesdsp.preference.AboutHeaderPreference
         app:selectable="false"
         app:iconSpaceReserved="false"
         app:allowDividerBelow="true" />
-
-    <Preference
-        android:title="@string/credits_version"
-        android:summary="x.x.x"
-        android:key="@string/key_credits_version"
-        android:icon="@drawable/ic_twotone_history_24dp"
-        app:allowDividerAbove="true" />
-
-    <Preference
-        android:title="@string/credits_build_info"
-        android:summary="@string/value_not_set"
-        android:icon="@drawable/ic_twotone_info_24dp"
-        android:key="@string/key_credits_build_info" />
 
     <Preference
         android:title="@string/credits_project_page"
@@ -27,6 +14,19 @@
             android:action="android.intent.action.VIEW"
             android:data="https://github.com/3030606794/dsp-Sam-sung" />
     </Preference>
+
+    <me.timschneeberger.rootlessjamesdsp.preference.AuthorBusinessCardPreference
+        android:key="credits_author_business_card"
+        android:title="@string/about_author_card_title"
+        app:iconSpaceReserved="false"
+        app:allowDividerAbove="true"
+        app:allowDividerBelow="true" />
+
+    <Preference
+        android:title="@string/credits_build_info"
+        android:summary="@string/value_not_set"
+        android:icon="@drawable/ic_twotone_info_24dp"
+        android:key="@string/key_credits_build_info" />
 
     <Preference
         android:key="@string/key_credits_google_play"

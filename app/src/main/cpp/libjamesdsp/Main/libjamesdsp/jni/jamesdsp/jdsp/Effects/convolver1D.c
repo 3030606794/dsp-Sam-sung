@@ -4,6 +4,9 @@
 #include <math.h>
 #include <float.h>
 #include "../jdsp_header.h"
+#ifdef DSP_FUSION_STREAMING
+#include "ConvolverControl.h"
+#endif
 #ifdef DSP_FUSION_TEST_ALLOCATIONS
 // Host tests inject failures only into this loader's own allocations. Android
 // builds omit both the hook and this symbol; FFT internals use their allocators.
@@ -29,10 +32,16 @@ void Convolver1DEnable(JamesDSPLib *jdsp)
 {
 	if (jdsp->conv.process)
 		jdsp->convolverEnabled = 1;
+#ifdef DSP_FUSION_STREAMING
+	FusionConvEnabled(jdsp->convolverControl, jdsp->convolverEnabled);
+#endif
 }
 void Convolver1DDisable(JamesDSPLib *jdsp)
 {
 	jdsp->convolverEnabled = 0;
+#ifdef DSP_FUSION_STREAMING
+	FusionConvEnabled(jdsp->convolverControl, 0);
+#endif
 }
 void Convolver1DConstructor(JamesDSPLib *jdsp)
 {

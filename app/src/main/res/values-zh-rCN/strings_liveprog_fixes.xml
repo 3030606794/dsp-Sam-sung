@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="liveprog_legacy_parameter_notice">脚本直接读取的参数会即时更新；初始化中的参数派生计算需移至 @slider 才能实时生效。</string>
+    <string name="liveprog_parameters_save_failed">脚本参数保存失败。</string>
+    <string name="liveprog_parameters_script_inactive">参数已保存；当前脚本版本尚未运行，请先成功编译该脚本。</string>
+    <string name="liveprog_parameters_driver_upgrade">参数已保存，但当前驱动不支持实时调参，请安装配套更新的 DSP 模块后应用。</string>
+    <string name="liveprog_parameters_apply_failed">参数 %1$s 应用失败；设置已保存，保留原来运行的脚本。</string>
+    <string name="liveprog_compile_retained">脚本编译或传输失败（%1$d），已保留原来运行的脚本。</string>
+</resources>

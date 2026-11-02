@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_power_on">PEQ 已开启，点击关闭</string>
+    <string name="peq_power_off">PEQ 已关闭，点击开启</string>
+    <string name="peq_live_monitor_off">实时监听：关</string>
+    <string name="peq_live_monitor_on">实时监听：开</string>
+</resources>

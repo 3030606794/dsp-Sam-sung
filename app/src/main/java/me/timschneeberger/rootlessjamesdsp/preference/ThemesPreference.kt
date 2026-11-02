@@ -17,11 +17,17 @@ class ThemesPreference @JvmOverloads constructor(context: Context, attrs: Attrib
 
     private var recycler: RecyclerView? = null
     private val adapter = ThemesPreferenceAdapter(this)
+    private val scrollListener = object : RecyclerView.OnScrollListener() {
+        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+            lastScrollPosition = recyclerView.computeHorizontalScrollOffset()
+        }
+    }
 
     var lastScrollPosition: Int? = null
 
     var entries: List<AppTheme> = emptyList()
         set(value) {
+            if (field == value) return
             field = value
             adapter.setItems(value)
         }
@@ -33,29 +39,29 @@ class ThemesPreference @JvmOverloads constructor(context: Context, attrs: Attrib
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
         super.onBindViewHolder(holder)
 
-        recycler = holder.findViewById(R.id.themes_list) as RecyclerView
-        recycler?.layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
-        recycler?.adapter = adapter
-
-        // Retain scroll position on activity recreate after changing theme
-        recycler?.addOnScrollListener(
-            object : RecyclerView.OnScrollListener() {
-                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                    super.onScrolled(recyclerView, dx, dy)
-                    lastScrollPosition = recyclerView.computeHorizontalScrollOffset()
-                }
-            },
-        )
-        lastScrollPosition?.let { scrollToOffset(it) }
+        val next = holder.findViewById(R.id.themes_list) as RecyclerView
+        if (recycler !== next) {
+            recycler?.removeOnScrollListener(scrollListener)
+            recycler = next
+            next.itemAnimator = null
+            if (next.layoutManager == null)
+                next.layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
+            if (next.adapter !== adapter) next.adapter = adapter
+            next.addOnScrollListener(scrollListener)
+            // Restore only when a new row is attached, rather than resetting its scroll on rebind.
+            lastScrollPosition?.let(::scrollToOffset)
+        }
     }
 
     override fun onItemClick(position: Int) {
-        if (position !in 0..entries.size) {
+        if (position !in entries.indices) {
             return
         }
 
-        callChangeListener(value)
-        value = entries[position].name
+        val selectedTheme = entries[position].name
+        if (callChangeListener(selectedTheme)) {
+            value = selectedTheme
+        }
     }
 
     override fun onClick() {

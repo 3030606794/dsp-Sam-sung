@@ -4,6 +4,7 @@
 #include <math.h>
 #include <float.h>
 #include "../jdsp_header.h"
+#include "Timbre.h"
 void VTInit(VacuumTube *tb, double fs)
 {
 	tb->pregain = 1.0f;
@@ -105,23 +106,19 @@ void VTProcess(VacuumTube *tb, float *x1, float *x2, float *out1, float *out2, s
 }
 void VacuumTubeEnable(JamesDSPLib *jdsp)
 {
-	VTInit(&jdsp->tube, jdsp->fs);
+	TimbreEnable(jdsp->timbre,jdsp,1);
 	jdsp->tubeEnabled = 1;
 }
 void VacuumTubeDisable(JamesDSPLib *jdsp)
 {
+	TimbreEnable(jdsp->timbre,jdsp,0);
 	jdsp->tubeEnabled = 0;
 }
 void VacuumTubeSetGain(JamesDSPLib *jdsp, double dbGain)
 {
-	if (dbGain > 12.0)
-		dbGain = 12.0;
-	if (dbGain < -3.0)
-		dbGain = -3.0;
-	jdsp->tube.pregain = db2magf(dbGain);
-	jdsp->tube.postgain = 1.0f / jdsp->tube.pregain;
+	TimbreSetLegacyDrive(jdsp->timbre,jdsp,dbGain);
 }
 void VacuumTubeProcess(JamesDSPLib *jdsp, size_t n)
 {
-	VTProcess(&jdsp->tube, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n);
+	TimbreProcess(jdsp->timbre,jdsp,n);
 }

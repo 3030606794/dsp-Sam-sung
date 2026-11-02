@@ -75,7 +75,7 @@
     <!-- Main screen -->
     <string name="power_button_alt">Toggle audio processing</string>
 
-    <string name="compander_enable">Dynamic range compander</string>
+    <string name="compander_enable">动态压扩器</string>
     <string name="compander_timeconstant">Time constant</string>
     <string name="compander_granularity">Granularity</string>
     <string name="compander_granularity_very_low">Very low</string>
@@ -118,13 +118,13 @@
     <string name="eq_preset_rock">Rock</string>
     <string name="eq_preset_vocal">Vocal Booster</string>
 
-    <string name="geq_enable">Arbitrary response equalizer</string>
+    <string name="geq_enable">曲线均衡器</string>
     <string name="geq_nodes">Magnitude response</string>
 
     <string name="bass_enable">Dynamic bass boost</string>
     <string name="bass_max_gain">Maximum gain</string>
 
-    <string name="reverb_enable">房间混响</string>
+    <string name="reverb_enable">场景混响</string>
     <string name="reverb_room_type">Room type</string>
     <string name="reverb_preset_default">Default</string>
     <string name="reverb_preset_small_hall1">Small hall 1</string>
@@ -140,7 +140,7 @@
     <string name="reverb_preset_long_reverb1">Long reverb 1</string>
     <string name="reverb_preset_long_reverb2">Long reverb 2</string>
 
-    <string name="convolver_enable">卷积处理</string>
+    <string name="convolver_enable">脉冲响应卷积</string>
     <string name="convolver_impulse">Impulse response</string>
     <string name="convolver_advanced_editing">Advanced waveform editing</string>
     <string name="convolver_convolution_mode">Impulse response optimization</string>
@@ -148,10 +148,11 @@
     <string name="convolver_convolution_mode_shrink">Shrink</string>
     <string name="convolver_convolution_mode_minimum_phase_shrink">Minimum phase transform and shrink</string>
 
-    <string name="ddc_enable">DDC 耳机响应校正</string>
+    <string name="ddc_enable">DDC 频响校正</string>
+    <string name="ddc_import_file">导入文件</string>
     <string name="ddc_file">DDC file</string>
 
-    <string name="liveprog_enable">可编程 DSP</string>
+    <string name="liveprog_enable">DSP 脚本处理</string>
     <string name="liveprog_file">Liveprog script</string>
     <string name="liveprog_additional_params">Additional script parameters</string>
     <string name="liveprog_additional_params_not_supported">Selected script has no customizable parameters</string>
@@ -160,7 +161,7 @@
     <string name="liveprog_edit_header">Edit selected script</string>
     <string name="liveprog_edit">Open active script in built-in editor</string>
 
-    <string name="tube_enable">模拟音色仿真</string>
+    <string name="tube_enable">分频染色</string>
     <string name="tube_drive">Preamp</string>
 
     <string name="output_control_header">Output control</string>
@@ -168,7 +169,7 @@
     <string name="output_limiter_release">Limiter release</string>
     <string name="output_control_postgain">Post gain</string>
 
-    <string name="stereowide_enable">Soundstage wideness</string>
+    <string name="stereowide_enable">立体声宽度</string>
     <string name="stereowide_level">Wideness</string>
     <string name="stereowide_level_none">None</string>
     <string name="stereowide_level_very_wide">Very wide</string>
@@ -176,7 +177,7 @@
     <string name="stereowide_level_very_narrow">Very narrow</string>
     <string name="stereowide_level_narrow">Narrow</string>
 
-    <string name="crossfeed_enable">交叉馈送</string>
+    <string name="crossfeed_enable">耳机空间模拟</string>
     <string name="crossfeed_preset">Preset</string>
     <string name="crossfeed_preset_bs2b_weak">BS2B Weak</string>
     <string name="crossfeed_preset_bs2b_strong">BS2B Strong</string>
@@ -298,18 +299,18 @@
     <string name="audio_format_header">Audio processing</string>
     <string name="audio_format_section_header">Preferred audio format</string>
     <string name="audio_format_processing_header">Audio processing options</string>
-    <string name="audio_format_processing_legacy">Legacy mode</string>
-    <string name="audio_format_processing_legacy_on">Attach globally to session 0 (deprecated)</string>
-    <string name="audio_format_processing_legacy_off">Attach to each app individually</string>
-    <string name="audio_format_enhanced_processing">Enhanced processing</string>
-    <string name="audio_format_enhanced_processing_on">Per-app control and enhanced support for apps enabled</string>
-    <string name="audio_format_enhanced_processing_off">Enhanced processing disabled</string>
+    <string name="audio_format_processing_legacy">Global mode (system default)</string>
+    <string name="audio_format_processing_legacy_on">Switch to the default Android system audio route; enabling this turns HD PCM off.</string>
+    <string name="audio_format_processing_legacy_off">Global attachment disconnected; using player sessions.</string>
+    <string name="audio_format_enhanced_processing">Enhanced processing (dynamic session tracking)</string>
+    <string name="audio_format_enhanced_processing_on">Attach only to active, nonzero player sessions.</string>
+    <string name="audio_format_enhanced_processing_off">Switch on to disconnect global mode and track player sessions.</string>
     <string name="audio_format_enhanced_processing_info_title">What is enhanced processing?</string>
     <string name="audio_format_enhanced_processing_info">Tap to view documentation</string>
-    <string name="audio_format_enhanced_processing_info_content">When enhanced processing is enabled, you can selectively exclude certain apps from being processed by JamesDSP. Use the 3-dot menu on the bottom right corner and select \'Excluded apps\' to access this feature.\n\nWhile legacy mode is disabled, JamesDSP relies on media apps to send a system broadcast when they start playback. This is an advantage over legacy mode because each app gets its own JamesDSP effect engine assigned to it, which allows for more fine-grained control. Otherwise, with legacy mode turned on, all apps would share a single processing engine, which Android deprecates and should not be used anymore.\n\nUnfortunately, not all media apps do this correctly and, therefore, would not function correctly with legacy mode disabled. To solve this issue, you can enable enhanced processing. Instead of relying on system broadcasts about new media sessions, JamesDSP will proactively scan for media sessions by itself and allow proper support for uncooperative media apps.</string>
+    <string name="audio_format_enhanced_processing_info_content">Enhanced processing and HD PCM / player-session mode select the same mode. Enabling either disconnects system Session 0 and tracks actual nonzero playback sessions. App allowlists and exclusions apply in this mode. Initialized sessions remain connected through pauses while their player process is alive.\n\nGlobal mode selects the Android default system audio route through Session 0. It does not automatically switch to player sessions. App lists are retained for player-session mode and do not filter the system mix. A suspended or bypassed global chain is reported on the home screen.\n\nThe home screen shows the session and sample rate actually being processed. The modes are mutually exclusive: the previous effect is released before the new mode is attached.</string>
     <string name="audio_format_media_apps_need_restart">You need to restart all active media apps after changing this setting to resume audio processing.</string>
     <string name="audio_format_summary">Preferred audio encoding, buffer size</string>
-    <string name="audio_format_summary_root">Legacy mode, enhanced processing</string>
+    <string name="audio_format_summary_root">System-global and player-session processing</string>
     <string name="audio_format_summary_plugin">Convolver optimizations</string>
     <string name="audio_format_encoding">Audio encoding</string>
     <string name="audio_format_encoding_int16">16-bit integer PCM</string>
@@ -624,8 +625,8 @@
     <string name="backup_automatic_backup">Automatic backup</string>
     <string name="backup_compat_info">Backups only include impulse responses, scripts, VDC files, presets, and the current audio configuration for maximum compatibility with other versions.</string>
     <string name="backup_restore_mode_title">Restore mode</string>
-    <string name="backup_restore_mode_clean">Clean restore (delete all existing files)</string>
-    <string name="backup_restore_mode_dirty">Dirty restore (overwrite only)</string>
+    <string name="backup_restore_mode_clean">Clean restore (preserve existing impulse responses)</string>
+    <string name="backup_restore_mode_dirty">Merge restore (preserve existing impulse responses)</string>
     <string name="backup_in_progress">Backup already in progress</string>
 
     <!-- Multi-device profiles -->

@@ -34,6 +34,7 @@
     <integer name="default_audioformat_buffersize" translatable="false">8192</integer>
     <bool name="default_audioformat_processing" translatable="false">true</bool>
     <bool name="default_audioformat_enhanced_processing" translatable="false">false</bool>
+    <bool name="default_audioformat_usb_rate_follow" translatable="false">false</bool>
     <bool name="default_audioformat_optimization_benchmark" translatable="false">false</bool>
 
     <!-- Device profiles -->

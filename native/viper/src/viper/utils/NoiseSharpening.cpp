@@ -34,6 +34,15 @@ void NoiseSharpening::Process(float *buffer, uint32_t size) {
     }
 }
 
+void NoiseSharpening::ProcessSelected(float* samples,const float sharpenInput[2]) {
+    for(unsigned ch=0;ch<2;++ch) {
+        const float shaped=samples[ch]+(sharpenInput[ch]-in[ch])*gain;
+        in[ch]=sharpenInput[ch];
+        const float hist=shaped*filters[ch].b1;
+        samples[ch]=filters[ch].prevSample+shaped*filters[ch].b0;
+        filters[ch].prevSample=shaped*filters[ch].a1+hist;
+    }
+}
 void NoiseSharpening::Reset() {
     for (int i = 0; i < 2; i++) {
         this->filters[i].setLPF_BW((float) ((double) this->samplingRate / 2.0 - 1000.0), this->samplingRate);

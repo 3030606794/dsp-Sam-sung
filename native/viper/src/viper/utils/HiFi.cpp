@@ -1,78 +1,85 @@
 #include "HiFi.h"
 #include "../constants.h"
+#include "ProfessionalTuning.h"
+#include <algorithm>
 
 HiFi::HiFi() {
-    this->gain = 1.f;
-    this->samplingRate = VIPER_DEFAULT_SAMPLING_RATE;
-    for (int i = 0; i < 2; i++) {
-        this->buffers[i] = new WaveBuffer(2, 0x800);
-        this->filters[i].lowpass = new IIR_NOrder_BW_LH(1);
-        this->filters[i].highpass = new IIR_NOrder_BW_LH(3);
-        this->filters[i].bandpass = new IIR_NOrder_BW_BP(3);
+    samplingRate=VIPER_DEFAULT_SAMPLING_RATE;
+    for(auto& filter:filters) {
+        filter.lowpass=new IIR_NOrder_BW_LH(1);
+        filter.highpass=new IIR_NOrder_BW_LH(3);
+        filter.bandpass=new IIR_NOrder_BW_BP(3);
     }
     Reset();
 }
-
 HiFi::~HiFi() {
-    for (int i = 0; i < 2; i++) {
-        delete this->buffers[i];
-        delete this->filters[i].lowpass;
-        delete this->filters[i].highpass;
-        delete this->filters[i].bandpass;
+    for(auto& filter:filters) {delete filter.lowpass;delete filter.highpass;delete filter.bandpass;}
+}
+void HiFi::RefreshFilters(bool resetState) {
+    for(auto& filter:filters) {
+        filter.lowpass->setLPF(currentLow,samplingRate);
+        filter.highpass->setHPF(currentHigh,samplingRate);
+        filter.bandpass->setBPF(currentLow,currentHigh,samplingRate);
+        if(resetState) {filter.lowpass->Mute();filter.highpass->Mute();filter.bandpass->Mute();}
     }
 }
-
-void HiFi::Process(float *samples, uint32_t size) {
-    if (size > 0) {
-        float *bpBuf = this->buffers[0]->PushZerosGetBuffer(size);
-        float *lpBuf = this->buffers[1]->PushZerosGetBuffer(size);
-        if (bpBuf == nullptr || lpBuf == nullptr) {
-            Reset();
-            return;
-        }
-
-        for (uint32_t i = 0; i < size * 2; i++) {
-            int index = i % 2;
-            float out1 = do_filter_lh(this->filters[index].lowpass, samples[i]);
-            float out2 = do_filter_lh(this->filters[index].highpass, samples[i]);
-            float out3 = do_filter_bp(this->filters[index].bandpass, samples[i]);
-            samples[i] = out2;
-            lpBuf[i] = out1;
-            bpBuf[i] = out3;
-        }
-        float *bpOut = this->buffers[0]->GetBuffer();
-        float *lpOut = this->buffers[1]->GetBuffer();
-        for (uint32_t i = 0; i < size * 2; i++) {
-            float hp = samples[i] * this->gain * 1.2f;
-            float bp = bpOut[i] * this->gain;
-            samples[i] = hp + bp + lpOut[i];
-        }
-        this->buffers[0]->PopSamples(size, false);
-        this->buffers[1]->PopSamples(size, false);
-    }
-}
-
 void HiFi::Reset() {
-    for (uint32_t i = 0; i < 2; i++) {
-        this->filters[i].lowpass->setLPF(120.0, this->samplingRate);
-        this->filters[i].lowpass->Mute();
-        this->filters[i].highpass->setHPF(1200.0, this->samplingRate);
-        this->filters[i].highpass->Mute();
-        this->filters[i].bandpass->setBPF(120.f, 1200.f, this->samplingRate);
-        this->filters[i].bandpass->Mute();
+    currentGain=gain;currentTrim=trim;
+    currentLow=professional::frequency(lowFrequency,samplingRate);
+    currentHigh=professional::frequency(highFrequency,samplingRate);
+    smoothing=professional::alpha(samplingRate);filterSmoothing=professional::alpha(samplingRate,16);
+    delayStep=1.f/(.01f*samplingRate);
+    RefreshFilters(true);
+    lowRing={};midRing={};position=tick=0;
+    lowDelay={LowDelayFrames(),LowDelayFrames(),1.f};
+    midDelay={MidDelayFrames(),MidDelayFrames(),1.f};
+}
+void HiFi::AdvanceTuning() {
+    currentGain=professional::advance(currentGain,gain,smoothing);
+    for(unsigned i=0;i<3;++i) currentTrim[i]=professional::advance(currentTrim[i],trim[i],smoothing);
+    if(tick++%16) return;
+    const float low=professional::frequency(lowFrequency,samplingRate),high=professional::frequency(highFrequency,samplingRate);
+    if(currentLow==low && currentHigh==high) return;
+    currentLow=professional::advance(currentLow,low,filterSmoothing);
+    currentHigh=professional::advance(currentHigh,high,filterSmoothing);
+    RefreshFilters(false);
+}
+unsigned HiFi::LowDelayFrames() const {return professional::delayFrames(samplingRate,lowDelayUs);}
+unsigned HiFi::MidDelayFrames() const {return professional::delayFrames(samplingRate,midDelayUs);}
+void HiFi::StartDelay(Delay& delay,unsigned wanted) {
+    // Complete a transition before following the latest edit; repeated drags never restart it.
+    if(delay.mix>=1.f && delay.to!=wanted) {delay.from=delay.to;delay.to=wanted;delay.mix=0.f;}
+}
+float HiFi::Delayed(const Ring& ring,const Delay& delay,unsigned channel) const {
+    const float first=ring[(position+capacity-delay.from)%capacity][channel];
+    const float second=ring[(position+capacity-delay.to)%capacity][channel];
+    return first+(second-first)*delay.mix;
+}
+void HiFi::Process(float* samples,uint32_t size) {
+    for(uint32_t frame=0;frame<size;++frame) {
+        AdvanceTuning();
+        StartDelay(lowDelay,LowDelayFrames());StartDelay(midDelay,MidDelayFrames());
+        for(unsigned channel=0;channel<2;++channel) {
+            const float input=samples[2*frame+channel];
+            const float low=do_filter_lh(filters[channel].lowpass,input);
+            const float high=do_filter_lh(filters[channel].highpass,input);
+            const float mid=do_filter_bp(filters[channel].bandpass,input);
+            lowRing[position][channel]=low;midRing[position][channel]=mid;
+            // Keep the original three-path summing order and 1.2 high-frequency factor.
+            const float hp=high*currentGain*1.2f*currentTrim[2];
+            const float bp=Delayed(midRing,midDelay,channel)*currentGain*currentTrim[1];
+            samples[2*frame+channel]=hp+bp+Delayed(lowRing,lowDelay,channel)*currentTrim[0];
+        }
+        position=(position+1)%capacity;
+        lowDelay.mix=std::min(1.f,lowDelay.mix+delayStep);
+        midDelay.mix=std::min(1.f,midDelay.mix+delayStep);
     }
-    this->buffers[0]->Reset();
-    this->buffers[0]->PushZeros(this->samplingRate / 400);
-    this->buffers[1]->Reset();
-    this->buffers[1]->PushZeros(this->samplingRate / 200);
-
 }
-
-void HiFi::SetClarity(float value) {
-    this->gain = value;
+void HiFi::SetClarity(float value) {gain=value;}
+void HiFi::SetSamplingRate(uint32_t rate) {
+    if(rate!=samplingRate) {samplingRate=rate;Reset();}
 }
-
-void HiFi::SetSamplingRate(uint32_t samplingRate) {
-    this->samplingRate = samplingRate;
-    Reset();
+void HiFi::SetTuning(float low,float high,const float trimDb[3],uint32_t lowUs,uint32_t midUs) {
+    lowFrequency=low;highFrequency=high;lowDelayUs=lowUs;midDelayUs=midUs;
+    for(unsigned i=0;i<3;++i) trim[i]=professional::amplitude(trimDb[i]);
 }

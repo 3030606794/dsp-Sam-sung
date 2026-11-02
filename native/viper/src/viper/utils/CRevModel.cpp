@@ -1,58 +1,12 @@
 #include "CRevModel.h"
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <memory>
 
 CRevModel::CRevModel() : gain(0), roomSize(0), internalRoomSize(0), damp(0),
         internalDamp(0), wet(0), unknown1(0), unknown2(0), dry(0), width(0), mode(0) {
-    buffers[0] = new float[1116];
-    buffers[1] = new float[1139];
-    buffers[2] = new float[1188];
-    buffers[3] = new float[1211];
-    buffers[4] = new float[1277];
-    buffers[5] = new float[1300];
-    buffers[6] = new float[1356];
-    buffers[7] = new float[1379];
-    buffers[8] = new float[1422];
-    buffers[9] = new float[1445];
-    buffers[10] = new float[1491];
-    buffers[11] = new float[1514];
-    buffers[12] = new float[1557];
-    buffers[13] = new float[1580];
-    buffers[14] = new float[1617];
-    buffers[15] = new float[1640];
-
-    buffers[16] = new float[556];
-    buffers[17] = new float[579];
-    buffers[18] = new float[441];
-    buffers[19] = new float[464];
-    buffers[20] = new float[341];
-    buffers[21] = new float[364];
-    buffers[22] = new float[225];
-    buffers[23] = new float[248];
-
-    combL[0].SetBuffer(buffers[0], 1116);
-    combR[0].SetBuffer(buffers[1], 1139);
-    combL[1].SetBuffer(buffers[2], 1188);
-    combR[1].SetBuffer(buffers[3], 1211);
-    combL[2].SetBuffer(buffers[4], 1277);
-    combR[2].SetBuffer(buffers[5], 1300);
-    combL[3].SetBuffer(buffers[6], 1356);
-    combR[3].SetBuffer(buffers[7], 1379);
-    combL[4].SetBuffer(buffers[8], 1422);
-    combR[4].SetBuffer(buffers[9], 1445);
-    combL[5].SetBuffer(buffers[10], 1491);
-    combR[5].SetBuffer(buffers[11], 1514);
-    combL[6].SetBuffer(buffers[12], 1557);
-    combR[6].SetBuffer(buffers[13], 1580);
-    combL[7].SetBuffer(buffers[14], 1617);
-    combR[7].SetBuffer(buffers[15], 1640);
-
-    allpassL[0].SetBuffer(buffers[16], 556);
-    allpassR[0].SetBuffer(buffers[17], 579);
-    allpassL[1].SetBuffer(buffers[18], 441);
-    allpassR[1].SetBuffer(buffers[19], 464);
-    allpassL[2].SetBuffer(buffers[20], 341);
-    allpassR[2].SetBuffer(buffers[21], 364);
-    allpassL[3].SetBuffer(buffers[22], 225);
-    allpassR[3].SetBuffer(buffers[23], 248);
+    SetSamplingRate(48000);
 
     allpassL[0].SetFeedback(0.5);
     allpassR[0].SetFeedback(0.5);
@@ -77,6 +31,27 @@ CRevModel::~CRevModel() {
     for (auto &buffer : buffers) {
         delete[] buffer;
     }
+}
+
+void CRevModel::SetSamplingRate(uint32_t rate) {
+    rate=std::clamp(rate,8000u,768000u);
+    if(rate==samplingRate)return;
+    // The original 48 kHz sound is the time reference. Prepare every line before
+    // replacing live storage; an allocation failure leaves the old bank intact.
+    constexpr unsigned original[]{1116,1139,1188,1211,1277,1300,1356,1379,
+        1422,1445,1491,1514,1557,1580,1617,1640,556,579,441,464,341,364,225,248};
+    std::array<unsigned,24> lengths{};
+    std::array<std::unique_ptr<float[]>,24> prepared;
+    for(unsigned i=0;i<24;++i){
+        lengths[i]=std::max(1u,static_cast<unsigned>(std::lround(double(original[i])*rate/48000.)));
+        prepared[i]=std::make_unique<float[]>(lengths[i]);
+    }
+    for(unsigned i=0;i<24;++i){delete[] buffers[i];buffers[i]=prepared[i].release();}
+    for(unsigned i=0;i<8;++i){combL[i].SetBuffer(buffers[2*i],lengths[2*i]);combR[i].SetBuffer(buffers[2*i+1],lengths[2*i+1]);}
+    for(unsigned i=0;i<4;++i){allpassL[i].SetBuffer(buffers[16+2*i],lengths[16+2*i]);allpassR[i].SetBuffer(buffers[17+2*i],lengths[17+2*i]);}
+    samplingRate=rate;
+    UpdateCoeffs();
+    ResetComparisonState();
 }
 
 float CRevModel::GetDamp() {
@@ -159,6 +134,7 @@ void CRevModel::SetDamp(float damp) {
     this->damp = damp * 0.4f;
     UpdateCoeffs();
 }
+void CRevModel::ResetComparisonState(){for(auto& filter:combL)filter.ResetState();for(auto& filter:combR)filter.ResetState();for(auto& filter:allpassL)filter.ResetState();for(auto& filter:allpassR)filter.ResetState();}
 
 void CRevModel::SetDry(float dry) {
     this->dry = dry * 2.0f;
@@ -198,10 +174,14 @@ void CRevModel::UpdateCoeffs() {
         this->gain = 0.015;
     }
 
+    // Preserve the original pole exactly at 48 kHz, and its time constant at
+    // other actual rates. Scaling delay lines alone would change the damping.
+    const float rateDamp = samplingRate == 48000 || internalDamp == 0.f ? internalDamp :
+        static_cast<float>(std::pow(internalDamp,48000. / samplingRate));
     for (int i = 0; i < 8; i++) {
         this->combL[i].SetFeedback(this->internalRoomSize);
-        this->combL[i].SetDamp(this->internalDamp);
+        this->combL[i].SetDamp(rateDamp);
         this->combR[i].SetFeedback(this->internalRoomSize);
-        this->combR[i].SetDamp(this->internalDamp);
+        this->combR[i].SetDamp(rateDamp);
     }
 }

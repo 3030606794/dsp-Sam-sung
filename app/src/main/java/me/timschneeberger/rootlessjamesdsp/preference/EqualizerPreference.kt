@@ -4,19 +4,24 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.TypedArray
 import android.util.AttributeSet
+import android.widget.FrameLayout
 import androidx.preference.DialogPreference
 import androidx.preference.PreferenceViewHolder
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.PreferenceGraphicEqualizerBinding
+import me.timschneeberger.rootlessjamesdsp.eq.EqualizerHomeSpectrumView
 import me.timschneeberger.rootlessjamesdsp.peq.PeqResponseView
 import me.timschneeberger.rootlessjamesdsp.view.EqPreview
 import me.timschneeberger.rootlessjamesdsp.interop.PreferenceCache
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.view.EqualizerSurface
+import me.timschneeberger.rootlessjamesdsp.ui.ParameterHelp
+import android.view.ViewGroup
 
 class EqualizerPreference : DialogPreference, SharedPreferences.OnSharedPreferenceChangeListener {
 
     private var equalizerView: PeqResponseView? = null
+    private var homeSpectrum: EqualizerHomeSpectrumView? = null
     var initialValue: String = ""
 
     var entries = arrayOf<CharSequence>()
@@ -62,6 +67,7 @@ class EqualizerPreference : DialogPreference, SharedPreferences.OnSharedPreferen
     }
 
     override fun onDetached() {
+        homeSpectrum?.release()
         eqPrefs.unregisterOnSharedPreferenceChangeListener(this)
         super.onDetached()
     }
@@ -78,8 +84,32 @@ class EqualizerPreference : DialogPreference, SharedPreferences.OnSharedPreferen
         super.onBindViewHolder(holder)
 
         val binding = PreferenceGraphicEqualizerBinding.bind(holder.itemView)
-        binding.root.findViewById<android.widget.TextView>(R.id.preview_title).text = "EQ"
+        val host = binding.eqHomeSpectrumHost
+        val spectrum = homeSpectrum ?: EqualizerHomeSpectrumView(context).also { homeSpectrum = it }
+        spectrum.configure(peq = false, hostState = {
+            val group = parent as? SwitchPreferenceGroup
+            (group?.isExpanded == true) to (group?.isChecked == true)
+        })
+        if (spectrum.parent !== host) {
+            (spectrum.parent as? ViewGroup)?.removeView(spectrum)
+            host.removeAllViews()
+            host.addView(spectrum, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
         binding.nodeCount.text = "15 个频段 · 点击调节"
+        binding.nodeCount.isSingleLine = true
+        // The PEQ shares this layout but is intentionally left unchanged.
+        (binding.nodeCount.parent as? android.view.View)?.let { row ->
+            (row.layoutParams as? ViewGroup.MarginLayoutParams)?.apply {
+                topMargin = (12 * context.resources.displayMetrics.density).toInt()
+                bottomMargin = topMargin
+                row.layoutParams = this
+            }
+        }
+        ParameterHelp.attachTitle(binding.nodeCount, "曲线均衡器",
+            "15 个频段分别调节增益，滤波器类型和插值器沿用当前设置；点击曲线进入完整调节页。",
+            "增益范围 −12 至 +12 dB；默认各频段 0 dB。右侧快捷预设点击即可应用。")
+        binding.eqQuickPresets.activate()
         equalizerView = binding.layoutPeq
         updateFromPreferences()
     }

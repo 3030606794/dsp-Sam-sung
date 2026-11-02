@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Approved menu proposal; geometry only. Existing theme tint supplies the color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M2,18 L5,11 L9,5 L13,9 L17,17 L22,19" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M2,18 L2.33333,17.50222 L2.66667,16.94667 L3,16.36 L3.33333,15.77333 L3.66667,15.22356 L4,14.74844 L4.33333,14.38711 L4.66667,14.17378 L5,14.13911 L5.33333,14.30267 L5.66667,14.67511 L6,15.25333 L6.33333,16.02178 L6.66667,16.95156 L7,18 L7.33333,19.11644 L7.66667,20.24133 L8,21.31289 L8.33333,22.26933 L8.66667,23.05378 L9,23.61778 L9.33333,23.92578 L9.66667,23.95689 L10,23.70622 L10.33333,23.18711 L10.66667,22.428 L11,21.472 L11.33333,20.37378 L11.66667,19.19467 L12,18 L12.33333,16.85422 L12.66667,15.816 L13,14.936 L13.33333,14.25156 L13.66667,13.78844 L14,13.556 L14.33333,13.55022 L14.66667,13.75378 L15,14.13911 L15.33333,14.66844 L15.66667,15.30044 L16,15.99067 L16.33333,16.696 L16.66667,17.37689 L17,18 L17.33333,18.53822 L17.66667,18.97422 L18,19.29733 L18.33333,19.50667 L18.66667,19.60711 L19,19.60933 L19.33333,19.52978 L19.66667,19.38578 L20,19.196 L20.33333,18.97956 L20.66667,18.75378 L21,18.53244 L21.33333,18.328 L21.66667,18.14889 L22,18" />
+</vector>

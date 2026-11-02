@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dynamic_peq_title">动态均衡器</string>
+    <string name="dynamic_peq_short_title">动态均衡器</string>
+    <string name="dynamic_peq_description">按频段动态控制，保留声音原有质感</string>
+    <item name="dynamic_peq_chart" type="id" />
+    <item name="dynamic_peq_status" type="id" />
+    <item name="dynamic_peq_power" type="id" />
+    <item name="dynamic_peq_add" type="id" />
+    <item name="dynamic_peq_reset" type="id" />
+    <item name="dynamic_peq_presets" type="id" />
+    <item name="dynamic_peq_band_list" type="id" />
+    <item name="dynamic_peq_home_switch" type="id" />
+    <item name="dynamic_peq_home_edit" type="id" />
+    <item name="dynamic_peq_band_power" type="id" />
+    <item name="dynamic_peq_band_delete" type="id" />
+    <item name="dynamic_peq_band_expand" type="id" />
+    <item name="dynamic_peq_band_dynamic" type="id" />
+    <item name="dynamic_peq_frequency" type="id" />
+    <item name="dynamic_peq_gain" type="id" />
+    <item name="dynamic_peq_q" type="id" />
+    <item name="dynamic_peq_threshold" type="id" />
+    <item name="dynamic_peq_ratio" type="id" />
+    <item name="dynamic_peq_range" type="id" />
+    <item name="dynamic_peq_attack" type="id" />
+    <item name="dynamic_peq_release" type="id" />
+    <item name="dynamic_peq_knee" type="id" />
+    <item name="dynamic_peq_parameter_slider" type="id" />
+    <item name="dynamic_peq_parameter_value" type="id" />
+    <item name="dynamic_peq_parameter_minus" type="id" />
+    <item name="dynamic_peq_parameter_plus" type="id" />
+</resources>

@@ -89,6 +89,18 @@ class EelParser(private val locale: Locale = Locale.getDefault()) {
         return false
     }
 
+    /** Parse the exact snapshot supplied to the compiler, even if the editable file changes. */
+    internal fun loadSource(path: String, source: String): Boolean {
+        reset()
+        if (path.isBlank()) return false
+        this.path = path
+        fileName = File(path).nameWithoutExtension
+        contents = source
+        parse()
+        lastFileHash = source.md5
+        return true
+    }
+
     fun parse(skipProperties: Boolean = false) {
         // Parse description & tags
         parseDescription()

@@ -5,10 +5,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.util.AttributeSet
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.PreferenceGraphicEqualizerBinding
+import me.timschneeberger.rootlessjamesdsp.eq.EqualizerHomeSpectrumView
 import me.timschneeberger.rootlessjamesdsp.peq.PeqRepository
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.registerLocalReceiver
@@ -17,6 +20,7 @@ import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.un
 class GraphicEqualizerPreference : Preference {
 
     private var binding: PreferenceGraphicEqualizerBinding? = null
+    private var homeSpectrum: EqualizerHomeSpectrumView? = null
 
     private val broadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -50,6 +54,7 @@ class GraphicEqualizerPreference : Preference {
     }
 
     override fun onDetached() {
+        homeSpectrum?.release()
         context.unregisterLocalReceiver(broadcastReceiver)
         super.onDetached()
     }
@@ -58,6 +63,18 @@ class GraphicEqualizerPreference : Preference {
         super.onBindViewHolder(holder)
 
         binding = PreferenceGraphicEqualizerBinding.bind(holder.itemView)
+        val host = binding!!.eqHomeSpectrumHost
+        val spectrum = homeSpectrum ?: EqualizerHomeSpectrumView(context).also { homeSpectrum = it }
+        spectrum.configure(peq = true, hostState = {
+            val group = parent as? SwitchPreferenceGroup
+            (group?.isExpanded == true) to (group?.isChecked == true)
+        })
+        if (spectrum.parent !== host) {
+            (spectrum.parent as? ViewGroup)?.removeView(spectrum)
+            host.removeAllViews()
+            host.addView(spectrum, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
         updateFromPreferences()
     }
 

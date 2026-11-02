@@ -5,6 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.preference.PreferenceFragmentCompat
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.transition.MaterialSharedAxis
 import me.timschneeberger.rootlessjamesdsp.MainApplication
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.setBackgroundFromAttribute
@@ -29,5 +30,15 @@ abstract class SettingsBaseFragment : PreferenceFragmentCompat() {
         return super.onCreateView(inflater, container, savedInstanceState).apply {
             setBackgroundFromAttribute(android.R.attr.windowBackground)
         }
+    }
+
+    override fun onCreateRecyclerView(
+        inflater: LayoutInflater,
+        parent: ViewGroup,
+        savedInstanceState: Bundle?,
+    ): RecyclerView = super.onCreateRecyclerView(inflater, parent, savedInstanceState).apply {
+        // A changed preference already updates its native switch. Cross-fading the whole
+        // glass row adds a second animation and can interrupt the thumb's own movement.
+        itemAnimator = null
     }
 }

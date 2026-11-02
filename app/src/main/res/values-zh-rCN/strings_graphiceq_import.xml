@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="geq_import_title">导入 GraphicEQ</string>
+    <string name="geq_import_entry">导入 GraphicEQ 文本</string>
+    <string name="geq_import_intro">将 GraphicEQ 曲线拟合为新的 PEQ 预设。先预览频响，再另存；之后由你从预设库主动应用。</string>
+    <string name="geq_import_pick">选择 TXT 文件</string>
+    <string name="geq_import_text_hint">GraphicEQ 文本 · 可粘贴或编辑</string>
+    <string name="geq_import_text_help">示例：GraphicEQ: 20 0; 100 3; 1000 0; 20000 -2</string>
+    <string name="geq_import_name">新预设名称</string>
+    <string name="geq_import_advanced_expand">专业设置 · 展开</string>
+    <string name="geq_import_advanced_collapse">专业设置 · 折叠</string>
+    <string name="geq_import_max_bands">PEQ 最大段数</string>
+    <string name="geq_import_target_error">目标最大误差</string>
+    <string name="geq_import_advanced_help">段数越多、误差目标越小，计算耗时可能越长。整体电平会保留，可能占用额外频段。误差统计仅覆盖显示的拟合频率范围。</string>
+    <string name="geq_import_options">最多 %1$d 段 · 目标 ≤ %2$s dB</string>
+    <string name="geq_import_fit">拟合并预览</string>
+    <string name="geq_import_refit">重新拟合</string>
+    <string name="geq_import_cancel_fit">取消拟合</string>
+    <string name="geq_import_fitting">正在拟合 · %1$d%%</string>
+    <string name="geq_import_cancelled">已取消拟合，文本和选项已保留。</string>
+    <string name="geq_import_changed">输入或拟合选项已修改，请重新拟合后再保存。</string>
+    <string name="geq_import_invalid_text">请粘贴 GraphicEQ 文本，或选择 TXT 文件。</string>
+    <string name="geq_import_failed">无法拟合曲线：%1$s</string>
+    <string name="geq_import_unknown_error">请检查输入后重试。</string>
+    <string name="geq_import_invalid_rate">尚未取得有效采样率，请等待音频驱动就绪后重试。</string>
+    <string name="geq_import_rate_changed">音频采样率已变化，请按当前采样率重新拟合后再保存。</string>
+    <string name="geq_import_chart_title">原曲线与拟合频响</string>
+    <string name="geq_import_legend_target">┄ 原始 GraphicEQ 曲线</string>
+    <string name="geq_import_legend_fitted">— 拟合后的 PEQ 曲线</string>
+    <string name="geq_import_chart_description">原始 GraphicEQ 与拟合 PEQ 的频率响应。横轴为对数频率 Hz，纵轴为增益 dB。%1$s</string>
+    <string name="geq_import_summary">平均绝对误差：%1$.3f dB\nRMS 误差：%2$.3f dB\n最大误差：%3$.3f dB，位于 %4$s Hz\n实际段数：%5$d / %6$d 段\n拟合采样率：%7$s Hz\n拟合范围：%8$s–%9$s Hz\n耗时：%10$.1f 秒</string>
+    <string name="geq_import_target_met">已达到目标：最大误差 ≤ %1$s dB。</string>
+    <string name="geq_import_limit_unmet">已达到 %1$d 段上限，仍未达到 %2$s dB 的误差目标。可提高段数上限或放宽误差目标后重新拟合，也可另存当前近似结果。</string>
+    <string name="geq_import_target_unmet">尚未达到 %1$s dB 的误差目标。可调整专业设置后重新拟合，也可另存当前近似结果。</string>
+    <string name="geq_import_excluded">有 %1$d 个原始点位于拟合范围之外；显示的误差未评估这些区域。</string>
+    <string name="geq_import_offsets">其中 %1$d 段用于保留整体电平，已计入总段数。</string>
+    <string name="geq_import_save">另存为新预设</string>
+    <string name="geq_import_confirm_title">保存这份拟合预设？</string>
+    <string name="geq_import_confirm">将“%1$s”保存为 %2$d 段新预设。当前 PEQ 参数与音效开关保持不变，需要时再从预设库主动应用。</string>
+    <string name="geq_import_confirm_unmet">本次拟合尚未达到指定的误差目标。</string>
+    <string name="geq_import_name_invalid">名称需要 1–40 个可显示字符。</string>
+    <string name="geq_import_duplicate">预设名称已存在，请换一个名称。</string>
+    <string name="geq_import_full">预设库已满 20 个，请先在预设库删除一个，再回来保存这份结果。</string>
+    <string name="geq_import_save_error">无法保存预设：%1$s</string>
+    <string name="geq_import_saved">已保存新预设，需要时请到 PEQ 预设库主动应用。</string>
+    <string name="geq_import_document_error">无法读取 TXT 文件：%1$s</string>
+</resources>

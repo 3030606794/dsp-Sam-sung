@@ -15,6 +15,7 @@ float CAllpassFilter::GetFeedback() {
 void CAllpassFilter::Mute() {
     memset(this->buffer, 0, this->bufferSize * sizeof(float));
 }
+void CAllpassFilter::ResetState(){Mute();this->bufferIndex=0;}
 
 float CAllpassFilter::Process(float sample) {
     float outSample = this->buffer[this->bufferIndex];

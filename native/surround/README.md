@@ -1,5 +1,12 @@
 # Band-limited RACE surround
 
+Current ui25 professional controls retain the original path below as the
+default. The extended 27-word atomic configuration, asymmetric cancellation,
+Butterworth slopes, level controls, runtime telemetry and listening lifecycle
+are specified in `../../docs/SURROUND-PROFESSIONAL.zh-CN.txt`. Capability 65536
+extends protocol 5; the current complete mask is 131071. Historical numbers
+below document the original six-word interface, which remains supported.
+
 This is an independent implementation of the publicly described recursive
 Ambiophonic crosstalk elimination principle. It contains no Neutron code or
 binaries and does **not** claim sample-identical output. The reference APK was

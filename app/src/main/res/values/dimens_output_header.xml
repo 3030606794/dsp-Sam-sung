@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="output_route_icon_title_gap">3mm</dimen>
+</resources>

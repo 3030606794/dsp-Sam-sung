@@ -16,6 +16,12 @@ class AppBlocklistRepository(private val appBlocklistDao: AppBlocklistDao) {
         appBlocklistDao.insertAll(app)
     }
 
+    /** Room wraps the complete vararg @Insert in one transaction and invalidates once. */
+    @WorkerThread
+    suspend fun insertAll(apps: List<BlockedApp>) {
+        if (apps.isNotEmpty()) appBlocklistDao.insertAll(*apps.toTypedArray())
+    }
+
     @WorkerThread
     suspend fun delete(app: BlockedApp) {
         appBlocklistDao.delete(app)

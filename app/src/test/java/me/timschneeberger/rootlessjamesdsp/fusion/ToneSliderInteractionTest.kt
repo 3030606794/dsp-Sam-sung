@@ -147,18 +147,26 @@ class ToneSliderInteractionTest {
         val slider = row(fragment, key).findViewById<Slider>(R.id.fusion_tone_slider)
         val x = slider.width * .8f
         val y = slider.height * .5f
-        val down = MotionEvent.obtain(100, 100, MotionEvent.ACTION_DOWN, x, y, 0)
+        // The advanced page scrolls: make a real horizontal drag beyond touch slop.
+        val down = MotionEvent.obtain(100, 100, MotionEvent.ACTION_DOWN, slider.width * .5f, y, 0)
         val move = MotionEvent.obtain(100, 120, MotionEvent.ACTION_MOVE, x, y, 0)
-        val up = MotionEvent.obtain(100, 140, MotionEvent.ACTION_UP, x, y, 0)
+        val continuation = MotionEvent.obtain(100, 130, MotionEvent.ACTION_MOVE, slider.width * .9f, y, 0)
+        val up = MotionEvent.obtain(100, 140, MotionEvent.ACTION_UP, slider.width * .9f, y, 0)
         try {
             slider.dispatchTouchEvent(down)
             slider.dispatchTouchEvent(move)
             idle()
-            assertTrue(prefs.getInt(key, 0) > 0)
-            assertTrue(broadcasts > 0)
+            val firstValue=prefs.getInt(key,0)
+            val firstBroadcasts=broadcasts
+            assertTrue(firstValue > 0)
+            assertTrue(firstBroadcasts > 0)
+            slider.dispatchTouchEvent(continuation)
+            idle()
+            assertTrue("The same live drag keeps committing before ACTION_UP",prefs.getInt(key,0)>firstValue)
+            assertTrue("The second move broadcasts before ACTION_UP",broadcasts>firstBroadcasts)
         } finally {
             slider.dispatchTouchEvent(up)
-            down.recycle(); move.recycle(); up.recycle()
+            down.recycle(); move.recycle(); continuation.recycle(); up.recycle()
         }
     }
 

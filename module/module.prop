@@ -1,6 +1,6 @@
 id=dsp_fusion
-name=DSP音效
-version=0.1.0-alpha12-surround1
-versionCode=1013
+name=DSP音效（三星版）
+version=0.1.0-alpha15-samsung-ui54.62
+versionCode=1078
 author=DSP-mobile-version contributors
-description=Samsung alpha12 with RACE surround, 8 editable presets, PEQ, JamesDSP, tone controls and ViPER. Protocol 5; capabilities 31. Update this driver and reboot to enable surround.
+description=Samsung SM-S9180 legacy/HIDL driver paired with APK1130. Adds GET-only leased synchronized PCM immediately before and after PEQ, including instance, configuration and transition metadata. Retains all prior read-only monitors. No filter algorithm, script, saved parameter or audition changes. Install paired module and reboot once.

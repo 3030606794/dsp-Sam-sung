@@ -9,7 +9,10 @@ TimeConstDelay::TimeConstDelay() {
 float TimeConstDelay::ProcessSample(float sample) {
     float val = this->samples[this->offset];
     this->samples[this->offset] = sample;
-    this->offset = (uint32_t) modff((float) this->offset + 1, (float *) &this->sampleCount); // TODO: check if this is correct
+    // Legacy ColorfulMusic always addressed slot zero: modff(integer, ...) returns
+    // zero, and its old float* cast also violated aliasing. Preserve that audible
+    // one-sample delay deterministically; do not silently replace it with 20/14 ms.
+    this->offset = 0;
     return val;
 }
 

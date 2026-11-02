@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <thread>
 #include <vector>
@@ -19,14 +20,24 @@ namespace dspfusion {
 // measured audio and the long-double direct-form RBJ reference below.
 struct PeqTestAccess {
     static size_t preparedCount(const PeqProcessor& eq) { return eq.pending_.count; }
+    static auto firstCoefficients(const PeqProcessor& eq) { return eq.pending_.coefficients[0]; }
+    static double firstQ(const PeqProcessor& eq) { return eq.settings_.bands[0].q; }
 };
 }
 namespace {
 constexpr double pi=3.14159265358979323846;
 using Band=std::array<int32_t,5>;
+int32_t floatWord(float value) {int32_t word;std::memcpy(&word,&value,sizeof(word));return word;}
+double preciseQ(int32_t word) {float value;std::memcpy(&value,&word,sizeof(value));return value;}
+struct PrecisionBand {int32_t type,enabled,frequency,gain;double q;};
 std::vector<int32_t> packet(std::initializer_list<Band> bands,bool enabled=true) {
     std::vector<int32_t> p{1,int(enabled),int32_t(bands.size())};
     for(const auto& b:bands) p.insert(p.end(),b.begin(),b.end());
+    return p;
+}
+std::vector<int32_t> precisePacket(std::initializer_list<PrecisionBand> bands,bool enabled=true) {
+    std::vector<int32_t> p{3,int(enabled),int32_t(bands.size())};
+    for(const auto& b:bands){uint64_t bits;std::memcpy(&bits,&b.q,8);p.insert(p.end(),{b.type,b.enabled,b.frequency,b.gain,int32_t(bits),int32_t(bits>>32)});}
     return p;
 }
 void set(PeqProcessor& eq,const std::vector<int32_t>& p) { assert(eq.setParameters(p.data(),p.size())); }
@@ -115,9 +126,14 @@ void testQualityBandwidthDirection() {
 }
 // A separate direct-form implementation is deliberately retained in tests: it
 // catches transfer-function mistakes in the state-variable production engine.
-std::vector<float> rbjReference(const Band& b,uint32_t rate,const std::vector<float>& source) {
+std::vector<float> rbjReference(const Band& b,uint32_t rate,const std::vector<float>& source,double precisionQuality=0) {
     const long double w=2*std::acos(-1.L)*(b[2]/1000.L)/rate,c=std::cos(w);
-    const long double alpha=std::sin(w)/(2*(b[4]/1000.L)),a=std::pow(10.L,b[3]/40000.L);
+    long double q=precisionQuality>0?precisionQuality:b[4]/1000.L;
+    if(precisionQuality>0 && b[0]==0){
+        const auto t=std::clamp(std::log10(q),0.L,1.L);
+        q*=std::pow(10.L,std::abs(b[3])/40000.L*t*t*(3-2*t));
+    }
+    const long double alpha=std::sin(w)/(2*q),a=std::pow(10.L,b[3]/40000.L);
     long double b0=1,b1=-2*c,b2=1,a0=1+alpha,a1=-2*c,a2=1-alpha;
     switch(b[0]) {
         case 0:b0=1+alpha*a;b2=1-alpha*a;a0=1+alpha/a;a2=1-alpha/a;break;
@@ -149,6 +165,68 @@ std::vector<float> rbjReference(const Band& b,uint32_t rate,const std::vector<fl
         out[2*frame+channel]=float(y);
     }
     return out;
+}
+void testPrecisionQProtocolAndTransfer() {
+    static_assert(PeqProcessor::kPrecisionCapability==8);
+    constexpr double minimum=.0001;
+    PeqProcessor validation;auto valid=precisePacket({{0,1,1000000,6000,minimum}});
+    set(validation,valid);assert(dspfusion::PeqTestAccess::firstQ(validation)==minimum);
+    const auto original=dspfusion::PeqTestAccess::firstCoefficients(validation);
+    for(double invalid:{0.,-1.,std::nextafter(minimum,0.),std::nextafter(30000.,30001.),
+                        std::numeric_limits<double>::infinity(),std::numeric_limits<double>::quiet_NaN()}) {
+        uint64_t bits;std::memcpy(&bits,&invalid,8);auto p=valid;p[7]=int32_t(bits);p[8]=int32_t(bits>>32);
+        assert(!validation.setParameters(p.data(),p.size()));
+        assert(dspfusion::PeqTestAccess::firstCoefficients(validation)==original);
+    }
+    auto invalid=valid;invalid[0]=4;assert(!validation.setParameters(invalid.data(),invalid.size()));
+    invalid=packet({{0,1,1000000,6000,99}});assert(!validation.setParameters(invalid.data(),invalid.size()));
+    PeqProcessor legacy,floating;set(legacy,packet({{0,1,1000000,12000,100000}}));
+    auto schema2=packet({{0,1,1000000,12000,floatWord(100.f)}});schema2[0]=2;set(floating,schema2);
+    assert(dspfusion::PeqTestAccess::firstCoefficients(legacy)==dspfusion::PeqTestAccess::firstCoefficients(floating));
+    // Only schema 3 changes the peak's gain/Q law; all output comparisons use
+    // an independently evaluated long-double RBJ transient with that same law.
+    unsigned cases=0;
+    for(uint32_t rate:{48000u,96000u,192000u,384000u,768000u})for(int type=0;type<=6;++type)
+        for(int gain:{-100000,100000})for(int frequency:{1000,731123,int(rate*400)})
+            for(double q:{minimum,.001,100.,30000.}) {
+                const Band band{type,1,frequency,gain,0};
+                PeqProcessor eq;eq.configure(rate);set(eq,precisePacket({{type,1,frequency,gain,q}}));
+                assert(dspfusion::PeqTestAccess::preparedCount(eq)==1);
+                const size_t frames=std::max(size_t(12000),size_t(rate/50+4096));
+                auto source=signal(frames,rate,731);source[0]+=.03125f;source[1]-=.025f;
+                for(auto& sample:source)sample*=1e-6f;
+                auto actual=source;render(eq,actual,333);const auto expected=rbjReference(band,rate,source,q);
+                double error=0,energy=0;
+                for(size_t i=2*(rate/50+1);i<actual.size();++i){
+                    assert(std::isfinite(actual[i]));error+=std::pow(double(actual[i])-expected[i],2);energy+=std::pow(double(expected[i]),2);
+                }
+                const double relative=std::sqrt(error/std::max(energy,1e-300));
+                if(relative>=1e-4)std::printf("PEQ reference discrepancy: fs%u type%d gain%d f%d q%.10g error%.10g\n",rate,type,gain,frequency,q,relative);
+                assert(relative<1e-4);++cases;
+            }
+    // Analog-reference BW is independent of center frequency. A 0.0001-octave
+    // edit at Q's floor and a 0.0001-Q edit at its ceiling must both survive.
+    const double scale=2/std::log(2.),bw=scale*std::asinh(1./(2*minimum));
+    const double adjacent=1./(2*std::sinh((bw-.0001)/scale));
+    assert(adjacent>minimum);
+    constexpr double high=29999.;const double highAdjacent=high+.0001;
+    assert(float(high)==float(highAdjacent)); // Demonstrates why schema 2 is insufficient.
+    for(int type=0;type<=6;++type)for(const auto pair:{std::array<double,2>{minimum,adjacent},std::array<double,2>{high,highAdjacent}}){
+        PeqProcessor first,second;set(first,precisePacket({{type,1,1000000,12000,pair[0]}}));
+        set(second,precisePacket({{type,1,1000000,12000,pair[1]}}));
+        assert(dspfusion::PeqTestAccess::firstQ(first)!=dspfusion::PeqTestAccess::firstQ(second));
+        assert(dspfusion::PeqTestAccess::firstCoefficients(first)!=dspfusion::PeqTestAccess::firstCoefficients(second));
+    }
+    for(uint32_t fs:{48000u,96000u,192000u,384000u,768000u})for(int type=0;type<=6;++type)
+        for(int gain:{-100000,100000})for(double q:{minimum,30000.}){
+            PeqProcessor eq;eq.configure(fs);std::vector<int32_t> p{3,1,170};uint64_t bits;std::memcpy(&bits,&q,8);
+            for(int band=0;band<170;++band)p.insert(p.end(),{type,1,band%2?int(fs*500)-1:1000,gain,int32_t(bits),int32_t(bits>>32)});
+            set(eq,p);assert(dspfusion::PeqTestAccess::preparedCount(eq)==170);
+            auto x=signal(4096,fs,73);render(eq,x,37);for(float sample:x)assert(std::isfinite(sample)&&std::abs(sample)<=1e6f);
+        }
+    PeqProcessor future;future.configure(768000);set(future,precisePacket({{0,1,768000000,12000,1.},{0,1,383999999,12000,1.}}));
+    assert(dspfusion::PeqTestAccess::preparedCount(future)==1); // Above-Nyquist request is kept but not moved.
+    std::printf("PEQ precision: schemas1/2 legacy, schema3 doubleQ0.0001..30000/1Hz..768kHz, %u seven-type RBJ transient references, independent BW/Q0.0001 steps, 170-band finite limits and real Nyquist bypass passed.\n",cases);
 }
 void testPassNotchOutputGain() {
     // Compare complete stereo waveforms against the independently rendered
@@ -243,7 +321,7 @@ void testNeutralValidationAndFullCount() {
     }
     assert(!eq.setParameters(p.data(),p.size()-1));assert(!eq.setParameters(nullptr,0));
     assert(!eq.setParameters(p.data(),2));
-    auto invalid=packet({{0,1,19999,0,1000}});assert(!eq.setParameters(invalid.data(),invalid.size()));
+    auto invalid=packet({{0,1,999,0,1000}});assert(!eq.setParameters(invalid.data(),invalid.size()));
     invalid=packet({{0,1,1000000,-100001,1000}});assert(!eq.setParameters(invalid.data(),invalid.size()));
     invalid=packet({{0,1,1000000,100001,1000}});assert(!eq.setParameters(invalid.data(),invalid.size()));
     invalid=packet({{0,1,1000000,0,100001}});assert(!eq.setParameters(invalid.data(),invalid.size()));
@@ -252,8 +330,8 @@ void testNeutralValidationAndFullCount() {
     // The 170th section must actually run; the first 169 remain neutral.
     p[3+169*5]=0;p[3+169*5+2]=1000000;p[3+169*5+3]=12000;
     assert(std::abs(measuredDb(p,48000,1000)-12)<.002);
-    // A requested frequency at/above Nyquist is bypassed rather than moved.
-    PeqProcessor lowRate;lowRate.configure(8000);set(lowRate,packet({{3,1,4000000,0,707},{0,1,20000000,24000,30000}}));
+    // A requested frequency above Nyquist is bypassed rather than moved.
+    PeqProcessor lowRate;lowRate.configure(8000);set(lowRate,packet({{3,1,4000001,0,707},{0,1,20000000,24000,30000}}));
     out=original;render(lowRate,out);assert(out==original);
     std::puts("PEQ: exact neutral bypass, strict packets, 170th band, Nyquist handling passed.");
 }
@@ -371,6 +449,6 @@ void benchmark() {
 }
 int main() {
     std::setvbuf(stdout,nullptr,_IONBF,0);
-    testTransferFunctions();testQualityBandwidthDirection();testPassNotchOutputGain();testExtendedRangeTransfer();testNeutralValidationAndFullCount();testContinuityAndSmoothing();testExtremeTransitions();testFiniteAndConcurrentUpdates();testFullCountExtremes();benchmark();
+    testTransferFunctions();testQualityBandwidthDirection();testPassNotchOutputGain();testExtendedRangeTransfer();testPrecisionQProtocolAndTransfer();testNeutralValidationAndFullCount();testContinuityAndSmoothing();testExtremeTransitions();testFiniteAndConcurrentUpdates();testFullCountExtremes();benchmark();
     std::puts("PEQ audio tests passed.");
 }

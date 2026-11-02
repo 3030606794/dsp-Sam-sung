@@ -8,6 +8,41 @@
     tools:context=".fragment.BlocklistFragment"
     android:orientation="vertical">
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginVertical="12dp"
+        android:textAppearance="?attr/textAppearanceBody2"
+        android:text="@string/app_processing_blocked_help" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/exclude_system_apps"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:layout_marginHorizontal="24dp"
+        android:text="@string/app_processing_exclude_system" />
+
+    <TextView
+        android:id="@+id/exclude_system_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="12dp"
+        android:textAppearance="?attr/textAppearanceCaption"
+        android:accessibilityLiveRegion="polite"
+        android:text="@string/app_processing_exclude_system_help" />
+
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/loader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
+        android:indeterminate="true"
+        android:visibility="gone" />
+
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/notice"
         android:visibility="visible"
@@ -44,7 +79,10 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerview"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="96dp"
         android:layout_marginHorizontal="16dp"
         tools:listitem="@layout/item_blocked_app_list" />
 
@@ -53,7 +91,8 @@
         android:visibility="gone"
         android:orientation="vertical"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:gravity="center"
         android:layout_marginBottom="?attr/actionBarSize"
         tools:ignore="UseCompoundDrawables">

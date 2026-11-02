@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="glass_primary">#A4CEFF</color>
+    <color name="glass_on_primary">#102C51</color>
+    <color name="glass_primary_container">#993C5C89</color>
+    <color name="glass_on_primary_container">#E5F1FF</color>
+    <color name="glass_secondary">#B4CAE5</color>
+    <color name="glass_secondary_container">#99344B67</color>
+    <color name="glass_tertiary">#CDC3FF</color>
+    <color name="glass_tertiary_container">#9950497B</color>
+    <color name="glass_background">#0C1626</color>
+    <color name="glass_background_top">#142B45</color>
+    <color name="glass_background_middle">#142136</color>
+    <color name="glass_background_bottom">#211E3B</color>
+    <color name="glass_surface">#D922334A</color>
+    <color name="glass_surface_variant">#99374B66</color>
+    <color name="glass_card">#A6293D58</color>
+    <color name="glass_card_start">#BF435C7B</color>
+    <color name="glass_card_end">#8C182A42</color>
+    <color name="glass_edge">#889DBADA</color>
+    <color name="glass_outline">#668DA6C7</color>
+    <color name="glass_on_surface">#F0F6FF</color>
+    <color name="glass_secondary_text">#BED0E8</color>
+    <color name="glass_inverse_surface">#E5F0FF</color>
+    <color name="glass_inverse_on_surface">#152A42</color>
+    <color name="glass_inverse_primary">#265FAD</color>
+    <color name="glass_dialog">#ED22344D</color>
+    <color name="glass_bar">#B81D304A</color>
+    <color name="glass_glow_blue">#66558BD4</color>
+    <color name="glass_glow_violet">#555F4CA0</color>
+</resources>

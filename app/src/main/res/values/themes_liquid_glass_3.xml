@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="theme_liquid_glass_3">液态玻璃Ⅲ</string>
+    <string name="glass3_settings_title">液态玻璃Ⅲ调节</string>
+    <string name="glass3_settings_summary">背景、透明度、光影、折射与 Q 弹动效</string>
+
+    <!-- Preserve the original app canvas and accent. Only the third theme enables tuning. -->
+    <style name="Theme.RootlessJamesDSP.LiquidGlass3" parent="Theme.RootlessJamesDSP">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="elevationOverlayEnabled">false</item>
+        <item name="colorControlHighlight">@android:color/transparent</item>
+        <item name="android:colorControlHighlight">@android:color/transparent</item>
+        <item name="materialCardViewStyle">@style/Widget.DSP.Glass2Card</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.DSP.Glass3Dialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.DSP.Glass3Dialog</item>
+        <item name="tooltipStyle">@style/Widget.DSP.Glass2Tooltip</item>
+    </style>
+
+    <style name="ThemeOverlay.DSP.Glass3Dialog" parent="AppTheme.AlertDialogTheme">
+        <item name="elevationOverlayEnabled">false</item>
+        <item name="colorControlHighlight">@android:color/transparent</item>
+        <item name="android:colorControlHighlight">@android:color/transparent</item>
+        <item name="tooltipStyle">@style/Widget.DSP.Glass2Tooltip</item>
+    </style>
+</resources>

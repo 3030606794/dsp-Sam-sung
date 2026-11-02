@@ -1,5 +1,6 @@
 #ifndef _FFTCONVOLVER_FFTCONVOLVER_H
 #define _FFTCONVOLVER_FFTCONVOLVER_H
+#include <stddef.h>
 extern unsigned int upper_power_of_two(unsigned int v);
 /**
 * @class FFTConvolver1x1
@@ -123,7 +124,9 @@ typedef struct
 	void(*fft)(float*, const float*);
 } FFTConvolver1x2;
 extern void FFTConvolver1x1Init(FFTConvolver1x1 *conv);
-extern void FFTConvolver2x4x2Init(FFTConvolver2x4x2 *conv);
+extern void* FFTConvolver2x4x2Allocate(size_t count,size_t bytes);
+void FFTConvolver2x4x2ResetHistory(FFTConvolver2x4x2* conv);
+void FFTConvolver2x4x2Init(FFTConvolver2x4x2 *conv);
 extern void FFTConvolver2x2Init(FFTConvolver2x2 *conv);
 extern void FFTConvolver1x2Init(FFTConvolver1x2 *conv);
 

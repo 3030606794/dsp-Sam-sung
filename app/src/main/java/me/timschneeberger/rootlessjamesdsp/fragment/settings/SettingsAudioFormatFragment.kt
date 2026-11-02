@@ -4,26 +4,30 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.preference.ListPreference
 import androidx.preference.Preference
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import me.timschneeberger.rootlessjamesdsp.R
-import me.timschneeberger.rootlessjamesdsp.activity.OnboardingActivity
 import me.timschneeberger.rootlessjamesdsp.interop.BenchmarkManager
 import me.timschneeberger.rootlessjamesdsp.preference.MaterialSeekbarPreference
 import me.timschneeberger.rootlessjamesdsp.preference.MaterialSwitchPreference
 import me.timschneeberger.rootlessjamesdsp.service.RootAudioProcessorService
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
+import me.timschneeberger.rootlessjamesdsp.utils.AudioProcessingModeSettings
+import me.timschneeberger.rootlessjamesdsp.utils.UsbAudioFollowStatus
+import me.timschneeberger.rootlessjamesdsp.utils.RootAccessStatus
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.requestIgnoreBatteryOptimizations
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.showAlert
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.toast
-import me.timschneeberger.rootlessjamesdsp.utils.extensions.PermissionExtensions.hasDumpPermission
 import me.timschneeberger.rootlessjamesdsp.utils.isRoot
 import me.timschneeberger.rootlessjamesdsp.utils.isRootless
 import me.timschneeberger.rootlessjamesdsp.utils.preferences.Preferences
 import org.koin.android.ext.android.inject
-import timber.log.Timber
 
 class SettingsAudioFormatFragment : SettingsBaseFragment() {
 
@@ -34,6 +38,7 @@ class SettingsAudioFormatFragment : SettingsBaseFragment() {
     private val enhancedModeInfo by lazy { findPreference<Preference>(getString(R.string.key_audioformat_enhanced_processing_info)) }
     private val benchmark by lazy { findPreference<MaterialSwitchPreference>(getString(R.string.key_audioformat_optimization_benchmark)) }
     private val benchmarkRefresh by lazy { findPreference<Preference>(getString(R.string.key_audioformat_optimization_refresh)) }
+    private val usbRateFollow by lazy { findPreference<MaterialSwitchPreference>(getString(R.string.key_audioformat_usb_rate_follow)) }
 
     private val preferences: Preferences.App by inject()
 
@@ -47,35 +52,12 @@ class SettingsAudioFormatFragment : SettingsBaseFragment() {
 
         // Rootless: Hide audio processing category
         legacyMode?.parent?.isVisible = isRoot()
-        legacyMode?.setOnPreferenceChangeListener { _, newValue ->
-            if (!(newValue as Boolean))
-                requireContext().requestIgnoreBatteryOptimizations()
-            else
-                enhancedMode?.isChecked = false
-
-            RootAudioProcessorService.updateLegacyMode(requireContext(), newValue)
-            true
-        }
-        enhancedMode?.setOnPreferenceChangeListener { _, newValue ->
-            if (newValue as Boolean) {
-                // Check DUMP permissions
-                if(!requireContext().hasDumpPermission()) {
-                    Timber.i("Launching enhanced processing onboarding")
-
-                    Intent(requireContext(), OnboardingActivity::class.java).let {
-                        it.putExtra(OnboardingActivity.EXTRA_ROOT_SETUP_DUMP_PERM, true)
-                        startActivity(it)
-                    }
-                    return@setOnPreferenceChangeListener false
-                }
-
-                RootAudioProcessorService.startServiceEnhanced(requireContext())
-            }
-            else {
-                requireContext().toast(R.string.audio_format_media_apps_need_restart)
-                RootAudioProcessorService.stopService(requireContext())
-            }
-            true
+        if (isRoot()) {
+            AudioProcessingModeSettings(requireContext(), preferences.preferences) { playerSessions ->
+                usbRateFollow?.summary = UsbAudioFollowStatus.summary(requireContext(), playerSessions)
+                if (playerSessions) requireContext().requestIgnoreBatteryOptimizations()
+                RootAudioProcessorService.refreshProcessingMode(requireContext())
+            }.bind(requireNotNull(legacyMode), requireNotNull(enhancedMode), requireNotNull(usbRateFollow))
         }
         enhancedModeInfo?.setOnPreferenceClickListener {
             context?.showAlert(
@@ -83,6 +65,23 @@ class SettingsAudioFormatFragment : SettingsBaseFragment() {
                 R.string.audio_format_enhanced_processing_info_content
             )
             true
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                UsbAudioFollowStatus.state.collect { status ->
+                    usbRateFollow?.summary = UsbAudioFollowStatus.summary(requireContext(),
+                        preferences.get<Boolean>(R.string.key_audioformat_usb_rate_follow), status)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                RootAccessStatus.state.collect {
+                    usbRateFollow?.summary = UsbAudioFollowStatus.summary(requireContext(),
+                        preferences.get<Boolean>(R.string.key_audioformat_usb_rate_follow))
+                }
+            }
         }
 
         fun runBenchmark() = context?.let { ctx ->

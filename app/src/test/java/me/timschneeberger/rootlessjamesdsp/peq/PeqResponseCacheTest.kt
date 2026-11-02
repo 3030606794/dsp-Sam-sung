@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** Incremental previews must retain the full adaptive grid and its unclipped mathematical sum. */
 class PeqResponseCacheTest {
-    private fun bank(count: Int = 170): PeqState = PeqModel.defaultState(count).let { state ->
+    private fun bank(count: Int = 130): PeqState = PeqModel.defaultState(count).let { state ->
         state.copy(bands = state.bands.mapIndexed { index, band -> band.copy(
             gain = if (index % 2 == 0) 0.5 else -0.5, q = 3.0 + index % 7) })
     }
@@ -27,17 +27,21 @@ class PeqResponseCacheTest {
         val expected = PeqResponse.adaptiveCurve(state, points, sampleRate)
         assertEquals("No adaptive frequency may be lost or substituted", expected.map { it.frequency }, actual.map { it.frequency })
         expected.zip(actual).forEach { (reference, cached) ->
+            if (reference.db.isNaN()) {
+                assertTrue("Above-Nyquist region must remain a gap", cached.db.isNaN())
+                return@forEach
+            }
             assertTrue("Non-finite response at ${cached.frequency} Hz", cached.db.isFinite())
             assertEquals("Response at ${cached.frequency} Hz", reference.db, cached.db, 1e-8)
         }
     }
 
-    @Test fun oneEditedBandAmong170MatchesFullCurveWithDeterministicallyFewerEvaluations() {
+    @Test fun oneEditedBandAmong130MatchesFullCurveWithDeterministicallyFewerEvaluations() {
         val cache = PeqResponse.PreviewCache()
         val initial = bank()
         val before = requireNotNull(cache.curve(initial, points = 1024))
         assertMatchesFull(initial, before, 1024)
-        assertEquals(before.size.toLong() * 170, cache.lastFilterEvaluations)
+        assertEquals(before.size.toLong() * 130, cache.lastFilterEvaluations)
         val next = edited(initial, 85) { it.copy(frequency = it.frequency + 11.25, q = 7.321, gain = 0.37) }
         val after = requireNotNull(cache.curve(next, points = 1024))
         assertMatchesFull(next, after, 1024)
@@ -45,11 +49,11 @@ class PeqResponseCacheTest {
         val retained = after.count { it.frequency in previousFrequencies }
         val new = after.size - retained
         val completeWork = after.size.toLong() * activeBands(next, 48000.0)
-        val expectedWork = retained.toLong() * 2 + new.toLong() * 170
+        val expectedWork = retained.toLong() * 2 + new.toLong() * 130
         assertEquals(expectedWork, cache.lastFilterEvaluations)
         assertTrue("Incremental work ${cache.lastFilterEvaluations} vs complete $completeWork",
             cache.lastFilterEvaluations < completeWork / 10)
-        println("170-band preview: ${cache.lastFilterEvaluations} filter evaluations vs $completeWork full; ${after.size} adaptive points")
+        println("130-band preview: ${cache.lastFilterEvaluations} filter evaluations vs $completeWork full; ${after.size} adaptive points")
     }
 
     @Test fun allFilterTypesAndExtremeParametersMatchAcrossNyquistBoundaries() {
@@ -102,15 +106,28 @@ class PeqResponseCacheTest {
     @Test fun earlyPartialAndFinalCancellationNeverCommitAnIncompleteSnapshot() {
         val original = bank(20)
         val next = edited(original, 5) { it.copy(frequency = 7123.456, gain = 12.345, q = 100.0) }
-        val totalNext = PeqResponse.adaptiveCurve(next, 128).size
-        val finalCancellationCheck = 3 + (totalNext + 15) / 16
-        for (cancelAt in listOf(1, 2, 4, finalCancellationCheck)) {
+        // Observe the work boundary rather than assuming a fixed number of checks:
+        // collecting adaptive band grids also checks cancellation before evaluation.
+        val probe = PeqResponse.PreviewCache()
+        requireNotNull(probe.curve(original, 128))
+        var finalCancellationCheck = 0
+        var firstEvaluationCheck = 0
+        assertNotNull(probe.curve(next, 128, cancelled = {
+            ++finalCancellationCheck
+            if (firstEvaluationCheck == 0 && probe.lastFilterEvaluations > 0)
+                firstEvaluationCheck = finalCancellationCheck
+            false
+        }))
+        assertTrue(firstEvaluationCheck > 2)
+        assertTrue(finalCancellationCheck > firstEvaluationCheck)
+        for (cancelAt in listOf(1, 2, firstEvaluationCheck, finalCancellationCheck)) {
             val cache = PeqResponse.PreviewCache()
             val before = requireNotNull(cache.curve(original, 128))
             var checks = 0
             assertNull(cache.curve(next, 128, cancelled = { ++checks >= cancelAt }))
             assertEquals(cancelAt, checks)
-            if (cancelAt >= 4) assertTrue("Must exercise cancellation after some work", cache.lastFilterEvaluations > 0)
+            if (cancelAt >= firstEvaluationCheck)
+                assertTrue("Must exercise cancellation after some work", cache.lastFilterEvaluations > 0)
             val unchanged = requireNotNull(cache.curve(original, 128))
             assertEquals(before, unchanged)
             assertEquals("A cancelled draft must leave all original samples available", 0, cache.lastFilterEvaluations)
@@ -130,7 +147,7 @@ class PeqResponseCacheTest {
         assertMatchesFull(display, requireNotNull(cache.curve(display, 257)), 257)
         for (rate in listOf(32000.0, 96000.0, 48000.0)) {
             val next = requireNotNull(cache.curve(display, 257, rate))
-            assertEquals(next.size.toLong() * activeBands(display, rate), cache.lastFilterEvaluations)
+            assertEquals(next.count { it.db.isFinite() }.toLong() * activeBands(display, rate), cache.lastFilterEvaluations)
             assertMatchesFull(display, next, 257, rate)
         }
         val empty = display.copy(bands = emptyList())

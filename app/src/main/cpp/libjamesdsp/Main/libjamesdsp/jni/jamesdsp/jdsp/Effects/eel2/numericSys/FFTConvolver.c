@@ -5,6 +5,36 @@
 #include <math.h>
 #include "../ns-eel.h"
 #include "codelet.h"
+#ifdef DSP_FUSION_TEST_ALLOCATIONS
+static int fftAllocationFailureAfter=-1;
+static unsigned long fftAllocationCount=0;
+void FFTConvolver2x4x2TestAllocationFailure(int after){fftAllocationFailureAfter=after;fftAllocationCount=0;}
+unsigned long FFTConvolver2x4x2TestAllocationCount(void){return fftAllocationCount;}
+#endif
+void* FFTConvolver2x4x2Allocate(size_t count,size_t bytes){
+#ifdef DSP_FUSION_TEST_ALLOCATIONS
+    ++fftAllocationCount;
+    if(fftAllocationFailureAfter==0){fftAllocationFailureAfter=-1;return NULL;}
+    if(fftAllocationFailureAfter>0)--fftAllocationFailureAfter;
+#endif
+    return calloc(count,bytes);
+}
+void FFTConvolver2x4x2ResetHistory(FFTConvolver2x4x2* conv){
+    if(!conv || !conv->bit)return;
+    for(unsigned int i=0;i<conv->_segCount;++i){
+        memset(conv->_segmentsReLeft[i],0,conv->_fftComplexSize*sizeof(float));
+        memset(conv->_segmentsImLeft[i],0,conv->_fftComplexSize*sizeof(float));
+        memset(conv->_segmentsReRight[i],0,conv->_fftComplexSize*sizeof(float));
+        memset(conv->_segmentsImRight[i],0,conv->_fftComplexSize*sizeof(float));
+    }
+    for(unsigned int c=0;c<2;++c){
+        memset(conv->_fftBuffer[c],0,conv->_segSize*sizeof(float));
+        memset(conv->_inputBuffer[c],0,conv->_blockSize*sizeof(float));
+        memset(conv->_overlap[c],0,conv->_blockSize*sizeof(float));
+        for(unsigned int k=0;k<2;++k)memset(conv->_preMultiplied[c][k],0,conv->_fftComplexSize*sizeof(float));
+    }
+    conv->_current=0;conv->_inputBufferFill=0;
+}
 unsigned int upper_power_of_two(unsigned int v)
 {
 	v--;
@@ -35,29 +65,7 @@ void FFTConvolver1x1Init(FFTConvolver1x1 *conv)
 }
 void FFTConvolver2x4x2Init(FFTConvolver2x4x2 *conv)
 {
-	conv->bit = 0;
-	conv->_blockSize = 0;
-	conv->_segSize = 0;
-	conv->_segCount = 0;
-	conv->_fftComplexSize = 0;
-	conv->_segmentsReLeft = 0;
-	conv->_segmentsImLeft = 0;
-	conv->_segmentsReRight = 0;
-	conv->_segmentsImRight = 0;
-	conv->_segmentsLLIRRe = 0;
-	conv->_segmentsLLIRIm = 0;
-	conv->_segmentsLRIRRe = 0;
-	conv->_segmentsLRIRIm = 0;
-	conv->_segmentsRLIRRe = 0;
-	conv->_segmentsRLIRIm = 0;
-	conv->_segmentsRRIRRe = 0;
-	conv->_segmentsRRIRIm = 0;
-	conv->_current = 0;
-	conv->_fftBuffer[0] = 0;
-	conv->_inputBuffer[0] = 0;
-	conv->_overlap[0] = 0;
-	conv->_inputBufferFill = 0;
-	conv->_preMultiplied[0][0] = 0;
+    memset(conv, 0, sizeof(*conv));
 }
 void FFTConvolver2x2Init(FFTConvolver2x2 *conv)
 {
@@ -156,87 +164,25 @@ void FFTConvolver1x1Free(FFTConvolver1x1 *conv)
 }
 void FFTConvolver2x4x2Free(FFTConvolver2x4x2 *conv)
 {
-	if (conv->_segmentsReLeft)
-	{
-		for (unsigned int i = 0; i < conv->_segCount; ++i)
-		{
-			free(conv->_segmentsReLeft[i]);
-			free(conv->_segmentsImLeft[i]);
-			free(conv->_segmentsReRight[i]);
-			free(conv->_segmentsImRight[i]);
-			free(conv->_segmentsLLIRRe[i]);
-			free(conv->_segmentsLLIRIm[i]);
-			free(conv->_segmentsLRIRRe[i]);
-			free(conv->_segmentsLRIRIm[i]);
-			free(conv->_segmentsRLIRRe[i]);
-			free(conv->_segmentsRLIRIm[i]);
-			free(conv->_segmentsRRIRRe[i]);
-			free(conv->_segmentsRRIRIm[i]);
-		}
-		free(conv->_segmentsReLeft);
-		free(conv->_segmentsImLeft);
-		free(conv->_segmentsReRight);
-		free(conv->_segmentsImRight);
-		free(conv->_segmentsLLIRRe);
-		free(conv->_segmentsLLIRIm);
-		free(conv->_segmentsLRIRRe);
-		free(conv->_segmentsLRIRIm);
-		free(conv->_segmentsRLIRRe);
-		free(conv->_segmentsRLIRIm);
-		free(conv->_segmentsRRIRRe);
-		free(conv->_segmentsRRIRIm);
-		conv->_segmentsReLeft = 0;
-		conv->_segmentsImLeft = 0;
-		conv->_segmentsReRight = 0;
-		conv->_segmentsImRight = 0;
-		conv->_segmentsLLIRRe = 0;
-		conv->_segmentsLLIRIm = 0;
-		conv->_segmentsLRIRRe = 0;
-		conv->_segmentsLRIRIm = 0;
-		conv->_segmentsRLIRRe = 0;
-		conv->_segmentsRLIRIm = 0;
-		conv->_segmentsRRIRRe = 0;
-		conv->_segmentsRRIRIm = 0;
-	}
-	if (conv->_preMultiplied[0][0])
-	{
-		free(conv->_preMultiplied[0][0]);
-		free(conv->_preMultiplied[0][1]);
-		free(conv->_preMultiplied[1][0]);
-		free(conv->_preMultiplied[1][1]);
-		conv->_preMultiplied[0][0] = 0;
-	}
-	if (conv->bit)
-	{
-		free(conv->bit);
-		free(conv->sine);
-		conv->bit = 0;
-	}
-	conv->_blockSize = 0;
-	conv->_segSize = 0;
-	conv->_segCount = 0;
-	conv->_fftComplexSize = 0;
-	if (conv->_fftBuffer[0])
-	{
-		free(conv->_fftBuffer[0]);
-		free(conv->_fftBuffer[1]);
-		conv->_fftBuffer[0] = 0;
-	}
-	if (conv->_overlap[0])
-	{
-		free(conv->_overlap[0]);
-		free(conv->_overlap[1]);
-		conv->_overlap[0] = 0;
-	}
-	if (conv->_inputBuffer[0])
-	{
-		free(conv->_inputBuffer[0]);
-		free(conv->_inputBuffer[1]);
-		conv->_inputBuffer[0] = 0;
-		conv->_inputBuffer[1] = 0;
-	}
-	conv->_current = 0;
-	conv->_inputBufferFill = 0;
+    if (!conv) return;
+    if (conv->_segmentsReLeft) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsReLeft[i]); free(conv->_segmentsReLeft); }
+    if (conv->_segmentsImLeft) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsImLeft[i]); free(conv->_segmentsImLeft); }
+    if (conv->_segmentsReRight) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsReRight[i]); free(conv->_segmentsReRight); }
+    if (conv->_segmentsImRight) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsImRight[i]); free(conv->_segmentsImRight); }
+    if (conv->_segmentsLLIRRe) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsLLIRRe[i]); free(conv->_segmentsLLIRRe); }
+    if (conv->_segmentsLLIRIm) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsLLIRIm[i]); free(conv->_segmentsLLIRIm); }
+    if (conv->_segmentsLRIRRe) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsLRIRRe[i]); free(conv->_segmentsLRIRRe); }
+    if (conv->_segmentsLRIRIm) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsLRIRIm[i]); free(conv->_segmentsLRIRIm); }
+    if (conv->_segmentsRLIRRe) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsRLIRRe[i]); free(conv->_segmentsRLIRRe); }
+    if (conv->_segmentsRLIRIm) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsRLIRIm[i]); free(conv->_segmentsRLIRIm); }
+    if (conv->_segmentsRRIRRe) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsRRIRRe[i]); free(conv->_segmentsRRIRRe); }
+    if (conv->_segmentsRRIRIm) { for (unsigned int i=0;i<conv->_segCount;++i) free(conv->_segmentsRRIRIm[i]); free(conv->_segmentsRRIRIm); }
+    free(conv->bit); free(conv->sine);
+    for (unsigned int c=0;c<2;++c) {
+        free(conv->_fftBuffer[c]); free(conv->_overlap[c]); free(conv->_inputBuffer[c]);
+        for (unsigned int k=0;k<2;++k) free(conv->_preMultiplied[c][k]);
+    }
+    FFTConvolver2x4x2Init(conv);
 }
 void FFTConvolver2x2Free(FFTConvolver2x2 *conv)
 {
@@ -524,7 +470,7 @@ int FFTConvolver1x1RefreshImpulseResponse(FFTConvolver1x1 *conv, unsigned int bl
 }
 int FFTConvolver2x4x2LoadImpulseResponse(FFTConvolver2x4x2 *conv, unsigned int blockSize, const float* irLL, const float* irLR, const float* irRL, const float* irRR, unsigned int irLen)
 {
-	if (blockSize == 0)
+	if (!conv || !irLL || !irLR || !irRL || !irRR || blockSize == 0 || blockSize > 524288)
 		return 0;
 	if (irLen == 0)
 		return 0;
@@ -579,44 +525,66 @@ int FFTConvolver2x4x2LoadImpulseResponse(FFTConvolver2x4x2 *conv, unsigned int b
 		conv->fft = DFT524288;
 	else if (conv->_segSize == 1048576)
 		conv->fft = DFT1048576;
-	conv->bit = (unsigned int*)malloc(conv->_segSize * sizeof(unsigned int));
-	conv->sine = (float*)malloc(conv->_segSize * sizeof(float));
+	conv->bit = (unsigned int*)FFTConvolver2x4x2Allocate(conv->_segSize,sizeof(unsigned int));
+	if (!conv->bit) goto allocation_failed;
+	conv->sine = (float*)FFTConvolver2x4x2Allocate(conv->_segSize,sizeof(float));
+	if (!conv->sine) goto allocation_failed;
 	fhtbitReversalTbl(conv->bit, conv->_segSize);
 	fhtsinHalfTblFloat(conv->sine, conv->_segSize);
-	conv->_fftBuffer[0] = (float*)malloc(conv->_segSize * sizeof(float));
-	conv->_fftBuffer[1] = (float*)malloc(conv->_segSize * sizeof(float));
+	conv->_fftBuffer[0] = (float*)FFTConvolver2x4x2Allocate(conv->_segSize,sizeof(float));
+	if (!conv->_fftBuffer[0]) goto allocation_failed;
+	conv->_fftBuffer[1] = (float*)FFTConvolver2x4x2Allocate(conv->_segSize,sizeof(float));
+	if (!conv->_fftBuffer[1]) goto allocation_failed;
 
 	// Prepare segments
-	conv->_segmentsReLeft = (float**)malloc(conv->_segCount * sizeof(float*));
-	conv->_segmentsImLeft = (float**)malloc(conv->_segCount * sizeof(float*));
-	conv->_segmentsReRight = (float**)malloc(conv->_segCount * sizeof(float*));
-	conv->_segmentsImRight = (float**)malloc(conv->_segCount * sizeof(float*));
+	conv->_segmentsReLeft = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsReLeft) goto allocation_failed;
+	conv->_segmentsImLeft = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsImLeft) goto allocation_failed;
+	conv->_segmentsReRight = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsReRight) goto allocation_failed;
+	conv->_segmentsImRight = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsImRight) goto allocation_failed;
 	for (unsigned int i = 0; i < conv->_segCount; ++i)
 	{
-		conv->_segmentsReLeft[i] = (float*)malloc(conv->_fftComplexSize * sizeof(float));
-		conv->_segmentsImLeft[i] = (float*)malloc(conv->_fftComplexSize * sizeof(float));
+		conv->_segmentsReLeft[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!conv->_segmentsReLeft[i]) goto allocation_failed;
+		conv->_segmentsImLeft[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!conv->_segmentsImLeft[i]) goto allocation_failed;
 		memset(conv->_segmentsReLeft[i], 0, conv->_fftComplexSize * sizeof(float));
 		memset(conv->_segmentsImLeft[i], 0, conv->_fftComplexSize * sizeof(float));
-		conv->_segmentsReRight[i] = (float*)malloc(conv->_fftComplexSize * sizeof(float));
-		conv->_segmentsImRight[i] = (float*)malloc(conv->_fftComplexSize * sizeof(float));
+		conv->_segmentsReRight[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!conv->_segmentsReRight[i]) goto allocation_failed;
+		conv->_segmentsImRight[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!conv->_segmentsImRight[i]) goto allocation_failed;
 		memset(conv->_segmentsReRight[i], 0, conv->_fftComplexSize * sizeof(float));
 		memset(conv->_segmentsImRight[i], 0, conv->_fftComplexSize * sizeof(float));
 	}
 
 	// Prepare IR
-	conv->_segmentsLLIRRe = (float**)malloc(conv->_segCount * sizeof(float*));
-	conv->_segmentsLLIRIm = (float**)malloc(conv->_segCount * sizeof(float*));
-	conv->_segmentsLRIRRe = (float**)malloc(conv->_segCount * sizeof(float*));
-	conv->_segmentsLRIRIm = (float**)malloc(conv->_segCount * sizeof(float*));
-	conv->_segmentsRLIRRe = (float**)malloc(conv->_segCount * sizeof(float*));
-	conv->_segmentsRLIRIm = (float**)malloc(conv->_segCount * sizeof(float*));
-	conv->_segmentsRRIRRe = (float**)malloc(conv->_segCount * sizeof(float*));
-	conv->_segmentsRRIRIm = (float**)malloc(conv->_segCount * sizeof(float*));
+	conv->_segmentsLLIRRe = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsLLIRRe) goto allocation_failed;
+	conv->_segmentsLLIRIm = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsLLIRIm) goto allocation_failed;
+	conv->_segmentsLRIRRe = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsLRIRRe) goto allocation_failed;
+	conv->_segmentsLRIRIm = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsLRIRIm) goto allocation_failed;
+	conv->_segmentsRLIRRe = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsRLIRRe) goto allocation_failed;
+	conv->_segmentsRLIRIm = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsRLIRIm) goto allocation_failed;
+	conv->_segmentsRRIRRe = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsRRIRRe) goto allocation_failed;
+	conv->_segmentsRRIRIm = (float**)FFTConvolver2x4x2Allocate(conv->_segCount, sizeof(float*));
+	if (!conv->_segmentsRRIRIm) goto allocation_failed;
 	for (unsigned int i = 0; i < conv->_segCount; ++i)
 	{
 		unsigned int j, symIdx;
-		float* segmentLLRe = (float*)malloc(conv->_fftComplexSize * sizeof(float));
-		float* segmentLLIm = (float*)malloc(conv->_fftComplexSize * sizeof(float));
+		float* segmentLLRe = conv->_segmentsLLIRRe[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!segmentLLRe) goto allocation_failed;
+		float* segmentLLIm = conv->_segmentsLLIRIm[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!segmentLLIm) goto allocation_failed;
 		unsigned int remaining = irLen - (i * conv->_blockSize);
 		unsigned int sizeCopy = (remaining >= conv->_blockSize) ? conv->_blockSize : remaining;
 		for (j = 0; j < sizeCopy; j++)
@@ -635,8 +603,10 @@ int FFTConvolver2x4x2LoadImpulseResponse(FFTConvolver2x4x2 *conv, unsigned int b
 		conv->_segmentsLLIRRe[i] = segmentLLRe;
 		conv->_segmentsLLIRIm[i] = segmentLLIm;
 		//
-		float* segmentLRRe = (float*)malloc(conv->_fftComplexSize * sizeof(float));
-		float* segmentLRIm = (float*)malloc(conv->_fftComplexSize * sizeof(float));
+		float* segmentLRRe = conv->_segmentsLRIRRe[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!segmentLRRe) goto allocation_failed;
+		float* segmentLRIm = conv->_segmentsLRIRIm[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!segmentLRIm) goto allocation_failed;
 		remaining = irLen - (i * conv->_blockSize);
 		sizeCopy = (remaining >= conv->_blockSize) ? conv->_blockSize : remaining;
 		for (j = 0; j < sizeCopy; j++)
@@ -655,8 +625,10 @@ int FFTConvolver2x4x2LoadImpulseResponse(FFTConvolver2x4x2 *conv, unsigned int b
 		conv->_segmentsLRIRRe[i] = segmentLRRe;
 		conv->_segmentsLRIRIm[i] = segmentLRIm;
 		//
-		float* segmentRLRe = (float*)malloc(conv->_fftComplexSize * sizeof(float));
-		float* segmentRLIm = (float*)malloc(conv->_fftComplexSize * sizeof(float));
+		float* segmentRLRe = conv->_segmentsRLIRRe[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!segmentRLRe) goto allocation_failed;
+		float* segmentRLIm = conv->_segmentsRLIRIm[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!segmentRLIm) goto allocation_failed;
 		remaining = irLen - (i * conv->_blockSize);
 		sizeCopy = (remaining >= conv->_blockSize) ? conv->_blockSize : remaining;
 		for (j = 0; j < sizeCopy; j++)
@@ -675,8 +647,10 @@ int FFTConvolver2x4x2LoadImpulseResponse(FFTConvolver2x4x2 *conv, unsigned int b
 		conv->_segmentsRLIRRe[i] = segmentRLRe;
 		conv->_segmentsRLIRIm[i] = segmentRLIm;
 		//
-		float* segmentRRRe = (float*)malloc(conv->_fftComplexSize * sizeof(float));
-		float* segmentRRIm = (float*)malloc(conv->_fftComplexSize * sizeof(float));
+		float* segmentRRRe = conv->_segmentsRRIRRe[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!segmentRRRe) goto allocation_failed;
+		float* segmentRRIm = conv->_segmentsRRIRIm[i] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	    if (!segmentRRIm) goto allocation_failed;
 		remaining = irLen - (i * conv->_blockSize);
 		sizeCopy = (remaining >= conv->_blockSize) ? conv->_blockSize : remaining;
 		for (j = 0; j < sizeCopy; j++)
@@ -697,23 +671,31 @@ int FFTConvolver2x4x2LoadImpulseResponse(FFTConvolver2x4x2 *conv, unsigned int b
 	}
 
 	// Prepare convolution buffers
-	conv->_preMultiplied[0][0] = (float*)malloc(conv->_fftComplexSize * sizeof(float));
-	conv->_preMultiplied[0][1] = (float*)malloc(conv->_fftComplexSize * sizeof(float));
-	conv->_preMultiplied[1][0] = (float*)malloc(conv->_fftComplexSize * sizeof(float));
-	conv->_preMultiplied[1][1] = (float*)malloc(conv->_fftComplexSize * sizeof(float));
+	conv->_preMultiplied[0][0] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	if (!conv->_preMultiplied[0][0]) goto allocation_failed;
+	conv->_preMultiplied[0][1] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	if (!conv->_preMultiplied[0][1]) goto allocation_failed;
+	conv->_preMultiplied[1][0] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	if (!conv->_preMultiplied[1][0]) goto allocation_failed;
+	conv->_preMultiplied[1][1] = (float*)FFTConvolver2x4x2Allocate(conv->_fftComplexSize,sizeof(float));
+	if (!conv->_preMultiplied[1][1]) goto allocation_failed;
 	memset(conv->_preMultiplied[0][0], 0, conv->_fftComplexSize * sizeof(float));
 	memset(conv->_preMultiplied[0][1], 0, conv->_fftComplexSize * sizeof(float));
 	memset(conv->_preMultiplied[1][0], 0, conv->_fftComplexSize * sizeof(float));
 	memset(conv->_preMultiplied[1][1], 0, conv->_fftComplexSize * sizeof(float));
-	conv->_overlap[0] = (float*)malloc(conv->_blockSize * sizeof(float));
+	conv->_overlap[0] = (float*)FFTConvolver2x4x2Allocate(conv->_blockSize,sizeof(float));
+	if (!conv->_overlap[0]) goto allocation_failed;
 	memset(conv->_overlap[0], 0, conv->_blockSize * sizeof(float));
-	conv->_overlap[1] = (float*)malloc(conv->_blockSize * sizeof(float));
+	conv->_overlap[1] = (float*)FFTConvolver2x4x2Allocate(conv->_blockSize,sizeof(float));
+	if (!conv->_overlap[1]) goto allocation_failed;
 	memset(conv->_overlap[1], 0, conv->_blockSize * sizeof(float));
 
 	// Prepare input buffer
-	conv->_inputBuffer[0] = (float*)malloc(conv->_blockSize * sizeof(float));
+	conv->_inputBuffer[0] = (float*)FFTConvolver2x4x2Allocate(conv->_blockSize,sizeof(float));
+	if (!conv->_inputBuffer[0]) goto allocation_failed;
 	memset(conv->_inputBuffer[0], 0, conv->_blockSize * sizeof(float));
-	conv->_inputBuffer[1] = (float*)malloc(conv->_blockSize * sizeof(float));
+	conv->_inputBuffer[1] = (float*)FFTConvolver2x4x2Allocate(conv->_blockSize,sizeof(float));
+	if (!conv->_inputBuffer[1]) goto allocation_failed;
 	memset(conv->_inputBuffer[1], 0, conv->_blockSize * sizeof(float));
 	conv->_inputBufferFill = 0;
 
@@ -721,6 +703,9 @@ int FFTConvolver2x4x2LoadImpulseResponse(FFTConvolver2x4x2 *conv, unsigned int b
 	conv->_current = 0;
 	conv->gain = 1.0f / ((float)conv->_segSize * 2.0f);
 	return 1;
+allocation_failed:
+    FFTConvolver2x4x2Free(conv);
+    return 0;
 }
 int FFTConvolver2x2LoadImpulseResponse(FFTConvolver2x2 *conv, unsigned int blockSize, const float* irL, const float* irR, unsigned int irLen)
 {

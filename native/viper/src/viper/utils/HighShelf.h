@@ -8,6 +8,7 @@ public:
     void SetFrequency(float freq);
     void SetGain(float gain);
     void SetSamplingRate(uint32_t samplingRate);
+    void Configure(float frequency, float gainAmplitude, float slope, uint32_t samplingRate, bool resetState);
 
 private:
     float frequency;

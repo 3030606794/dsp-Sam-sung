@@ -54,7 +54,7 @@ class DeviceProfilesCardFragment : PreferenceFragmentCompat(), RoutingObserver.R
                 RoutingObserver.DeviceGroup.ANALOG -> R.drawable.ic_twotone_headphones_24dp
                 RoutingObserver.DeviceGroup.BLUETOOTH -> R.drawable.ic_twotone_bluetooth_24dp
                 RoutingObserver.DeviceGroup.HDMI -> R.drawable.ic_twotone_settings_input_hdmi_24dp
-                RoutingObserver.DeviceGroup.SPEAKER -> R.drawable.ic_twotone_speaker_24dp
+                RoutingObserver.DeviceGroup.SPEAKER -> R.drawable.ic_output_speaker_aligned
                 RoutingObserver.DeviceGroup.USB -> R.drawable.ic_twotone_usb_24dp
                 else -> R.drawable.ic_twotone_device_unknown_24dp
             })

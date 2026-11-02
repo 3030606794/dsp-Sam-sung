@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.RootlessJamesDSP.LiquidGlass" parent="Theme.RootlessJamesDSP">
+        <item name="colorPrimary">@color/glass_primary</item>
+        <item name="android:colorAccent">@color/glass_primary</item>
+        <item name="colorAccent">@color/glass_primary</item>
+        <item name="colorOnPrimary">@color/glass_on_primary</item>
+        <item name="colorPrimaryContainer">@color/glass_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/glass_on_primary_container</item>
+        <item name="colorSecondary">@color/glass_secondary</item>
+        <item name="colorOnSecondary">@color/glass_on_primary</item>
+        <item name="colorSecondaryContainer">@color/glass_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/glass_on_surface</item>
+        <item name="colorTertiary">@color/glass_tertiary</item>
+        <item name="colorOnTertiary">@color/glass_on_primary</item>
+        <item name="colorTertiaryContainer">@color/glass_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/glass_on_surface</item>
+        <item name="android:colorBackground">@color/glass_background</item>
+        <item name="colorOnBackground">@color/glass_on_surface</item>
+        <item name="colorSurface">@color/glass_surface</item>
+        <item name="colorOnSurface">@color/glass_on_surface</item>
+        <item name="colorSurfaceVariant">@color/glass_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/glass_secondary_text</item>
+        <item name="colorOutline">@color/glass_outline</item>
+        <item name="colorSurfaceInverse">@color/glass_inverse_surface</item>
+        <item name="colorOnSurfaceInverse">@color/glass_inverse_on_surface</item>
+        <item name="colorPrimaryInverse">@color/glass_inverse_primary</item>
+        <item name="android:textColorPrimary">@color/glass_on_surface</item>
+        <item name="android:textColorSecondary">@color/glass_secondary_text</item>
+        <item name="android:divider">@color/glass_outline</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="elevationOverlayEnabled">false</item>
+        <item name="materialCardViewStyle">@style/Widget.DSP.GlassCard</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.DSP.GlassDialog</item>
+    </style>
+
+    <style name="Widget.DSP.GlassCard" parent="Theme.RootlessJamesDSP.CardView">
+        <item name="cardBackgroundColor">@color/glass_card</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="strokeColor">@color/glass_edge</item>
+    </style>
+
+    <style name="ThemeOverlay.DSP.GlassDialog" parent="AppTheme.AlertDialogTheme">
+        <item name="colorSurface">@color/glass_dialog</item>
+        <item name="colorBackgroundFloating">@color/glass_dialog</item>
+        <item name="colorOnSurface">@color/glass_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/glass_secondary_text</item>
+        <item name="colorPrimary">@color/glass_primary</item>
+        <item name="elevationOverlayEnabled">false</item>
+    </style>
+</resources>

@@ -8,6 +8,7 @@ public:
     NoiseSharpening();
 
     void Process(float *buffer, uint32_t size);
+    void ProcessSelected(float* samples,const float sharpenInput[2]);
 
     void Reset();
 

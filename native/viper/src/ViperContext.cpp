@@ -5,6 +5,7 @@
 #include "ViperContext.h"
 #include "log.h"
 #include "viper/constants.h"
+#include "viper/effects/DynamicTuning.h"
 
 #define SET(type, ptr, value) (*(type *) (ptr) = (value))
 
@@ -138,6 +139,124 @@ int32_t ViperContext::handleSetParam(effect_param_t *pCmdParam, void *pReplyData
 
     int param = *(int *) (pCmdParam->data);
     int *intValues = (int *) (pCmdParam->data + vOffset);
+    if(param==65655 || param==65656){
+        const size_t words=param==65655?dynamictuning::kWords:dynamictuning::kToolsWords;
+        const bool valid=pCmdParam->psize==4 && pCmdParam->vsize==words*4 &&
+            (param==65655?viper.dynamicSystem.SetProfessional(intValues,words):viper.dynamicSystem.SetTools(intValues,words));
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65657){
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=4 || intValues[0]!=0){*(int*)pReplyData=-EINVAL;return 0;}
+        viper.dynamicSystem.ClearTools();return 0;
+    }
+    if(param==65652 || param==65653){
+        const size_t words=param==65652?analogtuning::kWords:analogtuning::kToolsWords;
+        const bool valid=pCmdParam->psize==4 && pCmdParam->vsize==words*4 &&
+            (param==65652?viper.analogX.SetProfessional(intValues,words):viper.analogX.SetTools(intValues,words));
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65654){
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=4 || intValues[0]!=0){*(int*)pReplyData=-EINVAL;return 0;}
+        viper.analogX.ClearTools();return 0;
+    }
+    if(param==65649 || param==65650){
+        const size_t words=param==65649?tubetuning::kWords:tubetuning::kToolsWords;
+        const bool valid=pCmdParam->psize==4 && pCmdParam->vsize==words*4 &&
+            (param==65649?viper.tubeSimulator.SetProfessional(intValues,words):viper.tubeSimulator.SetTools(intValues,words));
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65651){
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=4 || intValues[0]!=0){*(int*)pReplyData=-EINVAL;return 0;}
+        viper.tubeSimulator.ClearTools();return 0;
+    }
+    if(param==65648){
+        const bool valid=pCmdParam->vsize%4==0 && viper.reverberation.SetAdvanced(intValues,pCmdParam->vsize/4);
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65645 || param==65646){
+        const bool valid=pCmdParam->vsize%4==0 && (param==65645?viper.reverberation.SetProfessional(intValues,pCmdParam->vsize/4):viper.reverberation.SetTools(intValues,pCmdParam->vsize/4));
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65647){
+        if(pCmdParam->vsize!=4 || intValues[0]!=0){*(int*)pReplyData=-EINVAL;return 0;}
+        viper.reverberation.ClearTools();return 0;
+    }
+    if(param==65643 || param==65644) {
+        const bool valid=pCmdParam->vsize%4==0 && (param==65643?
+            viper.cure.SetProfessional2(intValues,pCmdParam->vsize/4):viper.cure.SetTools2(intValues,pCmdParam->vsize/4));
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65640 || param==65641) {
+        const bool valid=pCmdParam->vsize%4==0 && (param==65640?
+            viper.cure.SetAdvanced(intValues,pCmdParam->vsize/4):viper.cure.SetTools(intValues,pCmdParam->vsize/4));
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65642) {
+        if(pCmdParam->vsize!=4 || intValues[0]!=0){*(int*)pReplyData=-EINVAL;return 0;}
+        viper.cure.ClearTools();return 0;
+    }
+    if(param==65635) {
+        const bool valid=pCmdParam->vsize==21*sizeof(int32_t) && viper.diffSurround.SetSecondRound(intValues,21);
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65636) {
+        if(pCmdParam->vsize!=4 || intValues[0]<0 || intValues[0]>4){*(int*)pReplyData=-EINVAL;return 0;}
+        viper.diffSurround.SetAudition(intValues[0]);return 0;
+    }
+    if(param==65632) {
+        const bool valid=pCmdParam->vsize==7*sizeof(int32_t) && viper.diffSurround.SetAdvanced(intValues,7);
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65633) {
+        if(pCmdParam->vsize!=4 || intValues[0]<0 || intValues[0]>2) {*(int*)pReplyData=-EINVAL;return 0;}
+        viper.diffSurround.SetAudition(intValues[0]);return 0;
+    }
+    if(param==65634) {
+        if(pCmdParam->vsize!=4 || intValues[0]!=0) {*(int*)pReplyData=-EINVAL;return 0;}
+        viper.diffSurround.ClearRuntime();return 0;
+    }
+    if(param>=65627 && param<=65630) {
+        const bool valid=pCmdParam->vsize%sizeof(int32_t)==0 &&
+            viper.colorfulMusic.SetAdvancedProcessing(param,intValues,pCmdParam->vsize/sizeof(int32_t));
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65631) {
+        if(pCmdParam->vsize!=4 || intValues[0]<0 || intValues[0]>1) {*(int*)pReplyData=-EINVAL;return 0;}
+        viper.colorfulMusic.SetDifferenceAudition(intValues[0]!=0);return 0;
+    }
+    if(param==65608) {
+        const bool valid=pCmdParam->vsize==13*sizeof(int32_t) && viper.colorfulMusic.SetAdvanced(intValues,13);
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65609) { // Internal imaging lifecycle cleanup; not a public SET.
+        if(pCmdParam->vsize!=4 || intValues[0]!=0) {*(int*)pReplyData=-EINVAL;return 0;}
+        viper.colorfulMusic.ClearImagingRuntime();return 0;
+    }
+    if(param>=65604 && param<=65607) {
+        const size_t counts[4]={4,4,8,9};
+        const size_t words=counts[param-65604];
+        bool valid=false;
+        if(pCmdParam->vsize==words*sizeof(int32_t)) {
+            switch(param) {
+                case 65604:valid=viper.viperClarity.SetSelective(intValues,words);break;
+                case 65605:valid=viper.spectrumExtend.SetNonlinear(intValues,words);break;
+                case 65606:valid=viper.viperClarity.SetDynamic(intValues,words);break;
+                case 65607:valid=viper.viperClarity.SetDeess(intValues,words);break;
+            }
+        }
+        *(int*)pReplyData=valid?0:-EINVAL;return 0;
+    }
+    if(param==65600 || param==65601) {
+        const size_t words=param==65600?11:7;
+        const bool valid=pCmdParam->vsize==words*sizeof(int32_t) &&
+            (param==65600?viper.viperClarity.SetAdvanced(intValues,words):viper.spectrumExtend.SetAdvanced(intValues,words));
+        *(int*)pReplyData=valid?0:-EINVAL;
+        return 0;
+    }
+    if(param==65602) { // Internal lifecycle cleanup; Fusion does not expose this SET.
+        if(pCmdParam->vsize!=4 || intValues[0]!=0) {*(int*)pReplyData=-EINVAL;return 0;}
+        viper.spectrumExtend.ClearAudition();viper.viperClarity.ClearDynamics();return 0;
+    }
     switch (pCmdParam->vsize) {
         case sizeof(int): {
             viper.DispatchCommand(param, intValues[0], 0, 0, 0, 0, nullptr);
@@ -180,9 +299,102 @@ int32_t ViperContext::handleGetParam(effect_param_t *pCmdParam, effect_param_t *
     // the parameter size to the next 32 bit alignment.
     uint32_t vOffset = ((pCmdParam->psize + sizeof(int32_t) - 1) / sizeof(int32_t)) * sizeof(int32_t);
 
-    VIPER_LOGD("handleGetParam() EFFECT_CMD_GET_PARAM called with data = %d, psize = %d, vsize = %d", *(uint32_t *) pCmdParam->data, pCmdParam->psize, pCmdParam->vsize);
-
     memcpy(pReplyParam, pCmdParam, sizeof(effect_param_t) + pCmdParam->psize);
+
+    const uint32_t professionalId=*(uint32_t*)pCmdParam->data;
+    if(professionalId==131228 || professionalId==131229){
+        const unsigned words=professionalId==131228?dynamictuning::kRuntimeWords:dynamictuning::kResponseWords;
+        const unsigned bytes=words*4;
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=bytes || *pReplySize<16+bytes)return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=bytes;
+        std::array<int32_t,dynamictuning::kResponseWords> values{};
+        if(professionalId==131228)viper.dynamicSystem.GetRuntime(values.data());else viper.dynamicSystem.GetResponse(values.data());
+        std::memcpy(pReplyParam->data+vOffset,values.data(),bytes);*pReplySize=16+bytes;return 0;
+    }
+    if(professionalId==131226){
+        constexpr unsigned bytes=analogtuning::kRuntimeWords*4;
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=bytes || *pReplySize<16+bytes)return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=bytes;
+        std::array<int32_t,analogtuning::kRuntimeWords> values{};viper.analogX.GetRuntime(values.data());
+        std::memcpy(pReplyParam->data+vOffset,values.data(),bytes);*pReplySize=16+bytes;return 0;
+    }
+    if(professionalId==131225){
+        constexpr unsigned bytes=tubetuning::kRuntimeWords*4;
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=bytes || *pReplySize<16+bytes)return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=bytes;
+        std::array<int32_t,tubetuning::kRuntimeWords> values{};viper.tubeSimulator.GetRuntime(values.data());
+        std::memcpy(pReplyParam->data+vOffset,values.data(),bytes);*pReplySize=16+bytes;return 0;
+    }
+    if(professionalId==131223){
+        constexpr unsigned bytes=reverbtuning::kDecayWords*4;
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=bytes || *pReplySize<16+bytes)return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=bytes;
+        std::array<int32_t,reverbtuning::kDecayWords> values{};viper.reverberation.GetDecay(values.data());
+        std::memcpy(pReplyParam->data+vOffset,values.data(),bytes);*pReplySize=16+bytes;return 0;
+    }
+    if(professionalId==131222){
+        constexpr unsigned bytes=reverbtuning::kRuntimeWords*4;
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=bytes || *pReplySize<16+bytes)return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=bytes;
+        std::array<int32_t,reverbtuning::kRuntimeWords> values{};viper.reverberation.GetRuntime(values.data());
+        std::memcpy(pReplyParam->data+vOffset,values.data(),bytes);*pReplySize=16+bytes;return 0;
+    }
+    if(professionalId==131221) {
+        constexpr unsigned bytes=headphone::kDiagnosticWords*4;
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=bytes || *pReplySize<16+bytes)return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=bytes;
+        std::array<int32_t,headphone::kDiagnosticWords> values{};viper.cure.GetDiagnostics(values.data());
+        std::memcpy(pReplyParam->data+vOffset,values.data(),bytes);*pReplySize=16+bytes;return 0;
+    }
+    if(professionalId==131219) {
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=80 || *pReplySize<96)return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=80;
+        std::array<int32_t,headphone::kRuntimeWords> values{};viper.cure.GetRuntime(values.data());
+        std::memcpy(pReplyParam->data+vOffset,values.data(),80);*pReplySize=96;return 0;
+    }
+    if(professionalId>=131152 && professionalId<=131211) {
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=4 || *pReplySize<20)return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=4;
+        *(int32_t*)(pReplyParam->data+vOffset)=viper.diffSurround.GetSecondRound(professionalId-131152);
+        *pReplySize=20;return 0;
+    }
+    if(professionalId>=131128 && professionalId<=131151) {
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=4 || *pReplySize<20) return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=4;
+        *(int32_t*)(pReplyParam->data+vOffset)=viper.diffSurround.GetRuntime(professionalId-131128);
+        *pReplySize=20;return 0;
+    }
+    if(professionalId>=131112 && professionalId<=131125) {
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=4 || *pReplySize<20) return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=4;
+        *(int32_t*)(pReplyParam->data+vOffset)=viper.colorfulMusic.GetAdvancedImaging(professionalId-131112);
+        *pReplySize=20;return 0;
+    }
+    if(professionalId>=131103 && professionalId<=131111) {
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=4 || *pReplySize<20) return -EINVAL;
+        pReplyParam->status=0;pReplyParam->vsize=4;
+        *(int32_t*)(pReplyParam->data+vOffset)=viper.colorfulMusic.GetImaging(professionalId-131103);
+        *pReplySize=20;return 0;
+    }
+    if(professionalId>=131086 && professionalId<=131093) {
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=4 || *pReplySize<20) return -EINVAL;
+        const unsigned index=professionalId-131086;
+        pReplyParam->status=0;pReplyParam->vsize=4;
+        *(int32_t*)(pReplyParam->data+vOffset)=index<5?viper.viperClarity.GetEffective(index):viper.spectrumExtend.GetEffective(index-5);
+        *pReplySize=20;return 0;
+    }
+
+    if(professionalId>=131094 && professionalId<=131102) {
+        if(pCmdParam->psize!=4 || pCmdParam->vsize!=4 || *pReplySize<20) return -EINVAL;
+        const unsigned index=professionalId-131094;
+        pReplyParam->status=0;pReplyParam->vsize=4;
+        const int32_t value=index<5?viper.viperClarity.GetTopEnd(index):
+            index<7?viper.spectrumExtend.GetNonlinear(index-5):viper.viperClarity.GetTopEnd(index-2);
+        *(int32_t*)(pReplyParam->data+vOffset)=value;
+        *pReplySize=20;return 0;
+    }
+
+    VIPER_LOGD("handleGetParam() EFFECT_CMD_GET_PARAM called with data = %d, psize = %d, vsize = %d", *(uint32_t *) pCmdParam->data, pCmdParam->psize, pCmdParam->vsize);
 
     switch (*(uint32_t *) pCmdParam->data) {
         case PARAM_GET_ENABLED: {
@@ -296,6 +508,13 @@ int32_t ViperContext::handleGetParam(effect_param_t *pCmdParam, effect_param_t *
 
 int32_t ViperContext::handleCommand(uint32_t cmdCode, uint32_t cmdSize, void *pCmdData, uint32_t *pReplySize, void *pReplyData) {
     uint32_t replySize = pReplySize == nullptr ? 0 : *pReplySize;
+    if(cmdCode==0x44494650u) { // Fusion's private, already-validated prepared-plan handoff.
+        if(cmdSize!=sizeof(std::shared_ptr<DiffSurround::Prepared>) || !pCmdData ||
+           replySize!=sizeof(int32_t) || !pReplyData)return -EINVAL;
+        auto& prepared=*static_cast<std::shared_ptr<DiffSurround::Prepared>*>(pCmdData);
+        SET(int32_t,pReplyData,viper.diffSurround.ApplyPrepared(prepared)?0:-EAGAIN);
+        return 0;
+    }
     switch (cmdCode) {
         case EFFECT_CMD_INIT: {
             if (replySize != sizeof(int32_t) || pReplyData == nullptr) {
@@ -338,6 +557,9 @@ int32_t ViperContext::handleCommand(uint32_t cmdCode, uint32_t cmdSize, void *pC
                 return -EINVAL;
             }
             enabled = false;
+            viper.tubeSimulator.ClearTools();
+            viper.analogX.ClearTools();
+            viper.dynamicSystem.ClearTools();
             SET(int32_t, pReplyData, 0);
             return 0;
         }

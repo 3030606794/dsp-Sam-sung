@@ -18,6 +18,8 @@ private:
     bool enabled;
     bool strengthAtLeast500;
     float gain;
+    float gainTarget=0,polarity=1,polarityTarget=1,activeMix=0,alpha=0;
+    bool running=false;
     float prev[2];
     TimeConstDelay timeConstDelay[2];
     Biquad highpass;

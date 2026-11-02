@@ -1,11 +1,13 @@
 *.iml
 **/build/
 out/
+/构建输出/
 dist/
 *.jks
 *.keystore
 *.hprof
 .gradle
+/.kotlin/
 /local.properties
 /.idea
 /.idea/caches

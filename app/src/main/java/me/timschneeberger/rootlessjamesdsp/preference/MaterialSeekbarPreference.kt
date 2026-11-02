@@ -1,20 +1,26 @@
 package me.timschneeberger.rootlessjamesdsp.preference
+
+import me.timschneeberger.rootlessjamesdsp.ui.glass.setGlassLabelFormatter
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.TypedArray
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.KeyEvent
-import android.view.LayoutInflater
 import android.view.View
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.EditText
+import android.text.InputType
 import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
-import androidx.preference.SeekBarPreference
+import androidx.core.widget.TextViewCompat
 import com.google.android.material.slider.Slider
+import me.timschneeberger.rootlessjamesdsp.ui.glass.GlassAlertDialogBuilder as MaterialAlertDialogBuilder
 import me.timschneeberger.rootlessjamesdsp.R
-import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.showInputAlert
-import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.toast
+import me.timschneeberger.rootlessjamesdsp.ui.SliderPreferenceUi
+import me.timschneeberger.rootlessjamesdsp.ui.SliderAppearance
+import me.timschneeberger.rootlessjamesdsp.utils.SliderDoubleTapReset
 import timber.log.Timber
 import java.math.BigDecimal
 import java.math.MathContext
@@ -22,9 +28,9 @@ import java.util.*
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.pow
 
-// TODO stepValue is broken in recyclerview!!!
-class MaterialSeekbarPreference : Preference {
+class MaterialSeekbarPreference : Preference, PreferenceValueSync {
     var mSeekBarValue/* synthetic access */ = 0f
     var mMin/* synthetic access */ = 0f
     private var mMax = 0f
@@ -48,13 +54,80 @@ class MaterialSeekbarPreference : Preference {
     var mUpdatesContinuously/* synthetic access */ = false
 
     var valueLabelOverride: ((Float) -> String)? = null
+    /** Optional declaration-based rounding; existing controls retain their current behavior. */
+    var valueNormalizer: ((Float) -> Float)? = null
+    /** DSP declaration default for this thumb only; null preserves the existing reset behavior. */
+    var thumbResetValueOverride: Float? = null
+    /** Explicit presentation opt-in for the professional DSP list; audio/value handling is shared. */
+    var useDspCompactLayout: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            layoutResource = if (value) R.layout.preference_liveprog_compact_slider
+                else R.layout.preference_materialslider
+            notifyChanged()
+        }
+    private var applyingInitialValue = false
+    private var defaultSliderValue = 0f
+    private val valueObserver = PreferenceValueObserver(this, ::syncFromPreferences)
+
+    override fun syncFromPreferences() {
+        if (!isPersistent || key == null || mTrackingTouch) return
+        val dataStore = preferenceDataStore
+        val stored = if (dataStore != null) {
+            runCatching { dataStore.getFloat(key, mSeekBarValue) }.getOrNull()
+        } else sharedPreferences?.let {
+            runCatching { it.getFloat(key, defaultSliderValue) }.getOrNull()
+        }
+        refreshDisplayedValue(stored?.takeIf { it.isFinite() } ?: return)
+    }
+
+    /** Another editor's committed value; never persists it or fires a user-change callback. */
+    fun refreshDisplayedValue(value: Float) {
+        if (mTrackingTouch || !value.isFinite()) return
+        val stored = value.coerceIn(mMin, mMax)
+        val next = validateValue(stored.coerceIn(mMin, mMax))
+        if (mSeekBarValue == next) return
+        mSeekBarValue = next
+        if (::mSeekBar.isInitialized && mSeekBar.getTag(R.id.seekbar) === this) {
+            if (mSeekBar.value != next) mSeekBar.value = next
+            updateLabelValue(next)
+        }
+    }
+
+    override fun onAttached() {
+        super.onAttached()
+        valueObserver.attach()
+    }
+
+    override fun finishInteraction() {
+        mTrackingTouch = false
+        syncFromPreferences()
+        if (::mSeekBar.isInitialized && mSeekBar.getTag(R.id.seekbar) === this) {
+            val next = validateValue(mSeekBarValue)
+            if (mSeekBar.value != next) mSeekBar.value = next
+            updateLabelValue(next)
+        }
+    }
+
+    override fun onDetached() {
+        valueObserver.detach()
+        mTrackingTouch = false
+        mSeekBarValueTextView = null
+        super.onDetached()
+    }
+
+    override fun releaseBoundView() {
+        mTrackingTouch = false
+        mSeekBarValueTextView = null
+    }
 
     /**
      * Listener reacting to the [SeekBar] changing value by the user
      */
     private val mSeekBarChangeListener =
         Slider.OnChangeListener { slider, value, fromUser ->
-            if (fromUser && mUpdatesContinuously || !mTrackingTouch) {
+            if (fromUser && (mUpdatesContinuously || !mTrackingTouch)) {
                 syncValueInternal(slider)
             } else {
                 // We always want to update the text while the seekbar is being dragged
@@ -71,6 +144,7 @@ class MaterialSeekbarPreference : Preference {
             if (seekBar.value != mSeekBarValue) {
                 syncValueInternal(seekBar)
             }
+            syncFromPreferences()
         }
     }
 
@@ -142,7 +216,7 @@ class MaterialSeekbarPreference : Preference {
 
     private fun validateValue(value: Float): Float {
         if (mSeekBarIncrement > 0 && !valueLandsOnTick(value)) {
-            val newValue = mSeekBarIncrement * ((value / mSeekBarIncrement).roundToInt())
+            val newValue = mMin + mSeekBarIncrement * (((value - mMin) / mSeekBarIncrement).roundToInt())
             Timber.w("setValueInternal: value corrected $value to $newValue")
             return newValue
         }
@@ -150,8 +224,13 @@ class MaterialSeekbarPreference : Preference {
     }
 
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
+        syncFromPreferences()
         super.onBindViewHolder(holder)
         mSeekBar = holder.findViewById(R.id.seekbar) as Slider
+        mSeekBar.setTag(R.id.seekbar, this)
+        mSeekBar.isSaveEnabled = false
+        holder.itemView.isSaveFromParentEnabled = false
+        SliderAppearance.apply(mSeekBar)
         mSeekBarValueTextView = holder.findViewById(R.id.seekbar_value) as TextView
         holder.itemView.setOnKeyListener(mSeekBarKeyListener)
 
@@ -159,17 +238,12 @@ class MaterialSeekbarPreference : Preference {
             mSeekBarValueTextView!!.minWidth = mLabelMinWidth
         }
 
-        if (mShowSeekBarValue) {
-            mSeekBarValueTextView!!.visibility = View.VISIBLE
-        } else {
-            mSeekBarValueTextView!!.visibility = View.GONE
-            mSeekBarValueTextView = null
-        }
+        mSeekBarValueTextView!!.visibility = View.VISIBLE
 
         mSeekBar.clearOnChangeListeners()
         mSeekBar.clearOnSliderTouchListeners()
-        mSeekBar.addOnChangeListener(mSeekBarChangeListener)
-        mSeekBar.addOnSliderTouchListener(mSeekBarTouchListener)
+        // A recycled slider must not publish its previous row's value while it is rebound.
+        mSeekBar.stepSize = 0f
         mSeekBar.valueFrom = mMin
         mSeekBar.valueTo = mMax
         // Ignore: If the increment is not zero, use that. Otherwise, use the default mKeyProgressIncrement
@@ -179,45 +253,115 @@ class MaterialSeekbarPreference : Preference {
         mSeekBar.stepSize = mSeekBarIncrement
 
         mSeekBar.value = validateValue(mSeekBarValue)
+        mSeekBar.setGlassLabelFormatter { formatLabelValue(it) }
         updateLabelValue(mSeekBarValue)
         mSeekBar.isEnabled = isEnabled
+        mSeekBar.addOnChangeListener(mSeekBarChangeListener)
+        mSeekBar.addOnSliderTouchListener(mSeekBarTouchListener)
 
-        this.setOnPreferenceClickListener {
-            context.showInputAlert(
-                LayoutInflater.from(context), 
-                context.getString(R.string.slider_dialog_title),
-                title?.toString(),
-                "%.${mPrecision}f".format(Locale.ROOT, getValue()),
-                true,
-                mUnit
-            ) {
-                it ?: return@showInputAlert
-                try {
-                    if(mSeekBar.stepSize <= 0 || valueLandsOnTick(it.toFloat())) {
-                        setValue(it.toFloat())
-                    }
-                    else {
-                        context.toast(
-                            context.getString(R.string.slider_dialog_step_error, mSeekBar.stepSize.roundToInt()),
-                            false
-                        )
-                    }
-                }
-                catch (ex: Exception) {
-                    Timber.e("Failed to parse number input")
-                    Timber.d(ex)
-                    context.toast(
-                        context.getString(R.string.slider_dialog_format_error),
-                        false
-                    )
-                }
-            }
-            true
+        val step = if (mSeekBarIncrement > 0) mSeekBarIncrement else 10f.pow(-mPrecision)
+        holder.findViewById(R.id.slider_decrease)?.apply {
+            isEnabled = this@MaterialSeekbarPreference.isEnabled
+            contentDescription = "${title}减少 $step$mUnit"
+            setOnClickListener { requestUserValue(validateValue((mSeekBarValue - step).coerceIn(mMin, mMax))) }
+        }
+        holder.findViewById(R.id.slider_increase)?.apply {
+            isEnabled = this@MaterialSeekbarPreference.isEnabled
+            contentDescription = "${title}增加 $step$mUnit"
+            setOnClickListener { requestUserValue(validateValue((mSeekBarValue + step).coerceIn(mMin, mMax))) }
+        }
+        mSeekBarValueTextView!!.isEnabled = isEnabled
+        mSeekBarValueTextView!!.setOnClickListener { showValueInput() }
+        setOnPreferenceClickListener { showValueInput(); true }
+        val explicitThumbResetValue = thumbResetValueOverride?.takeIf { it.isFinite() }?.let { declared ->
+            val bounded = declared.coerceIn(mMin, mMax)
+            val normalized = valueNormalizer?.invoke(bounded)?.takeIf { it.isFinite() } ?: bounded
+            validateValue(normalized.coerceIn(mMin, mMax)).coerceIn(mMin, mMax)
+        }
+        SliderDoubleTapReset.install(mSeekBar,
+            explicitThumbResetValue ?: validateValue(defaultSliderValue).coerceIn(mMin, mMax),
+            onCancel = ::finishInteraction,
+            resetLabel = "恢复默认值", thumbOnly = true) {
+            requestUserValue(explicitThumbResetValue ?: validateValue(defaultSliderValue.coerceIn(mMin, mMax)))
+            mSeekBar.value = validateValue(mSeekBarValue)
+        }
+        SliderPreferenceUi.bind(holder, title, summary,
+            "范围：$mMin～$mMax $mUnit；默认：${explicitThumbResetValue ?: defaultSliderValue} $mUnit；步长：$step $mUnit")
+        if (useDspCompactLayout) bindDspCompactAppearance(holder)
+    }
+
+    private fun bindDspCompactAppearance(holder: PreferenceViewHolder) {
+        (holder.findViewById(android.R.id.title) as? TextView)?.apply {
+            TextViewCompat.setAutoSizeTextTypeWithDefaults(this, TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            isSingleLine = false
+            maxLines = Int.MAX_VALUE
+            ellipsize = null
+        }
+        (holder.findViewById(android.R.id.summary) as? TextView)?.apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            text = this@MaterialSeekbarPreference.summary
+            visibility = if (text.isNullOrBlank()) View.GONE else View.VISIBLE
+        }
+        mSeekBarValueTextView?.apply {
+            // A long imported value wraps in the same fixed-width field instead of shrinking.
+            TextViewCompat.setAutoSizeTextTypeWithDefaults(this, TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            isSingleLine = false
+            maxLines = Int.MAX_VALUE
+            ellipsize = null
         }
     }
 
+    private fun requestUserValue(candidate: Float): Boolean {
+        if (!isEnabled || !candidate.isFinite() || candidate !in mMin..mMax ||
+            (mSeekBarIncrement > 0 && !valueLandsOnTick(candidate))) return false
+        if (candidate != mSeekBarValue && !callChangeListener(candidate)) {
+            if (::mSeekBar.isInitialized && mSeekBar.getTag(R.id.seekbar) === this)
+                mSeekBar.value = validateValue(mSeekBarValue)
+            return false
+        }
+        setValueInternal(candidate, false)
+        if (::mSeekBar.isInitialized && mSeekBar.getTag(R.id.seekbar) === this && mSeekBar.value != mSeekBarValue)
+            mSeekBar.value = validateValue(mSeekBarValue)
+        updateLabelValue(mSeekBarValue)
+        return true
+    }
+
+    private fun showValueInput() {
+        if (!isEnabled) return
+        val input = EditText(context).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            if (useDspCompactLayout) setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setSingleLine(); setText(mSeekBarValue.toString()); selectAll()
+        }
+        val dialog = MaterialAlertDialogBuilder(context).setTitle(title).setView(input)
+            .setPositiveButton(android.R.string.ok, null).setNegativeButton(android.R.string.cancel, null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val entered = input.text.toString().trim().toFloatOrNull()
+                if (entered == null || !requestUserValue(entered))
+                    input.error = "请输入 $mMin～$mMax $mUnit" + if (mSeekBarIncrement > 0) "，步长 $mSeekBarIncrement" else ""
+                else dialog.dismiss()
+            }
+        }
+        dialog.show()
+    }
     override fun onSetInitialValue(defaultValue: Any?) {
-        setValue(getPersistedFloat((defaultValue as? Float ?: 0f)))
+        defaultSliderValue = (defaultValue as? Number)?.toFloat() ?: defaultSliderValue
+        if(key in listOf("compander_timeconstant","compander_granularity") && sharedPreferences?.contains(key)==true) {
+            val original=sharedPreferences?.all?.get(key) as? Float ?: (defaultValue as? Float ?: 0f)
+            val persistent=isPersistent;isPersistent=false
+            setValue(original.takeIf {it.isFinite()} ?: (defaultValue as? Float ?: 0f))
+            isPersistent=persistent
+            return
+        }
+        applyingInitialValue = true
+        try {
+            setValue(getPersistedFloat(defaultSliderValue))
+        } finally {
+            applyingInitialValue = false
+        }
     }
 
     override fun onGetDefaultValue(a: TypedArray, index: Int): Any {
@@ -231,6 +375,14 @@ class MaterialSeekbarPreference : Preference {
      */
     fun getMin(): Float {
         return mMin
+    }
+
+    fun setRange(minimum: Float, maximum: Float) {
+        require(minimum.isFinite() && maximum.isFinite() && minimum < maximum)
+        if (mMin == minimum && mMax == maximum) return
+        mMin = minimum
+        mMax = maximum
+        notifyChanged()
     }
 
     /**
@@ -364,6 +516,7 @@ class MaterialSeekbarPreference : Preference {
     }
 
     private fun setValueInternal(_seekBarValue: Float, notifyChanged: Boolean) {
+        if (!_seekBarValue.isFinite()) return
         var seekBarValue = _seekBarValue
         if (seekBarValue < mMin) {
             seekBarValue = mMin
@@ -373,8 +526,9 @@ class MaterialSeekbarPreference : Preference {
         }
 
         seekBarValue = validateValue(seekBarValue)
+        if (!applyingInitialValue) seekBarValue = valueNormalizer?.invoke(seekBarValue) ?: seekBarValue
         if (mSeekBarIncrement > 0 && !valueLandsOnTick(seekBarValue)) {
-            seekBarValue = mSeekBarIncrement * ((seekBarValue / mSeekBarIncrement).roundToInt())
+            seekBarValue = mMin + mSeekBarIncrement * (((seekBarValue - mMin) / mSeekBarIncrement).roundToInt())
             Timber.w("setValueInternal: value corrected $_seekBarValue to $seekBarValue")
         }
 
@@ -382,7 +536,7 @@ class MaterialSeekbarPreference : Preference {
             mSeekBarValue = seekBarValue
             updateLabelValue(mSeekBarValue)
             persistFloat(seekBarValue)
-            if (notifyChanged) {
+            if (notifyChanged && !mTrackingTouch) {
                 notifyChanged()
             }
         }
@@ -415,6 +569,7 @@ class MaterialSeekbarPreference : Preference {
         if (seekBarValue != mSeekBarValue) {
             if (callChangeListener(seekBarValue)) {
                 setValueInternal(seekBarValue, false)
+                if (valueNormalizer != null && seekBar.value != mSeekBarValue) seekBar.value = mSeekBarValue
             } else {
                 seekBar.value = validateValue(mSeekBarValue)
                 updateLabelValue(mSeekBarValue)
@@ -429,18 +584,14 @@ class MaterialSeekbarPreference : Preference {
      */
     @SuppressLint("SetTextI18n")
     fun  /* synthetic access */updateLabelValue(value: Float) {
-        if (mSeekBarValueTextView != null) {
-
-            if(valueLabelOverride == null)
-            {
-                mSeekBarValueTextView!!.text = "%.${mPrecision}f${mUnit}".format(Locale.ROOT, value)
-            }
-            else
-            {
-                mSeekBarValueTextView!!.text = valueLabelOverride!!(value)
-            }
-        }
+        if (!::mSeekBar.isInitialized || mSeekBar.getTag(R.id.seekbar) !== this) return
+        val next = formatLabelValue(value)
+        mSeekBarValueTextView?.takeIf { it.text.toString() != next }?.text = next
     }
+
+    private fun formatLabelValue(value: Float): String = valueLabelOverride?.invoke(value)
+        // Units are literal text; a percent unit must not become a format token.
+        ?: ("%.${mPrecision}f".format(Locale.ROOT, value) + mUnit)
 
     private fun valueLandsOnTick(value: Float): Boolean {
         // Check that the value is a multiple of stepSize given the offset of valueFrom.
@@ -457,3 +608,4 @@ class MaterialSeekbarPreference : Preference {
         return abs(result.roundToInt() - result) < 1.0E-4
     }
 }
+

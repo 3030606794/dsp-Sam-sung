@@ -102,6 +102,7 @@ typedef struct
 	// Thread
 	pthread_t threads;
 	pt_info2x4x2 shared_info;
+    int workerStarted;
 #endif
 } TwoStageFFTConvolver2x4x2;
 typedef struct
@@ -123,6 +124,7 @@ typedef struct
 	// Thread
 	pthread_t threads;
 	pt_info2x2 shared_info;
+    int workerStarted;
 #endif
 } TwoStageFFTConvolver2x2;
 typedef struct
@@ -170,7 +172,8 @@ typedef struct
 * necessary allocations and preparations take place during initialization).
 */
 extern void TwoStageFFTConvolver1x1Init(TwoStageFFTConvolver1x1 *conv);
-extern void TwoStageFFTConvolver2x4x2Init(TwoStageFFTConvolver2x4x2 *conv);
+extern void TwoStageFFTConvolver2x4x2ResetHistory(TwoStageFFTConvolver2x4x2* conv);
+void TwoStageFFTConvolver2x4x2Init(TwoStageFFTConvolver2x4x2 *conv);
 extern void TwoStageFFTConvolver2x2Init(TwoStageFFTConvolver2x2 *conv);
 extern void TwoStageFFTConvolver1x2Init(TwoStageFFTConvolver1x2 *conv);
 

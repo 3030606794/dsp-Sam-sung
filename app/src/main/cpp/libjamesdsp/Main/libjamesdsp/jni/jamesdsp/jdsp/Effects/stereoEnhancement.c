@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <math.h>
 #include "../jdsp_header.h"
-void StereoEnhancementRefresh(JamesDSPLib *jdsp)
+void StereoEnhancementRefreshLocked(JamesDSPLib *jdsp)
 {
-  jdsp_lock(jdsp);
+	StereoWidthConfigure(&jdsp->sterEnh.professionalWidth,jdsp->fs);
 	WarpedPFB *subband0 = (WarpedPFB *)jdsp->sterEnh.subband[0];
 	WarpedPFB *subband1 = (WarpedPFB *)jdsp->sterEnh.subband[1];
 	initWarpedPFB(subband0, jdsp->fs, 5, 2);
@@ -12,6 +12,11 @@ void StereoEnhancementRefresh(JamesDSPLib *jdsp)
 	float ms = 1.2f; // 1.2 ms
 	for (unsigned int i = 0; i < 5; i++)
 		jdsp->sterEnh.emaAlpha[i] = 1.0f - powf(10.0f, (log10f(0.5f) / (ms / 1000.0f) / (jdsp->fs / (float)subband0->Sk[i])));
+}
+void StereoEnhancementRefresh(JamesDSPLib *jdsp)
+{
+  jdsp_lock(jdsp);
+  StereoEnhancementRefreshLocked(jdsp);
   jdsp_unlock(jdsp);
 }
 void StereoEnhancementSetParam(JamesDSPLib *jdsp, float mix)
@@ -27,6 +32,7 @@ void StereoEnhancementSetParam(JamesDSPLib *jdsp, float mix)
 }
 void StereoEnhancementConstructor(JamesDSPLib *jdsp)
 {
+	StereoWidthInit(&jdsp->sterEnh.professionalWidth,jdsp->fs);
 	StereoEnhancementRefresh(jdsp);
 }
 void StereoEnhancementDestructor(JamesDSPLib *jdsp)
@@ -34,10 +40,13 @@ void StereoEnhancementDestructor(JamesDSPLib *jdsp)
 }
 void StereoEnhancementEnable(JamesDSPLib *jdsp)
 {
+	jdsp->sterEnh.professionalWidth.enabled=1;
 	jdsp->sterEnhEnabled = 1;
 }
 void StereoEnhancementDisable(JamesDSPLib *jdsp)
 {
+	jdsp->sterEnh.professionalWidth.enabled=0;
+	StereoWidthClear(&jdsp->sterEnh.professionalWidth);
 	jdsp->sterEnhEnabled = 0;
 }
 void StereoEnhancementProcess(JamesDSPLib *jdsp, size_t n)
@@ -52,6 +61,7 @@ void StereoEnhancementProcess(JamesDSPLib *jdsp, size_t n)
 	float y1, y2;
 	for (size_t i = 0; i < n; i++)
 	{
+		const float inputL=jdsp->tmpBuffer[0][i],inputR=jdsp->tmpBuffer[1][i];
 		analysisWarpedPFBStereo(subband0, subband1, &jdsp->tmpBuffer[0][i], &jdsp->tmpBuffer[1][i]);
 		for (int j = 0; j < 5; j++)
 		{
@@ -73,5 +83,6 @@ void StereoEnhancementProcess(JamesDSPLib *jdsp, size_t n)
 		synthesisWarpedPFBStereo(subband0, subband1, &y1, &y2);
 		jdsp->tmpBuffer[0][i] = y1 * snh->gain;
 		jdsp->tmpBuffer[1][i] = y2 * snh->gain;
+		StereoWidthFrame(&snh->professionalWidth,inputL,inputR,&jdsp->tmpBuffer[0][i],&jdsp->tmpBuffer[1][i]);
 	}
 }

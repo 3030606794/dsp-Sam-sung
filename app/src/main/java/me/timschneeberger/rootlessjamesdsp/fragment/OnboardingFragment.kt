@@ -17,7 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.transition.TransitionManager
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import me.timschneeberger.rootlessjamesdsp.ui.glass.GlassAlertDialogBuilder as MaterialAlertDialogBuilder
 import com.google.android.material.transition.MaterialSharedAxis
 import me.timschneeberger.hiddenapi_impl.ShizukuSystemServerApi
 import me.timschneeberger.hiddenapi_impl.UserHandle
@@ -344,6 +344,15 @@ class OnboardingFragment : Fragment() {
     @SuppressLint("ApplySharedPref")
     private fun finishSetup() {
 
+        // Commit the default before MainActivity can start session discovery.
+        if (useRoot) {
+            prefsApp.preferences.edit()
+                .putBoolean(getString(R.string.key_audioformat_processing), true)
+                .putBoolean(getString(R.string.key_audioformat_enhanced_processing), false)
+                .putBoolean(getString(R.string.key_audioformat_usb_rate_follow), false)
+                .commit()
+        }
+
         if(!redoAdbSetup) {
             val intent = context?.let { Intent(it, MainActivity::class.java) } ?: return
             intent.putExtra(MainActivity.EXTRA_FORCE_SHOW_CAPTURE_PROMPT, true)
@@ -355,12 +364,11 @@ class OnboardingFragment : Fragment() {
         if(!useRoot) {
             prefsVar.set(R.string.key_first_boot, false)
         }
-        // Root: enable enhanced processing
+        // Root: start with the global output mix; HD sessions remain opt-in.
         else {
-            prefsApp.set(R.string.key_audioformat_enhanced_processing, true, async = false)
             context?.let {
-                RootAudioProcessorService.startServiceEnhanced(it)
-                it.toast(R.string.onboarding_root_enhanced_processing_setup_success)
+                RootAudioProcessorService.refreshProcessingMode(it)
+                it.toast(R.string.onboarding_root_global_processing_setup_success)
             }
         }
     }

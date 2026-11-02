@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include "PeqPcmTelemetry.h"
 
 namespace dspfusion {
 // Stereo RBJ transfer functions, realized as trapezoidal state-variable sections
@@ -14,14 +15,20 @@ namespace dspfusion {
 class PeqProcessor {
 public:
     static constexpr size_t kMaxBands=170;
-    static constexpr size_t kMaxWords=3+kMaxBands*5;
+    static constexpr size_t kMaxWords=3+kMaxBands*6;
+    // GET 131234 advertises schema 3's IEEE754 double Q words with this bit.
+    static constexpr int32_t kPrecisionCapability=8;
+    static constexpr double kMinQ=.0001,kMaxQ=30000.;
     enum Type : int32_t { Peak, LowShelf, HighShelf, LowPass, HighPass, Notch, BandPass };
     bool setParameters(const int32_t* words,size_t count);
     void configure(uint32_t sampleRate);
     void reset();
     void process(float* interleaved,uint32_t frames);
+    // Observation-only; GET never locks or changes a filter or effect switch.
+    bool readPcm(int32_t* words){return pcm_.read(words);}
+    void resetPcmObservation(){pcm_.discontinuity();}
 private:
-    struct Band { int32_t type=0,enabled=0,frequency=1000000,gain=0,q=707; };
+    struct Band { int32_t type=0,enabled=0,frequency=1000000,gain=0; double q=.707; bool constantSkirt=false; };
     struct Settings { bool enabled=false; size_t count=0; std::array<Band,kMaxBands> bands{}; };
     struct Coeff {
         double highInput=1,highState=0,step1=0,feedback1=0,step2=0;
@@ -50,5 +57,7 @@ private:
     std::array<Bank,2> banks_{};
     unsigned active_=0;
     bool transitioning_=false;
+    uint32_t pcmParameterHash_=0;
+    peqcapture::Capture pcm_;
 };
 }

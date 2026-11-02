@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="key_appearance_power_motion_enabled" translatable="false">appearance_power_motion_enabled</string>
+    <string name="key_appearance_power_motion_style" translatable="false">appearance_power_motion_style</string>
+    <bool name="default_appearance_power_motion_enabled">true</bool>
+    <string name="default_appearance_power_motion_style" translatable="false">wave</string>
+
+    <string name="power_motion_category_title">Master power animation</string>
+    <string name="power_motion_enabled_title">Animate master power</string>
+    <string name="power_motion_enabled_summary">When off, keep the basic color change and a subtle press response.</string>
+    <string name="power_motion_style_title">Animation style</string>
+    <string-array name="power_motion_style_entries">
+        <item>Full-frequency impact</item>
+        <item>Spectrum wall</item>
+        <item>Phase interference</item>
+        <item>Signal matrix</item>
+        <item>Band refraction</item>
+        <item>Soundfield dome</item>
+    </string-array>
+    <string-array name="power_motion_style_values" translatable="false">
+        <item>wave</item>
+        <item>spectrum</item>
+        <item>phase</item>
+        <item>matrix</item>
+        <item>refraction</item>
+        <item>dome</item>
+    </string-array>
+    <string-array name="power_motion_style_summaries">
+        <item>@string/power_motion_style_wave_summary</item>
+        <item>@string/power_motion_style_spectrum_summary</item>
+        <item>@string/power_motion_style_phase_summary</item>
+        <item>@string/power_motion_style_matrix_summary</item>
+        <item>@string/power_motion_style_refraction_summary</item>
+        <item>@string/power_motion_style_dome_summary</item>
+    </string-array>
+
+    <string name="power_motion_style_wave_summary">Full-frequency impact · Waves expand across the full screen when enabled and draw back to the power button when disabled.</string>
+    <string name="power_motion_style_spectrum_summary">Spectrum wall · Frequency bands rise to fill the screen when enabled and gather back into the power button when disabled.</string>
+    <string name="power_motion_style_phase_summary">Phase interference · Two wave fields spread and intersect across the screen when enabled, then merge back into the power button when disabled.</string>
+    <string name="power_motion_style_matrix_summary">Signal matrix · Signal paths light up across the screen when enabled and return to the power button when disabled.</string>
+    <string name="power_motion_style_refraction_summary">Band refraction · Frequency blades unfold across the screen when enabled and fold back into the power button when disabled.</string>
+    <string name="power_motion_style_dome_summary">Soundfield dome · A soundfield dome expands across the screen when enabled and contracts into the power button when disabled.</string>
+</resources>

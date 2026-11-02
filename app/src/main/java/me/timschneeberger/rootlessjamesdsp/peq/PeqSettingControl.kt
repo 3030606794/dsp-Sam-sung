@@ -1,5 +1,7 @@
 package me.timschneeberger.rootlessjamesdsp.peq
 
+import me.timschneeberger.rootlessjamesdsp.ui.glass.setGlassLabelFormatter
+
 import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputEditText
@@ -12,23 +14,26 @@ internal class PeqSettingControl(
     private val slider: Slider,
     private val input: TextInputEditText,
     private val box: TextInputLayout,
-    private val minimum: Double,
-    private val maximum: Double,
+    private var minimum: Double,
+    private var maximum: Double,
     private val resolution: Double,
     initial: Double,
     private val integer: Boolean = false,
     private val logarithmic: Boolean = false
 ) {
     private var updating = false
+    var changedByUser = false
+        private set
     init {
         slider.valueFrom = if (logarithmic) 0f else minimum.toFloat()
         slider.valueTo = if (logarithmic) 1f else maximum.toFloat()
         slider.stepSize = if (integer && !logarithmic) 1f else 0f
-        slider.setLabelFormatter { format(valueAt(it)) }
+        slider.setGlassLabelFormatter { format(valueAt(it)) }
         input.setText(format(initial))
         setSlider(initial)
         slider.addOnChangeListener { _, value, fromUser ->
             if (fromUser && !updating) {
+                changedByUser = true
                 updating = true
                 input.setText(format(valueAt(value)))
                 box.error = null
@@ -37,6 +42,7 @@ internal class PeqSettingControl(
         }
         input.doAfterTextChanged {
             if (!updating) {
+                changedByUser = true
                 val value = parse()
                 box.error = null
                 if (value != null) {
@@ -53,7 +59,21 @@ internal class PeqSettingControl(
         return (round(value / resolution) * resolution).coerceIn(minimum, maximum)
     }
     private fun setSlider(value: Double) {
-        slider.value = if (logarithmic) PeqBandAdapter.logarithmicPosition(value, minimum, maximum) else value.toFloat()
+        slider.value = if (logarithmic) PeqBandAdapter.logarithmicPosition(value.coerceIn(minimum, maximum), minimum, maximum)
+            else value.coerceIn(minimum, maximum).toFloat()
+    }
+    /** Runtime changes update validation and the thumb without rewriting a manually typed draft. */
+    fun updateBounds(minimum: Double, maximum: Double, displayedValue: Double? = null) {
+        require(minimum < maximum)
+        this.minimum = minimum
+        this.maximum = maximum
+        updating = true
+        slider.valueFrom = if (logarithmic) 0f else minimum.toFloat()
+        slider.valueTo = if (logarithmic) 1f else maximum.toFloat()
+        if (displayedValue != null) input.setText(format(displayedValue.coerceIn(minimum, maximum)))
+        input.text?.toString()?.toDoubleOrNull()?.takeIf { it.isFinite() }?.let { setSlider(it) }
+        updating = false
+        box.error = null
     }
     private fun parse(): Double? = input.text?.toString()?.toDoubleOrNull()?.takeIf {
         it.isFinite() && it in minimum..maximum && (!integer || it == round(it))

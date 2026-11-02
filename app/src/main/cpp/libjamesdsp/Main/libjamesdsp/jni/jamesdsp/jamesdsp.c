@@ -7,10 +7,68 @@
 #include "MemoryUsage.h"
 #endif
 #include <string.h>
+#include <stdio.h>
 #include <math.h>
 #include "essential.h"
 // Effect section
 #include "jdsp/jdsp_header.h"
+#ifdef DSP_FUSION_STREAMING
+#include "ConvolverControl.h"
+#include "jdsp/Effects/presetCrossfeed.h"
+#include "RoomReverb.h"
+#include "Timbre.h"
+#include "Compander.h"
+#include "DdcProcessor.h"
+#include "LiveprogCapture.h"
+#include "EqCapture.h"
+typedef struct {
+    JamesDSPLib *plan;
+    uint32_t channels, frames;
+    int32_t crc;
+    float *scratch;
+} FusionConvJob;
+uint32_t FusionConvJobFrames(void *opaque) {
+    FusionConvJob *job=opaque;return job && job->plan ? job->plan->impulseResponseStorage.impulseLengthActual:0;
+}
+uint32_t FusionConvJobChannels(void *opaque) {
+    FusionConvJob *job=opaque;return job && job->plan ? job->plan->impulseResponseStorage.impChannels:0;
+}
+void FusionConvJobInputs(void *opaque,float **left,float **right) {
+    FusionConvJob *job=opaque;*left=job->scratch;*right=job->scratch+8192;
+}
+void FusionConvProcessJob(void *opaque,size_t n) {
+    FusionConvJob *job=opaque;
+    if(job && job->plan && job->plan->conv.process && n<=8192)job->plan->conv.process(job->plan,n);
+}
+int FusionConvPrepareJob(void *opaque) {
+    FusionConvJob *job = (FusionConvJob *)opaque;
+    if (!job || !job->plan) return -EINVAL;
+    job->scratch=calloc(16384,sizeof(float));
+    if(!job->scratch)return -ENOMEM;
+    job->plan->tmpBuffer[0]=job->scratch;job->plan->tmpBuffer[1]=job->scratch+8192;
+    /* CRC and FFT preparation both stay off the processing lock. */
+    int32_t crc = (int32_t)0xFFFFFFFF;
+    for (size_t i=0;i<(size_t)job->channels*job->frames;++i) {
+        int32_t raw;memcpy(&raw,job->plan->impulseResponseStorage.impulseResponse+i,4);crc^=raw;
+        for (unsigned bit=0;bit<8;++bit){int32_t mask=-(crc&1);crc=(crc>>1)^((int32_t)0xEDB88320&mask);}
+    }
+    job->crc=~crc;
+    int result = Convolver1DLoadImpulseResponse(job->plan, job->plan->impulseResponseStorage.impulseResponse, job->channels, job->frames, 0);
+    return result > 0 ? 0 : -ENOMEM;
+}
+void FusionConvDestroyJob(void *opaque) {
+    FusionConvJob *job = (FusionConvJob *)opaque;
+    if (!job) return;
+    if (job->plan) {
+        Convolver1DDestructor(job->plan);
+        free(job->plan->impulseResponseStorage.impulseResponse);
+        free(job->plan);
+    }
+    free(job->scratch);
+    free(job);
+}
+
+#endif
 typedef struct
 {
 	unsigned long long initializeForFirst;
@@ -140,6 +198,269 @@ int32_t configure(EffectDSPMain *dspmain, void* pCmdData, effect_buffer_access_e
 }
 int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t cmdSize, void* pCmdData, uint32_t* replySize, void* pReplyData)
 {
+#ifdef DSP_FUSION_STREAMING
+    if(cmdCode==EQ_PCM_RESET){
+        if(cmdSize!=0||!replySize||!pReplyData||*replySize<4)return -EINVAL;
+        EqCaptureReset(dspmain->jdsp.equalizerCapture);*(int32_t*)pReplyData=0;*replySize=4;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize==16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==EQ_PCM_GET){
+        effect_param_t* p=pCmdData;
+        if(!replySize||!pReplyData||p->vsize!=EQ_PCM_WORDS*4||*replySize<16+EQ_PCM_WORDS*4)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=EQ_PCM_WORDS*4;*(uint32_t*)target->data=EQ_PCM_GET;
+        if(!EqCaptureRead(dspmain->jdsp.equalizerCapture,(int32_t*)(target->data+4)))return -EAGAIN;
+        *replySize=16+EQ_PCM_WORDS*4;return 0;
+    }
+    if(cmdCode==LIVEPROG_PCM_RESET){
+        if(cmdSize!=0||!replySize||!pReplyData||*replySize<4)return -EINVAL;
+        LiveprogCaptureReset(dspmain->jdsp.liveprogCapture);*(int32_t*)pReplyData=0;*replySize=4;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize==16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==LIVEPROG_PCM_GET){
+        effect_param_t* p=pCmdData;
+        if(!replySize||!pReplyData||p->vsize!=LIVEPROG_PCM_WORDS*4||*replySize<16+LIVEPROG_PCM_WORDS*4)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=LIVEPROG_PCM_WORDS*4;*(uint32_t*)target->data=LIVEPROG_PCM_GET;
+        if(!LiveprogCaptureRead(dspmain->jdsp.liveprogCapture,(int32_t*)(target->data+4)))return -EAGAIN;
+        *replySize=16+LIVEPROG_PCM_WORDS*4;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize==16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==FUSION_CONV_PCM_GET){
+        effect_param_t* p=pCmdData;
+        if(!replySize||!pReplyData||p->vsize!=FUSION_CONV_PCM_WORDS*4||*replySize<16+FUSION_CONV_PCM_WORDS*4)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=FUSION_CONV_PCM_WORDS*4;*(uint32_t*)target->data=FUSION_CONV_PCM_GET;
+        if(!FusionConvCaptureRead(dspmain->jdsp.convolverControl,(int32_t*)(target->data+4)))return -EAGAIN;
+        *replySize=16+FUSION_CONV_PCM_WORDS*4;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize==16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==DDC_PCM_GET){
+        effect_param_t* p=pCmdData;
+        if(!replySize||!pReplyData||p->vsize!=DDC_PCM_WORDS*4||*replySize<16+DDC_PCM_WORDS*4)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=DDC_PCM_WORDS*4;*(uint32_t*)target->data=DDC_PCM_GET;
+        if(!DdcCaptureRead(dspmain->jdsp.vdcFl.professional,(int32_t*)(target->data+4)))return -EAGAIN;
+        *replySize=16+DDC_PCM_WORDS*4;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize==16 && ((effect_param_t*)pCmdData)->psize==4){
+        effect_param_t* p=pCmdData;const uint32_t id=*(uint32_t*)p->data;
+        if(id==COMPANDER_PCM_GET || id==COMPANDER_GAIN_GET){
+            const uint32_t words=id==COMPANDER_PCM_GET?COMPANDER_PCM_WORDS:COMPANDER_GAIN_WORDS;
+            if(!replySize||!pReplyData||p->vsize!=words*4||*replySize<16+words*4)return -EINVAL;
+            effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=words*4;*(uint32_t*)target->data=id;
+            const int valid=id==COMPANDER_PCM_GET?CompanderCaptureRead(dspmain->jdsp.companderNative,(int32_t*)(target->data+4)):
+                CompanderGainRead(dspmain->jdsp.companderNative,(int32_t*)(target->data+4));
+            if(!valid)return -EAGAIN;*replySize=16+words*4;return 0;
+        }
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize==16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==TIMBRE_PCM_GET){
+        effect_param_t* p=pCmdData;
+        if(!replySize||!pReplyData||p->vsize!=TIMBRE_PCM_WORDS*4||*replySize<16+TIMBRE_PCM_WORDS*4)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=TIMBRE_PCM_WORDS*4;
+        *(uint32_t*)target->data=TIMBRE_PCM_GET;
+        if(!TimbreCaptureRead(dspmain->jdsp.timbre,(int32_t*)(target->data+4)))return -EAGAIN;
+        *replySize=16+TIMBRE_PCM_WORDS*4;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize==16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==ROOM_REVERB_PCM_GET){
+        effect_param_t* p=pCmdData;
+        if(!replySize||!pReplyData||p->vsize!=ROOM_REVERB_PCM_WORDS*4||*replySize<16+ROOM_REVERB_PCM_WORDS*4)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=ROOM_REVERB_PCM_WORDS*4;
+        *(uint32_t*)target->data=ROOM_REVERB_PCM_GET;
+        if(!RoomReverbCaptureRead(dspmain->jdsp.roomReverb,(int32_t*)(target->data+4)))return -EAGAIN;
+        *replySize=16+ROOM_REVERB_PCM_WORDS*4;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize==16 && ((effect_param_t*)pCmdData)->psize==4) {
+        effect_param_t* p=pCmdData;uint32_t id=*(uint32_t*)p->data;
+        if(id==131231 || id==131232) {
+            unsigned words=id==131231?COMPANDER_RUNTIME_WORDS:COMPANDER_RESPONSE_WORDS;
+            if(!replySize||!pReplyData||p->vsize!=words*4||*replySize<16+words*4)return -EINVAL;
+            effect_param_t* out=pReplyData;out->status=0;out->psize=4;out->vsize=words*4;*(uint32_t*)out->data=id;
+            if(id==131231)CompanderStatus(dspmain->jdsp.companderNative,(int32_t*)(out->data+4));
+            else CompanderResponse(dspmain->jdsp.companderNative,(int32_t*)(out->data+4));
+            *replySize=16+words*4;return 0;
+        }
+    }
+    if(cmdCode==EFFECT_CMD_SET_PARAM && pCmdData && cmdSize>=16) {
+        effect_param_t* p=pCmdData;uint32_t id=*(uint32_t*)p->data;
+        if(p->psize==4 && id>=1430 && id<=1432) {
+            if(!replySize||!pReplyData||*replySize<4)return -EINVAL;
+            int valid=0;
+            if(id==1430&&p->vsize==COMPANDER_WORDS*4&&cmdSize==16+COMPANDER_WORDS*4)
+                valid=CompanderSet(dspmain->jdsp.companderNative,&dspmain->jdsp,(int32_t*)(p->data+4),COMPANDER_WORDS);
+            if(id==1431&&p->vsize==COMPANDER_TOOLS_WORDS*4&&cmdSize==16+COMPANDER_TOOLS_WORDS*4)
+                valid=CompanderTools(dspmain->jdsp.companderNative,&dspmain->jdsp,(int32_t*)(p->data+4),COMPANDER_TOOLS_WORDS);
+            if(id==1432&&p->vsize==4&&cmdSize==20&&*(int32_t*)(p->data+4)==0){CompanderClear(dspmain->jdsp.companderNative);valid=1;}
+            *(int32_t*)pReplyData=valid?0:-EINVAL;*replySize=4;return 0;
+        }
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize==16 && ((effect_param_t*)pCmdData)->psize==4){
+        effect_param_t* request=pCmdData;uint32_t id=*(uint32_t*)request->data;
+        if(id==131238 || id==131239){
+            const uint32_t words=id==131238?DDC_RUNTIME_WORDS:DDC_RESPONSE_WORDS;
+            if(!replySize||!pReplyData||*replySize<16+words*4||request->vsize!=words*4)return -EINVAL;
+            effect_param_t* out=pReplyData;out->status=0;out->psize=4;out->vsize=words*4;*(uint32_t*)out->data=id;
+            if(id==131238)DdcStatus(dspmain->jdsp.vdcFl.professional,(int32_t*)(out->data+4));
+            else DdcResponse(dspmain->jdsp.vdcFl.professional,(int32_t*)(out->data+4));
+            *replySize=16+words*4;return 0;
+        }
+    }
+    if(cmdCode==EFFECT_CMD_SET_PARAM && pCmdData && cmdSize>=16){
+        effect_param_t* p=pCmdData;uint32_t id=*(uint32_t*)p->data;
+        if(p->psize==4&&id>=196648&&id<=196652){
+            if(!replySize||!pReplyData||*replySize<4)return -EINVAL;
+            int valid=0;
+            jdsp_lock(&dspmain->jdsp);
+            if(id==196648&&p->vsize==DDC_ADVANCED_WORDS*4&&cmdSize==16+DDC_ADVANCED_WORDS*4){
+                const int32_t* values=(int32_t*)(p->data+4);
+                valid=DdcSet(dspmain->jdsp.vdcFl.professional,values,DDC_ADVANCED_WORDS);
+                if(valid)dspmain->jdsp.ddcEnabled=values[2];
+            }
+            if(id==196649&&p->vsize==DDC_TOOLS_WORDS*4&&cmdSize==16+DDC_TOOLS_WORDS*4)
+                valid=DdcTools(dspmain->jdsp.vdcFl.professional,(int32_t*)(p->data+4),DDC_TOOLS_WORDS);
+            if(id==196650&&p->vsize==4&&cmdSize==20&&*(int32_t*)(p->data+4)==0){DdcClear(dspmain->jdsp.vdcFl.professional);valid=1;}
+            if(id==196651&&p->vsize==4&&cmdSize==20&&*(int32_t*)(p->data+4)==0){DDCDisable(&dspmain->jdsp);valid=1;}
+            if(id==196652&&p->vsize==4&&cmdSize==20&&*(int32_t*)(p->data+4)==0){DdcOriginal(dspmain->jdsp.vdcFl.professional);valid=1;}
+            jdsp_unlock(&dspmain->jdsp);
+            *(int32_t*)pReplyData=valid?0:-EINVAL;*replySize=4;return 0;
+        }
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize>=16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==131227){
+        if(!replySize || !pReplyData || *replySize<208 || ((effect_param_t*)pCmdData)->vsize!=192)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=192;*(uint32_t*)target->data=131227;
+        TimbreStatus(dspmain->jdsp.timbre,(int32_t*)(target->data+4));*replySize=208;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_SET_PARAM && pCmdData && cmdSize>=16){
+        effect_param_t* p=pCmdData;uint32_t id=*(uint32_t*)p->data;
+        if(p->psize==4 && id>=1427 && id<=1429){
+            if(!replySize || !pReplyData || *replySize<4)return -EINVAL;
+            int valid=0;
+            if(id==1427 && p->vsize==128 && cmdSize==144)valid=TimbreSet(dspmain->jdsp.timbre,&dspmain->jdsp,(int32_t*)(p->data+4),32);
+            if(id==1428 && p->vsize==272 && cmdSize==288)valid=TimbreTools(dspmain->jdsp.timbre,&dspmain->jdsp,(int32_t*)(p->data+4),68);
+            if(id==1429 && p->vsize==4 && cmdSize==20 && *(int32_t*)(p->data+4)==0){TimbreClear(dspmain->jdsp.timbre);valid=1;}
+            *(int32_t*)pReplyData=valid?0:-EINVAL;*replySize=4;return 0;
+        }
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize>=16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==131224){
+        if(!replySize || !pReplyData || *replySize<144 || ((effect_param_t*)pCmdData)->vsize!=128)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=128;*(uint32_t*)target->data=131224;
+        RoomReverbStatus(dspmain->jdsp.roomReverb,(int32_t*)(target->data+4));*replySize=144;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_SET_PARAM && pCmdData && cmdSize>=16){
+        effect_param_t* p=pCmdData;uint32_t id=*(uint32_t*)p->data;
+        if(p->psize==4 && id>=1424 && id<=1426){
+            if(!replySize || !pReplyData || *replySize<4)return -EINVAL;
+            int valid=0;
+            if(id==1424 && p->vsize==96 && cmdSize==112)valid=RoomReverbSet(dspmain->jdsp.roomReverb,&dspmain->jdsp,(int32_t*)(p->data+4),24);
+            if(id==1425 && p->vsize==208 && cmdSize==224)valid=RoomReverbTools(dspmain->jdsp.roomReverb,&dspmain->jdsp,(int32_t*)(p->data+4),52);
+            if(id==1426 && p->vsize==4 && cmdSize==20 && *(int32_t*)(p->data+4)==0){RoomReverbClear(dspmain->jdsp.roomReverb);valid=1;}
+            *(int32_t*)pReplyData=valid?0:-EINVAL;*replySize=4;return 0;
+        }
+    }
+    if(cmdCode==FUSION_PRESET_XF_CLEAR){
+        if(!replySize || !pReplyData || *replySize<4)return -EINVAL;
+        PresetCrossfeedClear(dspmain->jdsp.advXF.professional);*(int32_t*)pReplyData=0;*replySize=4;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize>=16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==131220){
+        if(!replySize || !pReplyData || *replySize<112 || ((effect_param_t*)pCmdData)->vsize!=96)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=96;*(uint32_t*)target->data=131220;
+        PresetCrossfeedSnapshot(dspmain->jdsp.advXF.professional,(int32_t*)(target->data+4));*replySize=112;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_SET_PARAM && pCmdData && cmdSize>=16){
+        effect_param_t* p=pCmdData;uint32_t id=*(uint32_t*)p->data;
+        if(p->psize==4 && (id>=1420 && id<=1423)){
+            if(!replySize || !pReplyData || *replySize<4)return -EINVAL;
+            int valid=0;
+            if(id==1420 && p->vsize==36 && cmdSize==52)valid=PresetCrossfeedSet(dspmain->jdsp.advXF.professional,&dspmain->jdsp,(int32_t*)(p->data+4),9);
+            if(id==1421 && p->vsize==84 && cmdSize==100)valid=PresetCrossfeedTools(dspmain->jdsp.advXF.professional,&dspmain->jdsp,(int32_t*)(p->data+4),21);
+            if(id==1422 && p->vsize==40 && cmdSize==56)valid=PresetCrossfeedAdvancedSet(dspmain->jdsp.advXF.professional,&dspmain->jdsp,(int32_t*)(p->data+4),10);
+            if(id==1423 && p->vsize==84 && cmdSize==100)valid=PresetCrossfeedAdvancedTools(dspmain->jdsp.advXF.professional,&dspmain->jdsp,(int32_t*)(p->data+4),21);
+            *(int32_t*)pReplyData=valid?0:-EINVAL;*replySize=4;return 0;
+        }
+    }
+#endif
+    if(cmdCode==FUSION_WIDTH_CLEAR) {
+        if(!replySize || !pReplyData || *replySize<4)return -EINVAL;
+        StereoWidthClear(&dspmain->jdsp.sterEnh.professionalWidth);*(int32_t*)pReplyData=0;*replySize=4;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize>=16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==131215) {
+        if(!replySize || !pReplyData || *replySize<144 || ((effect_param_t*)pCmdData)->vsize!=128)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=128;*(uint32_t*)target->data=131215;
+        StereoWidthSnapshot(&dspmain->jdsp.sterEnh.professionalWidth,(int32_t*)(target->data+4));*replySize=144;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && cmdSize>=16 && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==131216) {
+        if(!replySize || !pReplyData || *replySize<720 || ((effect_param_t*)pCmdData)->vsize!=704)return -EINVAL;
+        effect_param_t* target=pReplyData;target->status=0;target->psize=4;target->vsize=704;*(uint32_t*)target->data=131216;
+        StereoWidthAdvancedSnapshot(&dspmain->jdsp.sterEnh.professionalWidth,(int32_t*)(target->data+4));*replySize=720;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_SET_PARAM && pCmdData && cmdSize>=16) {
+        effect_param_t* p=pCmdData;uint32_t id=*(uint32_t*)p->data;
+        if(p->psize==4 && (id==1410 || id==1411 || id==1412 || id==1413)) {
+            if(!replySize || !pReplyData || *replySize<4)return -EINVAL;
+            int valid=0;
+            if(id==1410 && p->vsize==104 && cmdSize==120)valid=StereoWidthSet(&dspmain->jdsp.sterEnh.professionalWidth,(int32_t*)(p->data+4),26);
+            if(id==1411 && p->vsize==4 && cmdSize==20)valid=StereoWidthAudition(&dspmain->jdsp.sterEnh.professionalWidth,*(int32_t*)(p->data+4));
+            if(id==1412 && p->vsize==240 && cmdSize==256)valid=StereoWidthAdvancedSet(&dspmain->jdsp.sterEnh.professionalWidth,(int32_t*)(p->data+4),60);
+            if(id==1413 && p->vsize==4 && cmdSize==20)valid=StereoWidthAdvancedAudition(&dspmain->jdsp.sterEnh.professionalWidth,*(int32_t*)(p->data+4));
+            *(int32_t*)pReplyData=valid?0:-EINVAL;*replySize=4;return 0;
+        }
+    }
+#ifdef DSP_FUSION_STREAMING
+    if(cmdCode==FUSION_CONV_DRAIN) {
+        if(!pCmdData || cmdSize!=sizeof(void*) || !pReplyData)return -EINVAL;
+        *(void**)pCmdData=FusionConvDrain(dspmain->jdsp.convolverControl);*(int32_t*)pReplyData=0;return 0;
+    }
+    if(cmdCode==FUSION_CONV_REAP || cmdCode==FUSION_CONV_FORCE_REAP) {
+        if(!pCmdData || cmdSize!=sizeof(void*) || !pReplyData)return -EINVAL;
+        *(void**)pCmdData=FusionConvReap(dspmain->jdsp.convolverControl,cmdCode==FUSION_CONV_FORCE_REAP);
+        *(int32_t*)pReplyData=FusionConvBusy(dspmain->jdsp.convolverControl)?-EAGAIN:0;return 0;
+    }
+    if (cmdCode == FUSION_CONV_CLEAR) {
+        FusionConvClear(dspmain->jdsp.convolverControl);
+        *(int32_t *)pReplyData = 0; return 0;
+    }
+    if (cmdCode == FUSION_CONV_TAKE || cmdCode == FUSION_CONV_COMMIT) {
+        if (!pCmdData || cmdSize != sizeof(void *) || !pReplyData) return -EINVAL;
+        FusionConvJob **slot = (FusionConvJob **)pCmdData;
+        if (cmdCode == FUSION_CONV_TAKE) {
+            if (!dspmain->tempImpulseIncoming) {*(int32_t *)pReplyData=-EINVAL;return 0;}
+            FusionConvJob *job = (FusionConvJob *)calloc(1, sizeof(FusionConvJob));
+            if (!job) {*(int32_t *)pReplyData=-ENOMEM;return 0;}
+            job->plan = (JamesDSPLib *)calloc(1, sizeof(JamesDSPLib));
+            if (!job->plan) {free(job);*(int32_t *)pReplyData=-ENOMEM;return 0;}
+            job->channels=dspmain->impChannels;job->frames=dspmain->impulseLengthActual;
+            job->plan->fs=dspmain->jdsp.fs;job->plan->blockSize=dspmain->jdsp.blockSize;
+            job->plan->impulseResponseStorage.impulseResponse=dspmain->tempImpulseIncoming;
+            job->plan->impulseResponseStorage.impChannels=job->channels;
+            job->plan->impulseResponseStorage.impulseLengthActual=job->frames;
+            dspmain->tempImpulseIncoming=NULL;dspmain->samplesInc=0;*slot=job;
+            *(int32_t *)pReplyData=0;return 0;
+        }
+        FusionConvJob *job=*slot;
+        if (!job || !job->plan || !job->plan->conv.process) {*(int32_t *)pReplyData=-EINVAL;return 0;}
+        Convolver1D previous=dspmain->jdsp.conv;tmpIRData previousIR=dspmain->jdsp.impulseResponseStorage;
+        dspmain->jdsp.conv=job->plan->conv;dspmain->jdsp.impulseResponseStorage=job->plan->impulseResponseStorage;
+        job->plan->conv=previous;job->plan->impulseResponseStorage=previousIR;
+        dspmain->engineImpulseResponseHash=job->crc;
+        FusionConvLoaded(dspmain->jdsp.convolverControl, job->channels, job->frames, job->crc);
+        if(FusionConvAttachRetired(dspmain->jdsp.convolverControl,job,job->frames,job->channels))*slot=NULL;
+        *(int32_t *)pReplyData=0;return 0;
+    }
+    if(cmdCode==EFFECT_CMD_GET_PARAM && pCmdData && ((effect_param_t*)pCmdData)->psize==4 && *(uint32_t*)((effect_param_t*)pCmdData)->data==131214) {
+        if(!replySize || !pReplyData || *replySize<96 || ((effect_param_t*)pCmdData)->vsize!=80)return -EINVAL;
+        effect_param_t *target=pReplyData;target->status=0;target->psize=4;target->vsize=80;
+        *(uint32_t*)target->data=131214;FusionConvAdvancedSnapshot(dspmain->jdsp.convolverControl,(int32_t*)(target->data+4));*replySize=96;return 0;
+    }
+    if (cmdCode == EFFECT_CMD_GET_PARAM && pCmdData && ((effect_param_t *)pCmdData)->psize==4 && *(uint32_t *)((effect_param_t *)pCmdData)->data==131213) {
+        effect_param_t *target=(effect_param_t *)pReplyData;
+        if (((effect_param_t *)pCmdData)->vsize!=128 || !replySize || *replySize<144) return -EINVAL;
+        target->status=0;target->psize=4;target->vsize=128;*(uint32_t *)target->data=131213;
+        FusionConvSnapshot(dspmain->jdsp.convolverControl, (int32_t *)(target->data+4));*replySize=144;return 0;
+    }
+    if (cmdCode == EFFECT_CMD_SET_PARAM && pCmdData && cmdSize>=16) {
+        effect_param_t *packet=(effect_param_t *)pCmdData;
+        const uint32_t id=*(uint32_t *)packet->data;
+        if (packet->psize==4 && (id==1400 || id==1401 || id==1402)) {
+            int okay=0;
+            if (id==1400 && packet->vsize==40 && cmdSize==56)okay=FusionConvSet(dspmain->jdsp.convolverControl, (int32_t *)(packet->data+4), 10);
+            if (id==1401 && packet->vsize==4 && cmdSize==20)okay=FusionConvAudition(dspmain->jdsp.convolverControl, *(int32_t *)(packet->data+4));
+            if (id==1402 && packet->vsize==76 && cmdSize==92)okay=FusionConvSetAdvanced(dspmain->jdsp.convolverControl,(int32_t*)(packet->data+4),19);
+            *(int32_t *)pReplyData=okay?0:-EINVAL;return 0;
+        }
+    }
+#endif
 #ifdef DEBUG
 //		LOGI("Memory used: %f Mb", (float)getCurrentRSS() / 1024.0 / 1024.0);
 #endif
@@ -155,6 +476,9 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 		}
 		// Set sample rate
 		JamesDSPSetSampleRate(&dspmain->jdsp, dspmain->mSamplingRate, 0);
+#ifdef DSP_FUSION_STREAMING
+        FusionConvConfigure(dspmain->jdsp.convolverControl, (uint32_t)dspmain->jdsp.fs);
+#endif
 		*replyData = 0;
 		return 0;
 	}
@@ -164,6 +488,29 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 		if (cep->psize == 4 && cep->vsize == 4)
 		{
 			int32_t cmd = ((int32_t *)cep)[3];
+			if (cmd == 131241)
+			{
+				if (!replySize || !pReplyData || *replySize < sizeof(reply1x4_1x4_t)) return -EINVAL;
+				reply1x4_1x4_t *replyData = (reply1x4_1x4_t *)pReplyData;
+				replyData->status = 0;
+				replyData->psize = replyData->vsize = 4;
+				replyData->cmd = cmd;
+				replyData->data = LiveProgGetStatus(&dspmain->jdsp);
+				*replySize = sizeof(reply1x4_1x4_t);
+				return 0;
+			}
+			if (cmd == 131084 || cmd == 131085)
+			{
+				reply1x4_1x4_t *replyData = (reply1x4_1x4_t *)pReplyData;
+				replyData->status = 0;
+				replyData->psize = replyData->vsize = 4;
+				replyData->cmd = cmd;
+				const DBB *dbb = &dspmain->jdsp.dbb;
+				const float value = cmd == 131084 ? dbb->smoothMaxFreq : dbb->boostdB;
+				replyData->data = dspmain->jdsp.bassBoostEnabled && dbb->processed && isfinite(value) ? (int32_t)lroundf(value * 100.f) : 0;
+				*replySize = sizeof(reply1x4_1x4_t);
+				return 0;
+			}
 			if (cmd == 19998)
 			{
 				reply1x4_1x4_t *replyData = (reply1x4_1x4_t *)pReplyData;
@@ -269,13 +616,35 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 	{
 		effect_param_t *cep = (effect_param_t *)pCmdData;
 		int32_t *replyData = (int32_t *)pReplyData;
+		if (cep->psize == 4 && cmdSize >= sizeof(effect_param_t) + 4 && ((int32_t *)cep)[3] == 196656)
+		{
+			if (cep->vsize != 72 || cmdSize != sizeof(effect_param_t) + 76) { *replyData = -EINVAL; return 0; }
+			const char *name = (const char *)cep->data + 4;
+			const size_t length = strnlen(name, 64);
+			if (!length || length == 64) { *replyData = -EINVAL; return 0; }
+			for (size_t i = length; i < 64; ++i) if (name[i]) { *replyData = -EINVAL; return 0; }
+			double value;
+			memcpy(&value, cep->data + 68, sizeof(value));
+			const int result = LiveProgSetParameter(&dspmain->jdsp, name, value);
+			*replyData = result == 1 ? 0 : (result == -5 ? -ENOMEM : -EINVAL);
+			return 0;
+		}
+		if (cep->psize == 4 && cmdSize >= sizeof(effect_param_t) + 4 && ((int32_t *)cep)[3] == 1300)
+		{
+			if (cep->vsize != 28 || cmdSize != sizeof(effect_param_t) + 32)
+				*replyData = -EINVAL;
+			else
+				*replyData = BassBoostSetAdvanced(&dspmain->jdsp, (const int32_t *)(cep->data + 4)) ? 0 : -EINVAL;
+			return 0;
+		}
 		if (cep->psize == 4 && cep->vsize == 2)
 		{
 			int32_t cmd = ((int32_t *)cep)[3];
 			if (cmd == 128)
 			{
 				int reverbMode = (int)((int16_t *)cep)[8];
-				Reverb_SetParam(&dspmain->jdsp, reverbMode);
+                if(reverbMode<0 || reverbMode>18){*replyData=-EINVAL;return 0;}
+                if(!Reverb_SetParam(&dspmain->jdsp,reverbMode)){*replyData=-ENOMEM;return 0;}
 #ifdef DEBUG
 				LOGI("Reverb mode: %d", reverbMode);
 #endif
@@ -423,11 +792,21 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 				int16_t bs2bEnabled = ((int16_t *)cep)[8];
 				if (!bs2bEnabled)
 					CrossfeedDisable(&dspmain->jdsp);
-				else
-					CrossfeedEnable(&dspmain->jdsp, 1);
+				else {
+#ifdef DSP_FUSION_STREAMING
+                    // Fine edits already update the active model. Repeated gate writes must
+                    // not rebuild every legacy IR while the user drags a professional control.
+                    if(!dspmain->jdsp.crossfeedEnabled || dspmain->jdsp.crossfeedForceRefresh)
+#endif
+					    CrossfeedEnable(&dspmain->jdsp, 1);
+                }
 #ifdef DEBUG
 				LOGE("Crossfeed enabled: %d", bs2bEnabled);
 #endif
+                // A failed replacement may keep the old sound active; report the request failure.
+                if(bs2bEnabled && (!dspmain->jdsp.crossfeedEnabled || dspmain->jdsp.crossfeedForceRefresh)) {
+                    *replyData=-ENOMEM;return 0;
+                }
 				*replyData = 0;
 				return 0;
 			}
@@ -502,6 +881,9 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 					dspmain->engineImpulseResponseHash = ~crc;
 				else
 					Convolver1DDisable(&dspmain->jdsp);
+#ifdef DSP_FUSION_STREAMING
+                if (success>0)FusionConvLoaded(dspmain->jdsp.convolverControl,dspmain->impChannels,dspmain->impulseLengthActual,~crc);
+#endif
 				free(dspmain->tempImpulseIncoming);
 				dspmain->tempImpulseIncoming = 0;
 #ifdef DEBUG
@@ -530,16 +912,22 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 			}
 			else if (cmd == 10009)
 			{
+				const size_t ddcTransferred = (size_t)dspmain->stringIndex * 256;
 				dspmain->stringIndex = 0;
 				if (dspmain->stringEq)
 				{
 #ifdef DEBUG
 					LOGI("%s", dspmain->stringEq);
 #endif
-					// Initialize DDC
-					DDCStringParser(&dspmain->jdsp, dspmain->stringEq);
+					// A NUL is only transport padding; nonzero bytes after it are malformed.
+                    const size_t ddcLength = strnlen(dspmain->stringEq, ddcTransferred);
+                    int ddcPaddingValid = ddcTransferred > 0;
+                    for (size_t i=ddcLength;i<ddcTransferred;++i)if(dspmain->stringEq[i]){ddcPaddingValid=0;break;}
+                    const int ddcResult = ddcPaddingValid ? DDCStringParser(&dspmain->jdsp, dspmain->stringEq) : -1;
+                    if (!ddcPaddingValid) DdcFileError(dspmain->jdsp.vdcFl.professional,1);
 					free(dspmain->stringEq);
 					dspmain->stringEq = 0;
+					if (ddcResult < 0) { *replyData = -EINVAL; return 0; }
 #ifdef DEBUG
 					LOGI("DDC initialized");
 #endif
@@ -549,21 +937,30 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 			}
 			else if (cmd == 10010)
 			{
+				const size_t transferred = (size_t)dspmain->stringIndex * 256;
 				dspmain->stringIndex = 0;
-				if (dspmain->stringEq)
+				int errorCode = -7;
+				if (dspmain->stringEq && transferred)
 				{
 #ifdef DEBUG
 					LOGI("%s", dspmain->stringEq);
 #endif
 					// Initialize EEL
-					int errorCode = LiveProgStringParser(&dspmain->jdsp, dspmain->stringEq);
-					free(dspmain->stringEq);
-					dspmain->stringEq = 0;
+					const size_t length = strnlen(dspmain->stringEq, transferred);
+					int paddingValid = length > 0 && length < transferred;
+					for (size_t i = length; i < transferred; ++i) if (dspmain->stringEq[i]) { paddingValid = 0; break; }
+					if (paddingValid) errorCode = LiveProgStringParser(&dspmain->jdsp, dspmain->stringEq);
 #ifdef DEBUG
 					LOGI("Live prog error message: %s", checkErrorCode(errorCode));
 #endif
 				}
-				*replyData = 0;
+				free(dspmain->stringEq);
+				dspmain->stringEq = 0;
+				if (errorCode == -7) {
+					dspmain->jdsp.eel.lastCompileResult = errorCode;
+					snprintf(dspmain->jdsp.eel.lastError, sizeof(dspmain->jdsp.eel.lastError), "%s", "Malformed script transfer");
+				}
+				*replyData = errorCode == 1 ? 0 : -EINVAL;
 				return 0;
 			}
 		}
@@ -590,6 +987,7 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 			}
 			if (cmd == 25002)
 			{
+				if (LiveProgGetStatus(&dspmain->jdsp) != 1) { *replyData = -EINVAL; return 0; }
 				dspmain->hashSlot[0 + 2] = ((int32_t*)cep)[4];
 #ifdef DEBUG
 				LOGI("LiveProg hash: %d", dspmain->hashSlot[0 + 2]);
@@ -637,6 +1035,12 @@ int32_t EffectDSPMainCommand(EffectDSPMain *dspmain, uint32_t cmdCode, uint32_t 
 			int32_t cmd = ((int32_t *)cep)[3];
 			if (cmd == 115)
 			{
+                if(cmdSize!=84 || !replySize || !pReplyData || *replySize<4)return -EINVAL;
+                const float* values=((float*)cep)+4;
+                for(unsigned i=0;i<17;++i)if(!isfinite(values[i])){*replyData=-EINVAL;return 0;}
+                if(values[0]<.06f||values[0]>.3f||values[1]<0||values[1]>4||values[2]<0||values[2]>3){*replyData=-EINVAL;return 0;}
+                float previous=0;
+                for(unsigned i=0;i<7;++i){if(values[3+i]<=previous||values[3+i]>=24000||fabsf(values[10+i])>1.2f){*replyData=-EINVAL;return 0;}previous=values[3+i];}
 				float timeconstant = ((float*)cep)[4 + 0];
 				int granularity = (int)roundf(((float*)cep)[4 + 1]);
 				int tfresolution = (int)roundf(((float*)cep)[4 + 2]);

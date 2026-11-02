@@ -7,6 +7,8 @@ import com.hippo.unifile.UniFile
 import kotlinx.coroutines.Job
 import me.timschneeberger.rootlessjamesdsp.BuildConfig
 import me.timschneeberger.rootlessjamesdsp.R
+import me.timschneeberger.rootlessjamesdsp.convolver.ConvolverLibrary
+import me.timschneeberger.rootlessjamesdsp.convolver.ConvolverBackupRestore
 import me.timschneeberger.rootlessjamesdsp.preference.FileLibraryPreference
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.broadcastPresetLoadEvent
@@ -109,7 +111,9 @@ class BackupManager(private val context: Context): KoinComponent {
         Timber.d("Restoring backup from $uri")
 
         context.contentResolver.openInputStream(uri)!!.source().gzip().buffer().inputStream().use { stream ->
-            val targetFolder = File(context.cacheDir, "restore")
+            val targetFolder = File.createTempFile("restore-", ".work", context.cacheDir).apply {
+                check(delete() && mkdir()) { "Cannot prepare backup workspace" }
+            }
             val metadata = Tar.Reader(stream, ::isKnownFile).extract(targetFolder)
             if(metadata == null) {
                 targetFolder.deleteRecursively()
@@ -120,6 +124,11 @@ class BackupManager(private val context: Context): KoinComponent {
                 targetFolder.deleteRecursively()
                 throw UnsupportedOperationException(context.getString(R.string.backup_restore_error_version_too_new))
             }
+
+            // Prepare IR copies and incoming selections before any clean-restore removal.
+            ConvolverLibrary.install(context)
+            val irMapping = ConvolverBackupRestore.restoreFiles(context, File(targetFolder, "Convolver"))
+            ConvolverBackupRestore.rewriteSelections(targetFolder, irMapping)
 
             // Clean restore
             if(!dirty) {
@@ -134,6 +143,7 @@ class BackupManager(private val context: Context): KoinComponent {
                 context.getExternalFilesDir(null)
                     ?.absoluteFile
                     ?.listFiles()
+                    ?.filter { it.name != "Convolver" }
                     ?.forEach { it.deleteRecursively() }
             }
 
@@ -148,7 +158,7 @@ class BackupManager(private val context: Context): KoinComponent {
                         true
                     )
                 }
-                else if(file.isDirectory && FileLibraryPreference.types.any { file.name.startsWith(it.key) }) {
+                else if(file.isDirectory && file.name != "Convolver" && FileLibraryPreference.types.any { file.name.startsWith(it.key) }) {
                     file.copyRecursively(File(context.getExternalFilesDir(null)!!.absolutePath + "/" + file.name), true)
                 }
             }

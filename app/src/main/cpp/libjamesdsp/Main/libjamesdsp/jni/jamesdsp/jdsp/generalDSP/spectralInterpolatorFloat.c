@@ -124,7 +124,8 @@ void InitSpectralInterpolator(char *octaveSmooth, unsigned int fcLen, unsigned i
 	for (i = 0; i < idxLen + 3; i++)
 	{
 		mLevel_1[i] = (float)levels[i];
-		mLevel_2[i] = (float)(1.0 / (levels[i + 1] - levels[i]));
+		// The final sentinel has no successor and is never used as an interval.
+		mLevel_2[i] = i + 1 < idxLen + 3 ? (float)(1.0 / (levels[i + 1] - levels[i])) : 0.0f;
 	}
 	free(levels);
 	free(multiplicationPrecompute);

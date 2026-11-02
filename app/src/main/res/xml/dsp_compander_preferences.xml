@@ -5,7 +5,7 @@
         android:key="@string/key_compander_enable"
         android:disableDependentsState="false"
         android:title="@string/compander_enable"
-        android:icon="@drawable/ic_baseline_arrow_collapse_24dp"
+        android:icon="@drawable/ic_effect_compander_24"
         app:iconSpaceReserved="false">
         <me.timschneeberger.rootlessjamesdsp.preference.MaterialSeekbarPreference
             android:key="@string/key_compander_timeconstant"

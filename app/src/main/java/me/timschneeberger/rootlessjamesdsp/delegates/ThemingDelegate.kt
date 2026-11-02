@@ -14,6 +14,9 @@ interface ThemingDelegate {
         fun getThemeResIds(appTheme: AppTheme, isAmoled: Boolean): List<Int> {
             val resIds = mutableListOf<Int>()
             resIds += when (appTheme) {
+                AppTheme.LIQUID_GLASS -> R.style.Theme_RootlessJamesDSP_LiquidGlass
+                AppTheme.LIQUID_GLASS_2 -> R.style.Theme_RootlessJamesDSP_LiquidGlass2
+                AppTheme.LIQUID_GLASS_3 -> R.style.Theme_RootlessJamesDSP_LiquidGlass3
                 AppTheme.MONET -> R.style.Theme_RootlessJamesDSP_Monet
                 AppTheme.GREEN_APPLE -> R.style.Theme_RootlessJamesDSP_GreenApple
                 AppTheme.STRAWBERRY_DAIQUIRI -> R.style.Theme_RootlessJamesDSP_StrawberryDaiquiri
@@ -25,7 +28,8 @@ interface ThemingDelegate {
                 else -> R.style.Theme_RootlessJamesDSP
             }
 
-            if (isAmoled) {
+            // Glass keeps its own dark canvas so the translucent layers remain visible.
+            if (isAmoled && appTheme !in setOf(AppTheme.LIQUID_GLASS, AppTheme.LIQUID_GLASS_2, AppTheme.LIQUID_GLASS_3)) {
                 resIds += R.style.ThemeOverlay_RootlessJamesDSP_Amoled
             }
 

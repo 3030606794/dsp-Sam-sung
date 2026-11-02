@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="output_root_access_required">需要 Root 授权</string>
+    <string name="output_root_access_help">请在 Root 管理器中授权 DSP 音效</string>
+    <string name="audio_root_access_help">尚未获得 Root 权限，无法识别播放器会话。请在 Magisk 等 Root 管理器中授权 DSP 音效；授权后会自动重试连接。</string>
+</resources>

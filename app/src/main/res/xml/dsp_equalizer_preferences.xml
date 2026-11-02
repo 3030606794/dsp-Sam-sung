@@ -4,8 +4,8 @@
     <me.timschneeberger.rootlessjamesdsp.preference.SwitchPreferenceGroup
         android:disableDependentsState="false"
         android:key="@string/key_eq_enable"
-        android:title="@string/eq_enable"
-        android:icon="@drawable/ic_baseline_equalizer_24dp"
+        android:title="@string/fusion_eq_title"
+        android:icon="@drawable/ic_effect_curve_equalizer_24"
         app:iconSpaceReserved="false">
 
         <me.timschneeberger.rootlessjamesdsp.preference.EqualizerPreference

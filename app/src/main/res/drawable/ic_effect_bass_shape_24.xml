@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Approved menu proposal; geometry only. Existing theme tint supplies the color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M2,7.02489 L2.33333,7.03067 L2.66667,7.03867 L3,7.048 L3.33333,7.06 L3.66667,7.07467 L4,7.09333 L4.33333,7.116 L4.66667,7.14444 L5,7.18 L5.33333,7.22356 L5.66667,7.27778 L6,7.34444 L6.33333,7.42667 L6.66667,7.52711 L7,7.64978 L7.33333,7.79867 L7.66667,7.97778 L8,8.192 L8.33333,8.44578 L8.66667,8.74267 L9,9.08622 L9.33333,9.47644 L9.66667,9.91333 L10,10.39244 L10.33333,10.90667 L10.66667,11.44667 L11,12 L11.33333,12.55333 L11.66667,13.09333 L12,13.60756 L12.33333,14.08667 L12.66667,14.52356 L13,14.91378 L13.33333,15.25733 L13.66667,15.55422 L14,15.808 L14.33333,16.02222 L14.66667,16.20133 L15,16.35022 L15.33333,16.47289 L15.66667,16.57333 L16,16.65556 L16.33333,16.72222 L16.66667,16.77644 L17,16.82 L17.33333,16.85556 L17.66667,16.884 L18,16.90667 L18.33333,16.92533 L18.66667,16.94 L19,16.952 L19.33333,16.96133 L19.66667,16.96933 L20,16.97511 L20.33333,16.98 L20.66667,16.984 L21,16.98711 L21.33333,16.98978 L21.66667,16.992 L22,16.99333" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M18,3 L18,9" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M15,6 L21,6" />
+</vector>

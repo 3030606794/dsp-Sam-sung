@@ -43,6 +43,15 @@
         app:fragment="me.timschneeberger.rootlessjamesdsp.fragment.settings.SettingsMiscFragment"
         app:allowDividerBelow="true" />
 
+    <me.timschneeberger.rootlessjamesdsp.preference.AuthorDonationPreference
+        app:key="credits_donate_author"
+        app:title="@string/author_donation_title"
+        app:summary="@string/author_donation_summary"
+        app:icon="@drawable/ic_author_donation_24"
+        app:persistent="false"
+        app:allowDividerAbove="true"
+        app:allowDividerBelow="false" />
+
     <Preference
         app:key="@string/key_about"
         app:title="@string/about_settings"

@@ -1,36 +1,81 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:minHeight="48dp"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:paddingHorizontal="16dp"
-    android:paddingVertical="8dp">
+    android:minHeight="0dp"
+    android:clickable="false"
+    android:focusable="false"
+    android:paddingStart="6dp"
+    android:paddingEnd="16dp"
+    android:paddingVertical="6dp">
 
-    <androidx.appcompat.widget.AppCompatImageView
-        android:id="@android:id/icon"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
-        android:layout_marginEnd="12dp"
-        android:importantForAccessibility="no" />
-
-    <TextView
-        android:id="@android:id/summary"
-        android:layout_width="0dp"
+    <LinearLayout
+        android:id="@+id/output_device_title_area"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textAppearance="?attr/textAppearanceBodyMedium"
-        android:textColor="?attr/colorOnSurface" />
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/output_device_title_surface"
+        android:clickable="true"
+        android:focusable="true"
+        android:clipToOutline="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="6dp"
+        app:layout_constrainedWidth="true"
+        app:layout_constraintHorizontal_bias="0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/output_driver_info"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
 
-    <androidx.appcompat.widget.AppCompatImageView
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:layout_marginStart="8dp"
-        android:importantForAccessibility="no"
-        app:srcCompat="@drawable/ic_baseline_keyboard_arrow_down_24dp"
-        app:tint="?attr/colorOnSurfaceVariant" />
-</LinearLayout>
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@android:id/icon"
+            android:layout_width="wrap_content"
+            android:layout_height="24dp"
+            android:layout_marginEnd="@dimen/output_route_icon_title_gap"
+            android:importantForAccessibility="no"
+            app:srcCompat="@drawable/ic_output_speaker_aligned" />
+
+        <TextView
+            android:id="@android:id/summary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:includeFontPadding="false"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="?attr/colorOnSurface" />
+    </LinearLayout>
+
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/output_driver_info"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/output_header_action_surface"
+        android:clipToOutline="true"
+        android:padding="5dp"
+        android:contentDescription="@string/driver_status_title"
+        app:srcCompat="@drawable/ic_output_driver_info"
+        app:tint="?attr/colorOnSurfaceVariant"
+        app:layout_constraintEnd_toStartOf="@id/output_card_pin"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/output_card_pin"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:background="@drawable/output_header_action_surface"
+        android:clipToOutline="true"
+        android:padding="5dp"
+        android:contentDescription="@string/output_card_unpin"
+        app:srcCompat="@drawable/ic_peq_pin"
+        app:tint="?attr/colorOnSurfaceVariant"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>

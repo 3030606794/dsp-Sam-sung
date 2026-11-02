@@ -18,7 +18,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import com.google.android.material.materialswitch.MaterialSwitch
-import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
@@ -47,7 +46,11 @@ class PeqEditorUiTest {
     private val repository get() = PeqRepository(application)
     private var controller: ActivityController<HostActivity>? = null
 
-    @Before fun clear() { prefs.edit().clear().commit() }
+    @Before fun clear() {
+        prefs.edit().clear().commit()
+        application.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
+        assertTrue(PeqEditorPreferences(application).save(PeqEditorSettings(confirmDelete = true)))
+    }
     @After fun close() {
         controller?.pause()?.stop()?.destroy()
         idle()
@@ -67,6 +70,9 @@ class PeqEditorUiTest {
         idle()
     }
     private fun launch(): PeqFragment {
+        // These existing editing workflows operate on explicitly unlocked cards.
+        val locks = PeqBandLockStore(application)
+        repository.load().bands.forEach { locks.setBandLocked(it.id, false) }
         controller = Robolectric.buildActivity(HostActivity::class.java).setup().visible()
         layout()
         return fragment()
@@ -88,7 +94,12 @@ class PeqEditorUiTest {
         return dialog()
     }
     private fun edit(index: Int = 0): AlertDialog {
-        row(index).findViewById<MaterialButton>(R.id.peq_band_edit).performClick()
+        val card = row(index)
+        if (PeqBandLockStore(application).isBandLocked(repository.load().bands[index].id)) {
+            card.findViewById<View>(R.id.peq_band_lock).performClick()
+            layout()
+        }
+        row(index).findViewById<View>(R.id.peq_band_number).performClick()
         return dialog()
     }
 
@@ -96,7 +107,7 @@ class PeqEditorUiTest {
         launch()
         assertFalse(repository.hasSavedState())
         assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
-        assertEquals(10, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
+        assertEquals(4, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
         fun texts(view: View): List<String> = when (view) {
             is TextView -> listOf(view.text.toString())
             is ViewGroup -> (0 until view.childCount).flatMap { texts(view.getChildAt(it)) }
@@ -154,23 +165,25 @@ class PeqEditorUiTest {
         edit(0).findViewById<MaterialButton>(R.id.peq_band_copy)!!.performClick()
         layout()
         assertEquals(listOf(1000.0, 1000.0, 1000.0), repository.load().bands.map { it.frequency })
+        assertTrue(repository.load().bands.first().enabled)
+        assertFalse(repository.load().bands[1].enabled)
         controller!!.recreate()
         layout()
         assertEquals(listOf(1000.0, 1000.0, 1000.0), repository.load().bands.map { it.frequency })
     }
 
-    @Test fun curveStaysPinnedAnd170BandsAreRecycledWithValuesSurvivingRotation() {
-        val base = PeqModel.defaultState(170)
+    @Test fun curveStaysPinnedAnd130BandsAreRecycledWithValuesSurvivingRotation() {
+        val base = PeqModel.defaultState(130)
         repository.save(base.copy(bands = base.bands.mapIndexed { i, band ->
-            if (i == 169) band.copy(gain = 3.25) else band
+            if (i == 129) band.copy(gain = 3.25) else band
         }, gainStep = 0.25, gainRange = 6.0))
         launch()
         val curve = view<PeqResponseView>(R.id.peq_curve)
         val before = IntArray(2).also { curve.getLocationInWindow(it) }
         val list = view<RecyclerView>(R.id.peq_band_list)
-        assertEquals(170, list.adapter!!.itemCount)
+        assertEquals(130, list.adapter!!.itemCount)
         assertTrue("Only visible bands should be inflated", list.childCount in 1..25)
-        val last = row(169)
+        val last = row(129)
         val after = IntArray(2).also { curve.getLocationInWindow(it) }
         assertArrayEquals(before, after)
         assertEquals(3.25f, last.findViewById<Slider>(R.id.peq_band_slider).value, 0f)
@@ -178,7 +191,7 @@ class PeqEditorUiTest {
         assertEquals(3.5, repository.load().bands.last().gain, 0.0)
         controller!!.recreate()
         layout()
-        assertEquals(3.5f, row(169).findViewById<Slider>(R.id.peq_band_slider).value, 0f)
+        assertEquals(3.5f, row(129).findViewById<Slider>(R.id.peq_band_slider).value, 0f)
         assertFalse(prefs.getBoolean(application.getString(R.string.key_geq_enable), false))
     }
 
@@ -208,7 +221,7 @@ class PeqEditorUiTest {
         repository.save(original)
         launch()
         val settings = settings()
-        settings.findViewById<EditText>(R.id.peq_band_count)!!.setText("171")
+        settings.findViewById<EditText>(R.id.peq_band_count)!!.setText("131")
         settings.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         assertTrue(settings.isShowing)
         assertNotNull(settings.findViewById<TextInputLayout>(R.id.peq_count_box)!!.error)
@@ -263,7 +276,7 @@ class PeqEditorUiTest {
         val settings = settings()
         data class Setting(val input: Int, val slider: Int, val minimum: Double, val maximum: Double)
         val controls = listOf(
-            Setting(R.id.peq_band_count, R.id.peq_band_count_slider, 1.0, 170.0),
+            Setting(R.id.peq_band_count, R.id.peq_band_count_slider, 1.0, 130.0),
             Setting(R.id.peq_gain_step, R.id.peq_gain_step_slider, 0.01, 2.0),
             Setting(R.id.peq_gain_range, R.id.peq_gain_range_slider, 1.0, 100.0),
             Setting(R.id.peq_q_step, R.id.peq_q_step_slider, 0.01, 100.0),
@@ -297,8 +310,8 @@ class PeqEditorUiTest {
         assertEquals(original.bands.size.toDouble(), reopened.findViewById<EditText>(R.id.peq_band_count)!!.text.toString().toDouble(), 0.0)
         assertEquals(original.qStep, reopened.findViewById<EditText>(R.id.peq_q_step)!!.text.toString().toDouble(), 0.0)
         assertEquals(original.frequencyStep, reopened.findViewById<EditText>(R.id.peq_frequency_step)!!.text.toString().toDouble(), 0.0)
-        assertFalse(reopened.findViewById<MaterialSwitch>(R.id.peq_show_q_slider)!!.isChecked)
-        assertFalse(reopened.findViewById<MaterialSwitch>(R.id.peq_show_frequency_slider)!!.isChecked)
+        assertEquals(original.showQSlider, reopened.findViewById<MaterialSwitch>(R.id.peq_show_q_slider)!!.isChecked)
+        assertEquals(original.showFrequencySlider, reopened.findViewById<MaterialSwitch>(R.id.peq_show_frequency_slider)!!.isChecked)
     }
 
     @Test fun invalidSettingInputNeverClampsOrSavesAndCanBeCorrected() {
@@ -307,7 +320,7 @@ class PeqEditorUiTest {
         launch()
         val settings = settings()
         val cases = listOf(
-            Triple(R.id.peq_band_count, R.id.peq_count_box, listOf("0", "171", "1.5", "")),
+            Triple(R.id.peq_band_count, R.id.peq_count_box, listOf("0", "131", "1.5", "")),
             Triple(R.id.peq_gain_step, R.id.peq_gain_step_box, listOf("0.009", "2.01", "")),
             Triple(R.id.peq_gain_range, R.id.peq_gain_range_box, listOf("0.99", "100.01", "")),
             Triple(R.id.peq_q_step, R.id.peq_q_step_box, listOf("0.009", "100.01", "")),
@@ -376,9 +389,7 @@ class PeqEditorUiTest {
         launch()
         PeqFilterType.entries.forEach { type ->
             val dialog = edit()
-            val selector = dialog.findViewById<MaterialAutoCompleteTextView>(R.id.peq_band_type)!!
-            selector.setText(PeqBandAdapter.typeLabel(application, type), false)
-            selector.onItemClickListener!!.onItemClick(null, null, type.ordinal, type.ordinal.toLong())
+            dialog.findViewById<PeqFilterSelector>(R.id.peq_band_type)!!.setSelection(type, notify = true)
             dialog.findViewById<EditText>(R.id.peq_frequency_input)!!.setText("1234.5")
             dialog.findViewById<EditText>(R.id.peq_quality_input)!!.setText("3.25")
             dialog.findViewById<EditText>(R.id.peq_gain_input)!!.setText("-2.75")
@@ -393,8 +404,9 @@ class PeqEditorUiTest {
             assertEquals(-2.75, saved.gain, 0.0)
             assertEquals(View.VISIBLE,
                 row(0).findViewById<View>(R.id.peq_gain_controls).visibility)
+            val gainStep = repository.load().gainStep
             row(0).findViewById<MaterialButton>(R.id.peq_band_plus).performClick()
-            assertEquals(-2.65, repository.load().bands.single().gain, 1e-12)
+            assertEquals(saved.gain + gainStep, repository.load().bands.single().gain, 1e-12)
         }
     }
 
@@ -454,7 +466,7 @@ class PeqEditorUiTest {
     }
 
     @Test fun maximumQSurvivesRepeatedBandwidthSwitchesAndRememberedModeCanBeEditedBothWays() {
-        repository.save(PeqState(listOf(PeqBand(frequency = 1000.0, q = 100.0))))
+        repository.save(PeqState(listOf(PeqBand(frequency = 1000.0, q = 100.0)), qRange = 100.0))
         launch()
         val first = edit()
         repeat(3) {
@@ -490,7 +502,8 @@ class PeqEditorUiTest {
     }
 
     @Test fun optionalLogarithmicSlidersUseRealUserEventsAndPersistWithoutRedistributingSameCount() {
-        val original = PeqState(listOf(PeqBand(frequency = 777.0, q = 2.0, gain = 0.1)))
+        val original = PeqState(listOf(PeqBand(frequency = 777.0, q = 2.0, gain = 0.1)),
+            showQSlider = false, showFrequencySlider = false, qRange = 100.0)
         repository.save(original)
         launch()
         val settings = settings()

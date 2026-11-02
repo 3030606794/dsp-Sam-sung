@@ -1,9 +1,8 @@
 package me.timschneeberger.rootlessjamesdsp.liveprog
 
-import me.timschneeberger.rootlessjamesdsp.utils.extensions.equalsDelta
 import timber.log.Timber
-import java.util.Locale
-import kotlin.math.floor
+import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlin.math.max
 import kotlin.math.min
 
@@ -20,12 +19,18 @@ open class EelNumberRangeProperty<T:Number>(
         if(minimum.toDouble() >= maximum.toDouble()) {
             throw NumberFormatException("Minimum must be smaller than the maximum (key=$key)")
         }
+        if (!step.toDouble().isFinite() || step.toDouble() <= 0.0 ||
+            !minimum.toDouble().isFinite() || !maximum.toDouble().isFinite()) {
+            throw NumberFormatException("Range and positive step must be finite (key=$key)")
+        }
 
         value = validateRange(value)
+        if (default?.toDouble()?.isFinite() == false) throw NumberFormatException("Default must be finite (key=$key)")
     }
 
     @Suppress("UNCHECKED_CAST")
     fun validateRange(input: T): T {
+        if (!input.toDouble().isFinite()) throw NumberFormatException("Parameter must be finite (key=$key)")
         return when (input) {
             is Double -> min(max(minimum.toDouble(), input.toDouble()), maximum.toDouble()) as T
             is Int -> min(max(minimum.toInt(), input.toInt()), maximum.toInt()) as T
@@ -35,8 +40,28 @@ open class EelNumberRangeProperty<T:Number>(
     }
 
     fun handleAsInt(): Boolean {
-        return step.toDouble().equalsDelta(floor(step.toDouble()))
+        return precision == 0
     }
+
+    /** The declaration controls precision, including fractional range offsets. */
+    val precision: Int
+        get() = maxOf(decimal(step).scale(), decimal(minimum).scale(), decimal(maximum).scale(), decimal(value).scale(), 0)
+
+    fun normalize(input: Float): Float {
+        require(input.isFinite()) { "Parameter must be finite" }
+        val lower = decimal(minimum)
+        val upper = decimal(maximum)
+        val increment = decimal(step)
+        val requested = BigDecimal(input.toString()).max(lower).min(upper)
+        val ticks = requested.subtract(lower).divide(increment, 0, RoundingMode.HALF_UP)
+        val lastTick = upper.subtract(lower).divide(increment, 0, RoundingMode.FLOOR)
+        return lower.add(increment.multiply(ticks.min(lastTick))).toFloat()
+    }
+
+    fun landsOnStep(input: Float): Boolean = input.isFinite() &&
+        kotlin.math.abs(normalize(input).toDouble() - input.toDouble()) <= maxOf(1e-7, kotlin.math.abs(input.toDouble()) * 1e-7)
+
+    private fun decimal(number: Number) = BigDecimal(number.toString()).stripTrailingZeros()
 
     override fun hasDefault(): Boolean {
         return default != null
@@ -46,23 +71,16 @@ open class EelNumberRangeProperty<T:Number>(
         if (!hasDefault())
             return false
 
-        return if (value is Double || value is Float) {
-            if(default == value)
-                return true
-            default!!.toDouble().equalsDelta(value.toDouble())
-        } else {
-            default == value
-        }
+        return default!!.toDouble() == value.toDouble()
     }
 
     override fun restoreDefaults() {
         default?.let { value = it }
     }
 
-    override fun valueAsString() = if(handleAsInt()) {
-        value.toInt().toString()
-    } else {
-        "%.2f".format(Locale.ROOT, value)
+    override fun valueAsString(): String {
+        require(value.toDouble().isFinite()) { "Parameter must be finite" }
+        return decimal(value).toPlainString()
     }
 
     override fun manipulateProperty(contents: String): String? {
@@ -75,8 +93,35 @@ open class EelNumberRangeProperty<T:Number>(
 
     companion object : IPropertyCompanion {
         private fun matchVariable(key: String, contents: String): MatchResult? {
-            val regex = """$key\s*=\s*(-?\d+\.?\d*)\s*;""".toRegex()
-            return regex.find(contents)
+            val regex = """(?<![\w.])${Regex.escape(key)}\s*=\s*($NUMBER)\s*;""".toRegex()
+            return regex.find(maskComments(contents))
+        }
+
+        private fun maskComments(source: String): String {
+            val masked = source.toCharArray()
+            var index = 0
+            while (index < source.length) {
+                val line = source.startsWith("//", index)
+                val block = source.startsWith("/*", index)
+                val string = source[index] == '"'
+                if (!line && !block && !string) { index++; continue }
+                var end = index + if (string) 1 else 2
+                if (line) {
+                    while (end < source.length && source[end] != '\n') end++
+                } else if (block) {
+                    while (end < source.length && !source.startsWith("*/", end)) end++
+                    end = minOf(source.length, end + 2)
+                } else {
+                    while (end < source.length) {
+                        if (source[end] == '\\') { end += 2; continue }
+                        if (source[end++] == '"') break
+                    }
+                    end = minOf(source.length, end)
+                }
+                for (position in index until end) if (masked[position] != '\n' && masked[position] != '\r') masked[position] = ' '
+                index = end
+            }
+            return String(masked)
         }
 
         fun findVariable(key: String, contents: String): Float? {
@@ -93,8 +138,9 @@ open class EelNumberRangeProperty<T:Number>(
             }
         }
 
+        private const val NUMBER = "[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?"
         override val definitionRegex =
-            """(?<var>\w+):(?<def>-?\d+\.?\d*)?<(?<min>-?\d+\.?\d*),(?<max>-?\d+\.?\d*),?(?<step>-?\d+\.?\d*)?>(?<desc>[\s\S][^\n]*)""".toRegex()
+            """(?<var>[A-Za-z_][A-Za-z_0-9]*):(?<def>$NUMBER)?<(?<min>$NUMBER),(?<max>$NUMBER),?(?<step>$NUMBER)?>(?<desc>[^\n]+)""".toRegex()
 
         override fun parse(line: String, contents: String): EelBaseProperty? {
             val matchRange = definitionRegex.find(line)
@@ -126,7 +172,7 @@ open class EelNumberRangeProperty<T:Number>(
                     current,
                     min.toFloat(),
                     max.toFloat(),
-                    step.toFloatOrNull() ?: 0.1
+                    step.toFloatOrNull() ?: 0.1f
                 ).also { Timber.d("Found number range property: $it") }
             } catch (ex: NumberFormatException) {
                 Timber.e("Failed to parse number range parameter (key=$key)")

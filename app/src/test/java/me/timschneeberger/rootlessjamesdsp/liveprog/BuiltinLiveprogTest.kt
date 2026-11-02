@@ -19,6 +19,7 @@ class BuiltinLiveprogTest {
     }
     private fun bass(parser: EelParser) = parser.properties.first { it.key == "dBassGain" } as EelNumberRangeProperty<*>
     private fun oldSource(name: String): String = source(name)
+        .replace("\r\n", "\n")
         .replace("dBassGain:5<", if (name.endsWith("_preset.eel")) "dBassGain:60<" else "dBassGain:100<")
         .replace("dBassGain = 5;", if (name.endsWith("_preset.eel")) "dBassGain = 100;" else "dBassGain = 100.00;")
 

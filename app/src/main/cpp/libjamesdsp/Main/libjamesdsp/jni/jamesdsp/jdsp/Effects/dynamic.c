@@ -10,6 +10,7 @@ void JLimiterSetCoefficients(JamesDSPLib *jdsp, double thresholddB, double msRel
 {
 	if (msRelease < 1.5)
 		msRelease = 1.5;
+	jdsp->limiter.releaseMs = msRelease;
 	jdsp->limiter.relCoef = (float)exp(-1000.0 / (msRelease * round((double)jdsp->fs)));
 	jdsp->limiter.threshold = (float)pow(10.0, thresholddB / 20.0);
 }
@@ -171,25 +172,69 @@ static float mag2db(float mag)
 {
 	return 20.0f * log10f(mag + 1e-5f);
 }
+static inline float professionalGain(FFTCompander *comp, unsigned int idx, float logIn, float legacyGain)
+{
+	float target = legacyGain;
+	if (comp->proDetect)
+	{
+		float excess = logIn - comp->oldBuf[idx] - comp->proRelative;
+		if (comp->proKnee > 0.0f && excess > -comp->proKnee * 0.5f && excess < comp->proKnee * 0.5f)
+		{
+			float v = excess + comp->proKnee * 0.5f;
+			excess = v * v / (2.0f * comp->proKnee);
+		}
+		else if (excess < 0.0f) excess = 0.0f;
+		target = excess * comp->DREmult[idx];
+		if (target > comp->headRoomdB) target = comp->headRoomdB;
+		const float f = comp->proFrequency[idx];
+		if (comp->proInputDb < comp->proFloor || f < comp->proLow || f > comp->proHigh) target = 0.0f;
+	}
+	if (comp->proCore) target *= comp->proAmount;
+	if (comp->proLimits)
+	{
+		if (target > comp->proBoost) target = comp->proBoost;
+		if (target < -comp->proCut) target = -comp->proCut;
+	}
+	if (comp->proTime)
+	{
+		float gain = comp->proGain[idx];
+		const int rising = fabsf(target) > fabsf(gain) || target * gain < 0.0f;
+		if (rising) comp->proHeld[idx] = comp->proHold;
+		else if (comp->proHeld[idx]) { --comp->proHeld[idx]; return gain; }
+		gain += (target - gain) * (rising ? comp->proAttack : comp->proRelease);
+		comp->proGain[idx] = gain;
+		return gain;
+	}
+	comp->proGain[idx] = target;
+	return target;
+}
 static inline float processfftComp(FFTCompander *comp, unsigned int idx, float logIn)
 {
+	comp->proDetector[idx] = logIn;
 	float multBuf = logIn - comp->oldBuf[idx];
-	if (multBuf < 0.0f)
-		multBuf = 0.0f;
+	if (multBuf < 0.0f) multBuf = 0.0f;
 	multBuf *= comp->DREmult[idx];
-	if (multBuf > comp->headRoomdB)
-		multBuf = comp->headRoomdB;
+	if (multBuf > comp->headRoomdB) multBuf = comp->headRoomdB;
+	if (comp->proCore || comp->proTime || comp->proDetect || comp->proLimits)
+		multBuf = professionalGain(comp, idx, logIn, multBuf);
+	else comp->proGain[idx] = multBuf;
 	return db2mag2(multBuf);
 }
 static inline float processfftCompdB(FFTCompander *comp, unsigned int idx, float logIn)
 {
+	comp->proDetector[idx] = logIn;
 	float multBuf = logIn - comp->oldBuf[idx];
-	if (multBuf < 0.0f)
-		multBuf = 0.0f;
+	if (multBuf < 0.0f) multBuf = 0.0f;
 	multBuf *= comp->DREmult[idx];
-	if (multBuf > comp->headRoomdB)
-		multBuf = comp->headRoomdB;
+	if (multBuf > comp->headRoomdB) multBuf = comp->headRoomdB;
+	if (comp->proCore || comp->proTime || comp->proDetect || comp->proLimits)
+		multBuf = professionalGain(comp, idx, logIn, multBuf);
+	else comp->proGain[idx] = multBuf;
 	return multBuf;
+}
+static inline float linkedMagnitude(const FFTCompander *comp, float left, float right)
+{
+	return comp->proDetect && comp->proLinkMax ? max(left, right) : (left + right) * 0.5f;
 }
 void getwndDBL(double *wnd, unsigned int m, unsigned int n, char *mode)
 {
@@ -409,7 +454,7 @@ void CWTFrameInversion(FFTCompander *cm)
 			absV1 = fabsf(rR);
 			absV2 = fabsf(rI);
 			rightMag = max((127.0f / 128.0f) * max(absV1, absV2) + (3.0f / 16.0f) * min(absV1, absV2), (27.0f / 32.0f) * max(absV1, absV2) + (71.0f / 128.0f) * min(absV1, absV2));
-			cm->mag[i] = (leftMag + rightMag) * 0.5f;
+			cm->mag[i] = linkedMagnitude(cm, leftMag, rightMag);
 		}
 		ShrinkGridSpectralInterpolator(cm->octaveSmooth, cm->procUpTo, cm->mag, cm->aheight);
 		for (i = 0; i < cm->smallGridSize; i++)
@@ -453,7 +498,7 @@ void CWTFrameInversion(FFTCompander *cm)
 			absV1 = fabsf(rR);
 			absV2 = fabsf(rI);
 			rightMag = max((127.0f / 128.0f) * max(absV1, absV2) + (3.0f / 16.0f) * min(absV1, absV2), (27.0f / 32.0f) * max(absV1, absV2) + (71.0f / 128.0f) * min(absV1, absV2));
-			float magNormalized = mag2db((leftMag + rightMag) * 0.5f);
+			float magNormalized = mag2db(linkedMagnitude(cm, leftMag, rightMag));
 			cm->oldBuf[i] = cm->oldBuf[i] + cm->fgt_fac * (magNormalized - cm->oldBuf[i]);
 			// Log conversion
 			mask = processfftComp(cm, i, magNormalized);
@@ -664,7 +709,7 @@ void CWTFrameSTFTInversion(FFTCompander *cm)
 			absV1 = fabsf(rR);
 			absV2 = fabsf(rI);
 			rightMag = max((127.0f / 128.0f) * max(absV1, absV2) + (3.0f / 16.0f) * min(absV1, absV2), (27.0f / 32.0f) * max(absV1, absV2) + (71.0f / 128.0f) * min(absV1, absV2));
-			cm->mag[i] = (leftMag + rightMag) * 0.5f;
+			cm->mag[i] = linkedMagnitude(cm, leftMag, rightMag);
 		}
 		ShrinkGridSpectralInterpolator(cm->octaveSmooth, cm->procUpTo, cm->mag, cm->aheight);
 		for (i = 0; i < cm->smallGridSize; i++)
@@ -708,7 +753,7 @@ void CWTFrameSTFTInversion(FFTCompander *cm)
 			absV1 = fabsf(rR);
 			absV2 = fabsf(rI);
 			rightMag = max((127.0f / 128.0f) * max(absV1, absV2) + (3.0f / 16.0f) * min(absV1, absV2), (27.0f / 32.0f) * max(absV1, absV2) + (71.0f / 128.0f) * min(absV1, absV2));
-			float magNormalized = mag2db((leftMag + rightMag) * 0.5f);
+			float magNormalized = mag2db(linkedMagnitude(cm, leftMag, rightMag));
 			cm->oldBuf[i] = cm->oldBuf[i] + cm->fgt_fac * (magNormalized - cm->oldBuf[i]);
 			// Log conversion
 			mask = processfftComp(cm, i, magNormalized);
@@ -792,7 +837,7 @@ void regularSTFT(FFTCompander *cm)
 	{
 		leftMag = fabsf(lR);
 		rightMag = fabsf(rR);
-		cm->mag[0] = (leftMag + rightMag) * 0.5f;
+		cm->mag[0] = linkedMagnitude(cm, leftMag, rightMag);
 		for (i = 1; i < cm->procUpTo; i++)
 		{
 			symIdx = cm->fftLen - i;
@@ -808,7 +853,7 @@ void regularSTFT(FFTCompander *cm)
 			absV1 = fabsf(rR);
 			absV2 = fabsf(rI);
 			rightMag = max((127.0f / 128.0f) * max(absV1, absV2) + (3.0f / 16.0f) * min(absV1, absV2), (27.0f / 32.0f) * max(absV1, absV2) + (71.0f / 128.0f) * min(absV1, absV2));
-			cm->mag[i] = (leftMag + rightMag) * 0.5f;
+			cm->mag[i] = linkedMagnitude(cm, leftMag, rightMag);
 		}
 		ShrinkGridSpectralInterpolator(cm->octaveSmooth, cm->procUpTo, cm->mag, cm->aheight);
 		for (i = 0; i < cm->smallGridSize; i++)
@@ -849,7 +894,7 @@ void regularSTFT(FFTCompander *cm)
 	{
 		leftMag = fabsf(cm->mTempLBuffer[0]);
 		rightMag = fabsf(cm->mTempRBuffer[0]);
-		float magNormalized = mag2db((leftMag + rightMag) * 0.5f);
+		float magNormalized = mag2db(linkedMagnitude(cm, leftMag, rightMag));
 		cm->oldBuf[0] = cm->oldBuf[0] + cm->fgt_fac * (magNormalized - cm->oldBuf[0]);
 		// Log conversion
 		float mask = processfftComp(cm, 0, magNormalized);
@@ -870,7 +915,7 @@ void regularSTFT(FFTCompander *cm)
 			absV1 = fabsf(rR);
 			absV2 = fabsf(rI);
 			rightMag = max((127.0f / 128.0f) * max(absV1, absV2) + (3.0f / 16.0f) * min(absV1, absV2), (27.0f / 32.0f) * max(absV1, absV2) + (71.0f / 128.0f) * min(absV1, absV2));
-			magNormalized = mag2db((leftMag + rightMag) * 0.5f);
+			magNormalized = mag2db(linkedMagnitude(cm, leftMag, rightMag));
 			cm->oldBuf[i] = cm->oldBuf[i] + cm->fgt_fac * (magNormalized - cm->oldBuf[i]);
 			// Log conversion
 			mask = processfftComp(cm, i, magNormalized);
@@ -941,6 +986,11 @@ int FFTCompanderProcessSamples(FFTCompander *cm, const float *inLeft, const floa
 		{
 			*sampDL = *inLeft;
 			*sampDR = *inRight;
+			if (cm->proTrackRaw) {
+				cm->proRawHistory[0][cm->proInputSamples % 16384] = *inLeft;
+				cm->proRawHistory[1][cm->proInputSamples % 16384] = *inRight;
+				++cm->proInputSamples;
+			}
 			inLeft += 1;
 			inRight += 1;
 			sampDL += 1;
@@ -949,16 +999,32 @@ int FFTCompanderProcessSamples(FFTCompander *cm, const float *inLeft, const floa
 		inSampleCount -= copyCount;
 		cm->mInputPos = (cm->mInputPos + copyCount) & cm->minus_fftLen;
 		cm->mInputSamplesNeeded -= copyCount;
-		if (cm->mInputSamplesNeeded == 0)
+		if (cm->mInputSamplesNeeded == 0) {
 			cm->process(cm);
+			if (cm->proTrackRaw) {
+				const int slot = cm->mOutputBuffer[cm->mOutputBufferCount - 1] == cm->buffer[0] ? 0 : 1;
+				const unsigned delay = cm->tfresolution == 2 ? cm->fftLen / 2 + cm->ovpLen : cm->fftLen;
+				cm->proOutputSource[slot] = (int64_t)cm->proInputSamples - delay;
+			}
+		}
 	}
 	while ((cm->mOutputBufferCount > 0) && (outSampleCount < maxOutSampleCount)) {
 		float *sampD = cm->mOutputBuffer[0];
 		copyCount = min(cm->ovpLen - cm->mOutputReadSampleOffset, maxOutSampleCount - outSampleCount);
 		float *out = sampD + (cm->mOutputReadSampleOffset * 2);
 		float *max = outL + copyCount;
+		const int rawSlot = sampD == cm->buffer[0] ? 0 : 1;
+		unsigned int rawOffset = 0;
 		while (outL < max)
 		{
+			if (cm->proTrackRaw && cm->proRawOutput[0] && cm->proRawOutput[1]) {
+				const int64_t source = cm->proOutputSource[rawSlot] + cm->mOutputReadSampleOffset + rawOffset;
+				for (unsigned int channel = 0; channel < 2; ++channel)
+					cm->proRawOutput[channel][outSampleCount + rawOffset] = source >= 0 ? cm->proRawHistory[channel][source % 16384] : 0.0f;
+				const int64_t outputTime = (int64_t)cm->proInputSamples - maxOutSampleCount + outSampleCount + rawOffset;
+				cm->proRawDelay = outputTime > source ? (unsigned int)(outputTime - source) : 0;
+			}
+			++rawOffset;
 			*outL = *out;
 			out += 1;
 			*outR = *out;
@@ -1024,7 +1090,19 @@ void HSHOSVF2nd(double gain, double overallGainDb, float *c1, float *c2, float *
 	if (fabs(gain) < 8.0 * DBL_EPSILON)
 		gR = 0;
 	else
-		gR = (G * G - GB * GB) / (GB * GB - 1);
+	{
+		const double denominator = GB * GB - 1;
+		// Preserve the healthy original expression exactly. Very small nonzero
+		// gains can round both differences to zero and poisoned all IIR state.
+		if (denominator == 0.0) gR = 0.4142135623730950488;
+		else {
+			gR = (G * G - GB * GB) / denominator;
+			if (gR < 0.0) {
+				const double x = gain * 0.1151292546497022842;
+				gR = exp(1.4142135623730950488 * x) * expm1(0.5857864376269049512 * x) / expm1(1.4142135623730950488 * x);
+			}
+		}
+	}
 	double ratOrd = sqrt(gR);
 	double ratRO = sqrt(sqrt(gR));
 	double gP1 = sqrt(G);
@@ -1042,7 +1120,19 @@ void HSHOSVF2ndNoOverallGain(double gain, float *c1, float *c2, float *d0, float
 	if (fabs(gain) < 8.0 * DBL_EPSILON)
 		gR = 0;
 	else
-		gR = (G * G - GB * GB) / (GB * GB - 1);
+	{
+		const double denominator = GB * GB - 1;
+		// Preserve the healthy original expression exactly. Very small nonzero
+		// gains can round both differences to zero and poisoned all IIR state.
+		if (denominator == 0.0) gR = 0.4142135623730950488;
+		else {
+			gR = (G * G - GB * GB) / denominator;
+			if (gR < 0.0) {
+				const double x = gain * 0.1151292546497022842;
+				gR = exp(1.4142135623730950488 * x) * expm1(0.5857864376269049512 * x) / expm1(1.4142135623730950488 * x);
+			}
+		}
+	}
 	double ratOrd = sqrt(gR);
 	double ratRO = sqrt(sqrt(gR));
 	double gP1 = sqrt(G);
@@ -1555,7 +1645,7 @@ void FFTCompanderInit(FFTCompander *cm, float fs, int tfresolution, unsigned int
 		// Time domain method
 		double fb_bwERBs = 3.0;
 		double fb_lowFreqHz = 40.0;
-		double fb_highFreqHz = 20000.0;
+		double fb_highFreqHz = fs < 40000.0f ? fs * 0.45 : 20000.0;
 #define freq2erb(freq) (9.265 * log(1.0 + freq / (24.7 * 9.265)))
 #define erb2freq(erb) (24.7 * 9.265 * (exp(erb / 9.265) - 1))
 		double ERBS[DYN_BANDS_GAMMATONE];
@@ -1585,7 +1675,7 @@ void FFTCompanderInit(FFTCompander *cm, float fs, int tfresolution, unsigned int
 		cm->alpha = 0.5f / cm->updatePerNSmps;
 	}
 }
-void CompressorConstructor(JamesDSPLib *jdsp)
+void CompressorLegacyConstructor(JamesDSPLib *jdsp)
 {
 	FFTCompander *cm = (FFTCompander *)(&jdsp->comp);
 	double freq[NUMPTS_DRS] = { 95.0, 200.0, 400.0, 800.0, 1600.0, 3400.0, 7500.0 };
@@ -1595,63 +1685,56 @@ void CompressorConstructor(JamesDSPLib *jdsp)
 	cm->freq2[NUMPTS_DRS + 1] = 24000.0;
 	initIerper(&cm->pch, NUMPTS_DRS + 2);
 }
-void CompressorDestructor(JamesDSPLib *jdsp)
+void CompressorLegacyDestructor(JamesDSPLib *jdsp)
 {
 	freeIerper(&jdsp->comp.pch);
 }
-void CompressorEnable(JamesDSPLib *jdsp, char enable)
+void CompressorLegacyEnable(JamesDSPLib *jdsp, char enable)
 {
 	if (jdsp->compForceRefresh)
 	{
-		CompressorSetParam(jdsp, jdsp->comp.fgt_facT, jdsp->comp.granularity, jdsp->comp.tfresolution, 1);
-		CompressorSetGain(jdsp, 0, 0, 0);
+		CompressorLegacySetParam(jdsp, jdsp->comp.fgt_facT, jdsp->comp.granularity, jdsp->comp.tfresolution, 1);
+		CompressorLegacySetGain(jdsp, 0, 0, 0);
 	}
 	if (enable)
 		jdsp->compEnabled = 1;
 }
-void CompressorDisable(JamesDSPLib *jdsp)
+void CompressorLegacyDisable(JamesDSPLib *jdsp)
 {
 	jdsp->compEnabled = 0;
 }
-void CompressorSetParam(JamesDSPLib *jdsp, float fgt_facT, int granularity, int tfresolution, char forceRefresh)
+void FFTCompanderConfigure(FFTCompander *cm, float fs, float fgt_facT, int granularity, int tfresolution)
 {
-	FFTCompander *cm = (FFTCompander *)(&jdsp->comp);
-	if ((fgt_facT != cm->fgt_facT || tfresolution != cm->tfresolution || granularity != cm->granularity) || forceRefresh)
+	FFTCompanderInit(cm, fs, tfresolution, 3, 1.0);
+	cm->fgt_facT = fgt_facT; cm->tfresolution = tfresolution; cm->granularity = granularity;
+	if (tfresolution < 3)
 	{
-		FFTCompanderInit(&jdsp->comp, jdsp->fs, tfresolution, 3, 1.0);
-		cm->fgt_facT = fgt_facT;
-		cm->tfresolution = tfresolution;
-		cm->granularity = granularity;
-		if (cm->tfresolution < 3)
-		{
-			cm->fgt_fac = (float)(1.0 - exp(-1.0 / (cm->fgt_facT * jdsp->comp.spectralRate)));
-			double avgBW;
-			if (!cm->granularity)
-				avgBW = 1.65;
-			else if (cm->granularity == 1)
-				avgBW = 1.45;
-			else if (cm->granularity == 2)
-				avgBW = 1.2;
-			else if (cm->granularity == 3)
-				avgBW = 1.15;
-			else
-				avgBW = 1.08;
-			FFTCompanderSetavgBW(cm, avgBW);
-		}
-		else if (cm->tfresolution == 3)
-		{
-			cm->fgt_fac = (float)(1.0 - exp(-1.0 / (cm->fgt_facT * jdsp->fs)));
-		}
+		cm->fgt_fac = (float)(1.0 - exp(-1.0 / (fgt_facT * cm->spectralRate)));
+		double avgBW;
+		if (!granularity) avgBW = 1.65;
+		else if (granularity == 1) avgBW = 1.45;
+		else if (granularity == 2) avgBW = 1.2;
+		else if (granularity == 3) avgBW = 1.15;
+		else avgBW = 1.08;
+		FFTCompanderSetavgBW(cm, avgBW);
 	}
+	else cm->fgt_fac = (float)(1.0 - exp(-1.0 / (fgt_facT * fs)));
 }
-void CompressorSetGain(JamesDSPLib *jdsp, double *freq, double *gains, char cpy)
+void CompressorLegacySetParam(JamesDSPLib *jdsp, float fgt_facT, int granularity, int tfresolution, char forceRefresh)
 {
-	FFTCompander *cm = (FFTCompander *)(&jdsp->comp);
-	if (cpy)
-	{
-		memcpy(cm->freq2 + 1, freq, NUMPTS_DRS * sizeof(double));
-		memcpy(cm->gains2 + 1, gains, NUMPTS_DRS * sizeof(double));
-	}
+	FFTCompander *cm = &jdsp->comp;
+	if (fgt_facT != cm->fgt_facT || tfresolution != cm->tfresolution || granularity != cm->granularity || forceRefresh)
+		FFTCompanderConfigure(cm, jdsp->fs, fgt_facT, granularity, tfresolution);
+}
+void CompressorLegacySetGain(JamesDSPLib *jdsp, double *freq, double *gains, char cpy)
+{
+	FFTCompander *cm = &jdsp->comp;
+	FFTCompanderCurve(cm, jdsp->fs, cpy ? freq : cm->freq2 + 1, cpy ? gains : cm->gains2 + 1);
+}
+void FFTCompanderCurve(FFTCompander *cm, float fs, const double *freq, const double *gains)
+{
+	if (freq != cm->freq2 + 1) memcpy(cm->freq2 + 1, freq, NUMPTS_DRS * sizeof(double));
+	if (gains != cm->gains2 + 1) memcpy(cm->gains2 + 1, gains, NUMPTS_DRS * sizeof(double));
 	cm->freq2[0] = 0.0;
 	cm->gains2[0] = cm->gains2[1];
 	cm->freq2[NUMPTS_DRS + 1] = 24000.0;
@@ -1665,7 +1748,7 @@ void CompressorSetGain(JamesDSPLib *jdsp, double *freq, double *gains, char cpy)
 	if (cm->tfresolution < 3)
 	{
 		for (int i = 0; i < HALFWNDLEN_DRS; i++)
-			cm->DREmultUniform[i] = getValueAt(&cm->pch.cb, i * jdsp->fs / cm->fftLen * 0.25);
+			cm->DREmultUniform[i] = getValueAt(&cm->pch.cb, i * fs / cm->fftLen * (cm->proExact ? 1.0 : 0.25));
 		if (!cm->noGridDownsampling)
 			ShrinkGridSpectralInterpolator(cm->octaveSmooth, cm->procUpTo, cm->DREmultUniform, cm->DREmult);
 		else
@@ -1727,16 +1810,19 @@ void CompressorSetGain(JamesDSPLib *jdsp, double *freq, double *gains, char cpy)
 				cm->headRoomdB = cm->DREmult[i] * 12.0f;
 	}
 }
-void CompressorProcess(JamesDSPLib *jdsp, size_t n)
+void FFTCompanderRender(FFTCompander *cm, float *left, float *right, size_t n, float *rawLeft, float *rawRight)
 {
-	FFTCompander *cm = (FFTCompander *)(&jdsp->comp);
+	if (rawLeft) memcpy(rawLeft, left, n * sizeof(float));
+	if (rawRight) memcpy(rawRight, right, n * sizeof(float));
 	if (cm->tfresolution < 3)
 	{
 		unsigned int offset = 0;
 		while (offset < n)
 		{
 			const unsigned int processing = min(n - offset, cm->ovpLen);
-			FFTCompanderProcessSamples(cm, jdsp->tmpBuffer[0] + offset, jdsp->tmpBuffer[1] + offset, processing, jdsp->tmpBuffer[0] + offset, jdsp->tmpBuffer[1] + offset);
+			cm->proRawOutput[0] = rawLeft ? rawLeft + offset : 0;
+			cm->proRawOutput[1] = rawRight ? rawRight + offset : 0;
+			FFTCompanderProcessSamples(cm, left + offset, right + offset, processing, left + offset, right + offset);
 			offset += processing;
 		}
 	}
@@ -1752,11 +1838,11 @@ void CompressorProcess(JamesDSPLib *jdsp, size_t n)
 		{
 			for (sb = 0; sb < DYN_BANDS_GAMMATONE; sb++)
 			{
-				filter2(&ZreL[sb], &ZimL[sb], &cm->bRe[sb], &cm->aRe[sb], &cm->aIm[sb], jdsp->tmpBuffer[0][smp], &yre, &yim);
+				filter2(&ZreL[sb], &ZimL[sb], &cm->bRe[sb], &cm->aRe[sb], &cm->aIm[sb], left[smp], &yre, &yim);
 				float leftMag = hypotf(yre, yim);
-				filter2(&ZreR[sb], &ZimR[sb], &cm->bRe[sb], &cm->aRe[sb], &cm->aIm[sb], jdsp->tmpBuffer[1][smp], &yre, &yim);
+				filter2(&ZreR[sb], &ZimR[sb], &cm->bRe[sb], &cm->aRe[sb], &cm->aIm[sb], right[smp], &yre, &yim);
 				float rightMag = hypotf(yre, yim);
-				float magNormalized = mag2db((leftMag + rightMag) * 0.5f);
+				float magNormalized = mag2db(linkedMagnitude(cm, leftMag, rightMag));
 				cm->oldBuf[sb] = cm->oldBuf[sb] + cm->fgt_fac * (magNormalized - cm->oldBuf[sb]);
 				cm->interpolatedGain[sb + 1] = processfftCompdB(cm, sb, magNormalized);
 			}
@@ -1796,8 +1882,8 @@ void CompressorProcess(JamesDSPLib *jdsp, size_t n)
 				cm->c2[sb] += cm->c2step[sb];
 			}
 			cm->overallGain += cm->overallGainstep;
-			float x1 = jdsp->tmpBuffer[0][smp];
-			float x2 = jdsp->tmpBuffer[1][smp];
+			float x1 = left[smp];
+			float x2 = right[smp];
 			for (i = 0; i < DYN_BANDS_GAMMATONE - 1; i++)
 			{
 				float y1 = x1 - cm->z1_AL[i] - cm->z2_AL[i];
@@ -1809,8 +1895,12 @@ void CompressorProcess(JamesDSPLib *jdsp, size_t n)
 				cm->z2_AR[i] = cm->z2_AR[i] + cm->c2[i] * cm->z1_AR[i];
 				cm->z1_AR[i] = cm->z1_AR[i] + cm->c1[i] * y2;
 			}
-			jdsp->tmpBuffer[0][smp] = x1 * cm->overallGain;
-			jdsp->tmpBuffer[1][smp] = x2 * cm->overallGain;
+			left[smp] = x1 * cm->overallGain;
+			right[smp] = x2 * cm->overallGain;
 		}
 	}
+}
+void CompressorLegacyProcess(JamesDSPLib *jdsp, size_t n)
+{
+	FFTCompanderRender(&jdsp->comp, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n, 0, 0);
 }

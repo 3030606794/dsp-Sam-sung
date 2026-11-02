@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="glass2_primary">#ACD5FF</color>
+    <color name="glass2_on_primary">#0C2849</color>
+    <color name="glass2_primary_container">#80355587</color>
+    <color name="glass2_on_primary_container">#EDF6FF</color>
+    <color name="glass2_secondary">#B1D9EC</color>
+    <color name="glass2_secondary_container">#80305066</color>
+    <color name="glass2_tertiary">#D7C7FF</color>
+    <color name="glass2_tertiary_container">#804E4277</color>
+    <color name="glass2_background">#081323</color>
+    <color name="glass2_background_top">#102B45</color>
+    <color name="glass2_background_middle">#10243A</color>
+    <color name="glass2_background_bottom">#251B40</color>
+    <color name="glass2_surface">#C0293D54</color>
+    <color name="glass2_surface_variant">#8C304D69</color>
+    <color name="glass2_card">#70314D6B</color>
+    <color name="glass2_card_start">#99456384</color>
+    <color name="glass2_card_end">#49132640</color>
+    <color name="glass2_edge">#B9BDDDF8</color>
+    <color name="glass2_edge_shadow">#A6000718</color>
+    <color name="glass2_outline">#809ABBDD</color>
+    <color name="glass2_on_surface">#F3F9FF</color>
+    <color name="glass2_secondary_text">#C4DAEB</color>
+    <color name="glass2_inverse_surface">#E7F3FF</color>
+    <color name="glass2_inverse_on_surface">#112B43</color>
+    <color name="glass2_inverse_primary">#245EA4</color>
+    <color name="glass2_dialog">#D1223852</color>
+    <color name="glass2_bar">#99192D44</color>
+    <color name="glass2_glow_blue">#AA317EC1</color>
+    <color name="glass2_glow_violet">#996A449B</color>
+    <color name="glass2_glow_cyan">#802E9296</color>
+    <color name="glass2_tooltip">#DB29445F</color>
+    <color name="glass2_input">#70344E69</color>
+</resources>

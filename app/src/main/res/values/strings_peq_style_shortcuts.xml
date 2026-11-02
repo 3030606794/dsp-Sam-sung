@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_static_style_shortcut">静图</string>
+    <string name="peq_realtime_style_shortcut">动图</string>
+</resources>

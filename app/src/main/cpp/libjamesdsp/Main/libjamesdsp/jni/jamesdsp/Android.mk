@@ -15,6 +15,7 @@ LOCAL_SRC_FILES := \
 	jdsp/Effects/vdc.c \
 	jdsp/Effects/vacuumTube.c \
 	jdsp/Effects/stereoEnhancement.c \
+	jdsp/Effects/stereoWidthControl.c \
 	jdsp/Effects/reverb.c \
 	jdsp/Effects/liveprogWrapper.c \
 	jdsp/Effects/multimodalEQ.c \

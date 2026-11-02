@@ -1,30 +1,30 @@
 #pragma once
 
 #include <cstdint>
-#include "../utils/Harmonic.h"
-#include "../utils/MultiBiquad.h"
-#include <array>
+#include <cstddef>
+#include <memory>
+#include "AnalogTuning.h"
 
 class AnalogX {
 public:
     AnalogX();
+    ~AnalogX();
+    AnalogX(const AnalogX&)=delete;
+    AnalogX& operator=(const AnalogX&)=delete;
 
     void Process(float *samples, uint32_t size);
     void Reset();
     void SetEnable(bool enable);
     void SetProcessingModel(int processingModel);
     void SetSamplingRate(uint32_t samplingRate);
+    bool SetProfessional(const int32_t*,size_t);
+    bool SetTools(const int32_t*,size_t);
+    void ClearTools();
+    void GetRuntime(int32_t*)const;
 
 private:
-    std::array<MultiBiquad, 2> highPass;
-    std::array<Harmonic, 2> harmonic;
-    std::array<MultiBiquad, 2> lowPass;
-    std::array<MultiBiquad, 2> peak;
-
-    float gain;
-    int processingModel;
-    uint32_t samplingRate;
-    bool enable;
+    struct Engine;
+    std::unique_ptr<Engine> engine;
 };
 
 

@@ -46,10 +46,30 @@
         app:contentInsetStart="0dp"
         android:fitsSystemWindows="true">
 
-        <androidx.appcompat.widget.ActionMenuView
-            android:id="@+id/left_menu"
-            android:layout_width="wrap_content"
-            android:layout_height="?actionBarSize" />
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/settings_button"
+            android:layout_width="@dimen/bottom_control_touch_size"
+            android:layout_height="@dimen/bottom_control_touch_size"
+            android:layout_gravity="start|center_vertical"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/output_header_action_surface"
+            android:clipToOutline="true"
+            android:padding="@dimen/bottom_control_icon_padding"
+            android:contentDescription="@string/action_settings"
+            app:srcCompat="@drawable/ic_twotone_settings_24dp"
+            app:tint="?attr/colorOnSurface" />
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/home_more_button"
+            android:layout_width="@dimen/bottom_control_touch_size"
+            android:layout_height="@dimen/bottom_control_touch_size"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginEnd="12dp"
+            android:background="@drawable/output_header_action_surface"
+            android:clipToOutline="true"
+            android:padding="@dimen/bottom_control_icon_padding"
+            android:contentDescription="@string/abc_action_menu_overflow_description"
+            app:srcCompat="@drawable/ic_more_vert_24"
+            app:tint="?attr/colorOnSurface" />
     </com.google.android.material.bottomappbar.BottomAppBar>
 
     <me.timschneeberger.rootlessjamesdsp.view.FloatingToggleButton
@@ -57,11 +77,12 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_anchor="@id/bar"
-        app:fabCustomSize="48dp"
-        app:maxImageSize="36dp"
+        app:fabCustomSize="@dimen/bottom_control_touch_size"
+        app:maxImageSize="@dimen/bottom_control_icon_size"
         app:elevation="0dp"
         app:hoveredFocusedTranslationZ="0dp"
         app:pressedTranslationZ="0dp"
+        app:powerAnimationsEnabled="true"
         app:srcCompat="@drawable/ic_twotone_power_settings_24dp"
         android:hapticFeedbackEnabled="true"
         android:contentDescription="@string/power_button_alt" />

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Approved menu proposal; geometry only. Existing theme tint supplies the color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!-- Transparent marker interiors replace the draft white fill without adding a background. -->
+    <group>
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M0,0 H24 V24 H0 Z M3.8,15.76642 A1.2,1.2 0,1 0 6.2,15.76642 A1.2,1.2 0,1 0 3.8,15.76642 Z M10.8,10.99489 A1.2,1.2 0,1 0 13.2,10.99489 A1.2,1.2 0,1 0 10.8,10.99489 Z M17.8,12.2047 A1.2,1.2 0,1 0 20.2,12.2047 A1.2,1.2 0,1 0 17.8,12.2047 Z" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="#FF000000"
+            android:strokeWidth="1.65"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M2,13.65333 L2.33333,13.89867 L2.66667,14.152 L3,14.40933 L3.33333,14.66622 L3.66667,14.91733 L4,15.15822 L4.33333,15.38356 L4.66667,15.588 L5,15.76622 L5.33333,15.91422 L5.66667,16.02711 L6,16.10089 L6.33333,16.132 L6.66667,16.11822 L7,16.05733 L7.33333,15.94889 L7.66667,15.792 L8,15.588 L8.33333,15.33911 L8.66667,15.048 L9,14.71822 L9.33333,14.35467 L9.66667,13.96311 L10,13.54889 L10.33333,13.11956 L10.66667,12.68178 L11,12.24311 L11.33333,11.81067 L11.66667,11.39244 L12,10.99511 L12.33333,10.62533 L12.66667,10.28978 L13,9.99378 L13.33333,9.74222 L13.66667,9.53822 L14,9.38578 L14.33333,9.28578 L14.66667,9.23956 L15,9.24622 L15.33333,9.30489 L15.66667,9.41333 L16,9.56756 L16.33333,9.76444 L16.66667,9.99867 L17,10.26533 L17.33333,10.55822 L17.66667,10.87156 L18,11.19867 L18.33333,11.53422 L18.66667,11.87156 L19,12.20489 L19.33333,12.52844 L19.66667,12.83778 L20,13.12844 L20.33333,13.39644 L20.66667,13.63867 L21,13.85289 L21.33333,14.03689 L21.66667,14.19022 L22,14.31244" />
+    </group>
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M3.8,15.76642 A1.2,1.2 0,1 0 6.2,15.76642 A1.2,1.2 0,1 0 3.8,15.76642 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M10.8,10.99489 A1.2,1.2 0,1 0 13.2,10.99489 A1.2,1.2 0,1 0 10.8,10.99489 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M17.8,12.2047 A1.2,1.2 0,1 0 20.2,12.2047 A1.2,1.2 0,1 0 17.8,12.2047 Z" />
+</vector>

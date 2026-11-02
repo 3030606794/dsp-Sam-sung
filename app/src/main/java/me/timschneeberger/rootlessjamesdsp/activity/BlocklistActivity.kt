@@ -20,7 +20,7 @@ class BlocklistActivity : BaseActivity() {
             supportFragmentManager
                 .beginTransaction()
                 .replace(R.id.blocklist_host, BlocklistFragment.newInstance())
-                .commit()
+                .commitNow()
         }
 
         binding.fab.setOnClickListener {

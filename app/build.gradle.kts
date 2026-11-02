@@ -22,6 +22,21 @@ androidComponents {
     }
 }
 
+// The supplied tree also contains older, currently incompatible UI test sources.
+// Reuse the existing explicit class selection for source compilation as well as execution.
+// Production/default test source sets remain untouched when no selection is requested.
+val focusedTestIncludes = providers.gradleProperty("fusionTestClassIncludes").orNull
+    ?.split(',')?.filter(String::isNotBlank).orEmpty()
+val focusedTestSourceDirectory = layout.buildDirectory.dir("focused-test-sources")
+val stageFocusedTests = if (focusedTestIncludes.isNotEmpty()) tasks.register<Sync>("stageFocusedTests") {
+    from("src/test/java") { include(focusedTestIncludes); include("**/testutil/**") }
+    from("src/test/kotlin") { include(focusedTestIncludes); include("**/testutil/**") }
+    into(focusedTestSourceDirectory)
+} else null
+if (stageFocusedTests != null) tasks.configureEach {
+    if (name.contains("UnitTest")) dependsOn(stageFocusedTests)
+}
+
 android {
 
     val SUPPORTED_ABIS = setOf("armeabi-v7a", "arm64-v8a")
@@ -119,7 +134,7 @@ android {
         create("root") {
             dimension = "version"
 
-            manifestPlaceholders["label"] = "dsp音效"
+            manifestPlaceholders["label"] = "@string/jamesdsp"
             project.setProperty("archivesBaseName", "DSP-Fusion-v${AndroidConfig.versionName}")
             applicationId = "com.dspfusion.android"
             AndroidConfig.minSdk = 26
@@ -140,6 +155,7 @@ android {
     sourceSets {
         // Use different app icon for non-release builds
         getByName("debug").res.srcDirs("src/debug/res")
+        if (stageFocusedTests != null) getByName("test").java.setSrcDirs(listOf(focusedTestSourceDirectory))
     }
 
     // Export multiple CPU architecture split apks
@@ -177,6 +193,14 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        // Native Robolectric retains graphics state across classes; isolate each
+        // fixture so large font/width matrices remain bounded on a 16 GB host.
+        unitTests.all {
+            it.maxHeapSize = "1g"; it.forkEvery = 1; it.maxParallelForks = 1
+            // Optional scan restriction avoids launching empty JVMs for unrelated
+            // test classes. The runtime classpath still contains every fixture.
+            providers.gradleProperty("fusionTestClassIncludes").orNull?.split(',')?.filter(String::isNotBlank)?.forEach {pattern->it.include(pattern)}
+        }
     }
 
     externalNativeBuild {
@@ -201,6 +225,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.7")
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.viewpager2:viewpager2:1.0.0")
     implementation("androidx.navigation:navigation-fragment-ktx:2.8.4")
     implementation("androidx.navigation:navigation-ui-ktx:2.8.4")
     implementation("androidx.preference:preference-ktx:1.2.1")

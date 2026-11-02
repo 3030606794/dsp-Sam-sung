@@ -6,8 +6,10 @@ import android.util.AttributeSet
 import androidx.preference.ListPreference
 import androidx.preference.Preference.SummaryProvider
 import me.timschneeberger.rootlessjamesdsp.R
+import me.timschneeberger.rootlessjamesdsp.convolver.ConvolverLibrary
 import me.timschneeberger.rootlessjamesdsp.model.preset.Preset
 import me.timschneeberger.rootlessjamesdsp.liveprog.EelParser
+import me.timschneeberger.rootlessjamesdsp.liveprog.LiveprogDuplicateCleaner
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.toast
 import timber.log.Timber
 import java.io.File
@@ -50,12 +52,14 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
     }
 
     override fun onSetInitialValue(defaultValue: Any?) {
+        if (isIrs()) { ConvolverLibrary.install(context); refresh() }
         // Convert old full path convention to new relative paths
         val init = getPersistedString((defaultValue as? String) ?: "")
         value = if(init.startsWith("/"))
-            File(init).toRelativeString(context.getExternalFilesDir(null)!!)
+            File(init).toRelativeString(context.getExternalFilesDir(null)!!).replace(File.separatorChar, '/')
         else
             init
+        if (isIrs() && value.isNullOrBlank()) value = ConvolverLibrary.DEFAULT_PATH
     }
 
     override fun onClick() {
@@ -68,6 +72,9 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
         preferenceManager.showDialog(this)
     }
 
+    /** Reread a selected file's display metadata even when its path did not change. */
+    fun refreshDescription() = notifyChanged()
+
     fun refresh() {
         if(directory == null)
         {
@@ -75,6 +82,11 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
             return
         }
 
+        if (isLiveprog()) {
+            val removed = runCatching { LiveprogDuplicateCleaner.clean(context, directory!!, value) }
+                .onFailure { Timber.w(it, "Could not clean legacy script copies") }.getOrDefault(0)
+            if (removed > 0) context.toast(context.getString(R.string.liveprog_duplicate_copies_removed, removed))
+        }
         initFileList()
     }
 
@@ -87,8 +99,8 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
                     val parser = EelParser(context.resources.configuration.locales[0])
                     parser.load(File(directory!!, it).absolutePath, skipProperties = true)
                     parser.localizedBuiltinTitle ?: it.substringBeforeLast('.')
-                } else it.substringBeforeLast('.')
-                val path = File(directory!!, it).toRelativeString(context.getExternalFilesDir(null)!!)
+                } else if (isIrs()) ConvolverLibrary.displayName(it) else it.substringBeforeLast('.')
+                val path = File(directory!!, it).toRelativeString(context.getExternalFilesDir(null)!!).replace(File.separatorChar, '/')
                 result.add(name to path)
             }
         }
@@ -106,7 +118,9 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
     }
 
     fun hasValidContent(stream: InputStream): Boolean {
-        return if (isPreset())
+        return if (isVdc())
+            runCatching { me.timschneeberger.rootlessjamesdsp.fusion.DdcVdc.read(stream) }.isSuccess
+        else if (isPreset())
             Preset.validate(stream)
         else
             true
@@ -134,13 +148,13 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
         )
 
         fun hasIrsExtension(it: String): Boolean {
-            return types["Convolver"]!!.any { ext -> it.endsWith(ext) }
+            return types["Convolver"]!!.any { ext -> it.endsWith(ext, ignoreCase = true) }
         }
         fun hasLiveprogExtension(it: String): Boolean {
             return types["Liveprog"]!!.any { ext -> it.endsWith(ext) }
         }
         fun hasVdcExtension(it: String): Boolean {
-            return types["DDC"]!!.any { ext -> it.endsWith(ext) }
+            return types["DDC"]!!.any { ext -> it.endsWith(ext,ignoreCase=true) }
         }
         fun hasPresetExtension(it: String): Boolean {
             return types["Presets"]!!.any { ext -> it.endsWith(ext) }
@@ -152,7 +166,7 @@ class FileLibraryPreference(context: Context, attrs: AttributeSet?) :
          * If path is relative to the external files dir, it needs to be changed to use a full path.
          */
         fun createFullPathCompat(context: Context, path: String): String {
-            return if(path.startsWith("/"))
+            return if(File(path).isAbsolute)
                 path
             else {
                 val externalDir = context.getExternalFilesDir(null)

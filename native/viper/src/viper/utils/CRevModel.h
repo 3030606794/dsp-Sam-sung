@@ -12,12 +12,15 @@ public:
     void ProcessReplace(float *bufL, float *bufR, uint32_t size);
     void UpdateCoeffs();
     void Reset();
+    // Comparison snapshots require a fresh independent tail; the historical Reset remains unchanged.
+    void ResetComparisonState();
     void SetRoomSize(float roomSize);
     void SetDamp(float damp);
     void SetWet(float wet);
     void SetDry(float dry);
     void SetWidth(float width);
     void SetMode(float mode);
+    void SetSamplingRate(uint32_t samplingRate);
     float GetRoomSize();
     float GetDamp();
     float GetWet();
@@ -44,7 +47,8 @@ private:
     CAllpassFilter allpassL[4];
     CAllpassFilter allpassR[4];
 
-    float *buffers[24];
+    float *buffers[24]{};
+    uint32_t samplingRate=0;
 };
 
 

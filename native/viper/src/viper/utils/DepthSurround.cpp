@@ -1,6 +1,7 @@
 #include "DepthSurround.h"
 #include <cmath>
 #include "../constants.h"
+#include "ProfessionalTuning.h"
 
 DepthSurround::DepthSurround() {
     this->strength = 0;
@@ -15,42 +16,21 @@ DepthSurround::DepthSurround() {
 }
 
 void DepthSurround::Process(float *samples, uint32_t size) {
-    if (this->enabled) {
-        if (!this->strengthAtLeast500) {
-            for (uint32_t i = 0; i < size; i++) {
-                float sampleLeft = samples[2 * i];
-                float sampleRight = samples[2 * i + 1];
-
-                this->prev[0] = this->gain * this->timeConstDelay[0].ProcessSample(sampleLeft + this->prev[1]);
-                this->prev[1] = this->gain * this->timeConstDelay[1].ProcessSample(sampleRight + this->prev[0]);
-
-                float l = this->prev[0] + sampleLeft;
-                float r = this->prev[1] + sampleRight;
-
-                float diff = (l - r) / 2.f;
-                float avg = (l + r) / 2.f;
-                float avgOut = (float) this->highpass.ProcessSample(diff);
-                samples[2 * i] = avg + (diff - avgOut);
-                samples[2 * i + 1] = avg - (diff - avgOut);
-            }
-        } else {
-            for (uint32_t i = 0; i < size; i++) {
-                float sampleLeft = samples[2 * i];
-                float sampleRight = samples[2 * i + 1];
-
-                this->prev[0] = this->gain * this->timeConstDelay[0].ProcessSample(sampleLeft + this->prev[1]);
-                this->prev[1] = -this->gain * this->timeConstDelay[1].ProcessSample(sampleRight + this->prev[0]);
-
-                float l = this->prev[0] + sampleLeft;
-                float r = this->prev[1] + sampleRight;
-
-                float diff = (l - r) / 2.f;
-                float avg = (l + r) / 2.f;
-                float avgOut = (float) this->highpass.ProcessSample(diff);
-                samples[2 * i] = avg + (diff - avgOut);
-                samples[2 * i + 1] = avg - (diff - avgOut);
-            }
-        }
+    running=true;
+    for(uint32_t i=0;i<size;++i) {
+        gain=professional::advance(gain,gainTarget,alpha);
+        polarity=professional::advance(polarity,polarityTarget,alpha);
+        activeMix=professional::advance(activeMix,enabled?1.f:0.f,alpha);
+        if(activeMix==0.f)continue;
+        const float left=samples[2*i],right=samples[2*i+1];
+        prev[0]=gain*timeConstDelay[0].ProcessSample(left+prev[1]);
+        prev[1]=(polarity*gain)*timeConstDelay[1].ProcessSample(right+prev[0]);
+        const float l=prev[0]+left,r=prev[1]+right;
+        const float diff=(l-r)/2.f,avg=(l+r)/2.f;
+        const float filtered=static_cast<float>(highpass.ProcessSample(diff));
+        const float wetL=avg+(diff-filtered),wetR=avg-(diff-filtered);
+        samples[2*i]=activeMix==1.f?wetL:left+activeMix*(wetL-left);
+        samples[2*i+1]=activeMix==1.f?wetR:right+activeMix*(wetR-right);
     }
 }
 
@@ -62,13 +42,17 @@ void DepthSurround::RefreshStrength(short strength) {
         if (gain > 1.0) {
             gain = 1.0;
         }
-        this->gain = (float) gain;
+        this->gainTarget = (float) gain;
     } else {
-        this->gain = 0.0;
+        this->gainTarget = 0.0;
     }
+    polarityTarget=strengthAtLeast500?-1.f:1.f;
+    if(!running){gain=gainTarget;polarity=polarityTarget;activeMix=enabled?1.f:0.f;}
 }
 
 void DepthSurround::SetSamplingRate(uint32_t samplingRate) {
+    alpha=professional::alpha(samplingRate);running=false;
+    gain=gainTarget;polarity=polarityTarget;activeMix=enabled?1.f:0.f;
     this->timeConstDelay[0].SetParameters(samplingRate, 0.02);
     this->timeConstDelay[1].SetParameters(samplingRate, 0.014);
     this->highpass.SetHighPassParameter(800.0f, samplingRate, -11.0f, 0.72f, 0.0);

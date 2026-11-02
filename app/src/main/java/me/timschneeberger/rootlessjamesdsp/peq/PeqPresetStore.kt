@@ -6,9 +6,11 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.util.UUID
+import java.security.MessageDigest
 
 /** Personal PEQ favorites live outside device/effect preferences and global preset replacement. */
 class PeqPresetStore internal constructor(
@@ -16,6 +18,11 @@ class PeqPresetStore internal constructor(
     private val writePayload: (FileOutputStream, ByteArray) -> Unit = { stream, bytes -> stream.write(bytes) }
 ) {
     constructor(context: Context) : this(File(context.applicationContext.filesDir, FILE_NAME))
+
+    /** Filled by load; opening the library never rewrites its original file. */
+    var lastLoadedLegacyPresetCount: Int = 0
+        private set
+    private var legacyBytesToBackup: ByteArray? = null
 
     fun load(): List<PeqPreset> = synchronized(fileLock) { read() }
 
@@ -88,6 +95,8 @@ class PeqPresetStore internal constructor(
         ?: throw IllegalArgumentException("此预设已不存在，请刷新列表")
 
     private fun read(): List<PeqPreset> {
+        legacyBytesToBackup = null
+        lastLoadedLegacyPresetCount = 0
         val atomic = AtomicFile(file)
         val stream = try { atomic.openRead() } catch (missing: FileNotFoundException) {
             if (!file.exists() && !File(file.path + ".bak").exists()) return emptyList()
@@ -106,17 +115,48 @@ class PeqPresetStore internal constructor(
         }
         val decoder = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
-        return PeqPresetCodec.decodeDocument(decoder.decode(ByteBuffer.wrap(bytes)).toString(), local = true)
+        var legacyCount = 0
+        val result = PeqPresetCodec.decodeDocument(decoder.decode(ByteBuffer.wrap(bytes)).toString(), local = true) {
+            legacyCount++
+        }
+        lastLoadedLegacyPresetCount = legacyCount
+        if (legacyCount > 0) legacyBytesToBackup = bytes
+        return result
     }
 
     private fun write(presets: List<PeqPreset>) {
         val bytes = PeqPresetCodec.encodeDocument(presets, local = true).toByteArray(Charsets.UTF_8)
+        legacyBytesToBackup?.let { original ->
+            // Content-addressed backups preserve every distinct old library before a user writes it.
+            val hash = MessageDigest.getInstance("SHA-256").digest(original)
+                .joinToString("") { "%02x".format(it.toInt() and 255) }
+            val backup = File(file.path + ".before-130-$hash.json")
+            if (!backup.isFile || !backup.readBytes().contentEquals(original)) {
+                val atomicBackup = AtomicFile(backup)
+                val output = atomicBackup.startWrite()
+                try {
+                    output.write(original)
+                    output.fd.sync()
+                    atomicBackup.finishWrite(output)
+                    // AtomicFile may log a failed rename rather than throw. Do not replace the
+                    // original library unless its complete recovery copy can actually be read.
+                    if (!backup.isFile || !backup.readBytes().contentEquals(original)) {
+                        throw IOException("旧预设备份保存失败，原预设文件未修改")
+                    }
+                } catch (failure: Exception) {
+                    atomicBackup.failWrite(output)
+                    throw failure
+                }
+            }
+        }
         val atomic = AtomicFile(file)
         val stream = atomic.startWrite()
         try {
             writePayload(stream, bytes)
             stream.fd.sync()
             atomic.finishWrite(stream)
+            legacyBytesToBackup = null
+            lastLoadedLegacyPresetCount = 0
         } catch (failure: Exception) {
             atomic.failWrite(stream)
             throw failure

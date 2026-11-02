@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="liveprog_legacy_parameter_notice">Parameters read directly by the script update immediately. Move parameter-dependent initialization calculations to @slider for live updates.</string>
+    <string name="liveprog_parameters_save_failed">Unable to save script parameters.</string>
+    <string name="liveprog_parameters_script_inactive">Parameters saved. This revision is not active; compile the script successfully before applying them.</string>
+    <string name="liveprog_parameters_driver_upgrade">Parameters saved, but this driver does not support live script controls. Install the matching updated DSP module to apply them.</string>
+    <string name="liveprog_parameters_apply_failed">Could not apply %1$s. The parameter is saved; the previous running script is retained.</string>
+    <string name="liveprog_compile_retained">Script compile or transfer failed (%1$d). The previous running script is retained.</string>
+</resources>

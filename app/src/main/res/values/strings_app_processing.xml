@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_processing_selected_title">指定应用</string>
+    <string name="app_processing_selected_enabled">仅处理指定应用</string>
+    <string name="app_processing_selected_help">指定与排除名单仅在高清 PCM／播放器会话模式生效。系统全局模式直接处理 Session 0，不按应用筛选；名单会保留供切回会话模式使用。指定与排除名单互斥，此设置不改变播放器的输出模式或采样率。</string>
+    <string name="app_processing_selected_global_saved">当前为系统全局模式：不按应用筛选。已保存 %1$d 个指定应用，切回播放器会话模式后生效。</string>
+    <string name="app_processing_selected_empty_enabled">已开启，但尚未指定应用：当前不处理任何应用。点击右下角 ＋ 添加。</string>
+    <string name="app_processing_selected_empty_disabled">尚未指定应用。点击右下角 ＋ 添加；关闭本开关时按原有模式处理，排除名单仍生效。</string>
+    <string name="app_processing_selected_status_enabled">已开启：仅处理指定的 %1$d 个应用。</string>
+    <string name="app_processing_selected_status_disabled">已关闭：按原有模式处理。已选的 %1$d 个应用会保留，排除名单仍生效。</string>
+    <string name="app_processing_selected_add">添加指定应用</string>
+    <string name="app_processing_selected_remove_title">取消指定此应用？</string>
+    <string name="app_processing_selected_remove_message">从指定名单移除“%1$s”。开启“仅处理指定应用”时，此应用将播放原声。</string>
+    <string name="app_processing_selected_remove">取消指定</string>
+    <string name="app_processing_selected_list_hint">点击应用可取消指定。更改立即保存。</string>
+    <string name="app_processing_selected_missing">未安装 · %1$s</string>
+    <string name="app_processing_blocked_help">下列应用在高清 PCM／播放器会话模式中不参与 DSP 处理。系统全局 Session 0 不按应用筛选，此名单会保留供切回会话模式使用。指定与排除名单互斥。</string>
+    <string name="app_processing_list_save_failed">未能保存应用名单，请稍后重试。</string>
+    <string name="app_processing_exclude_system">排除系统应用</string>
+    <string name="app_processing_exclude_system_help">一键将已安装的系统应用加入排除名单，已指定的应用保留。仅播放器会话模式生效，可从列表逐项移除。</string>
+    <string name="app_processing_exclude_system_busy">正在添加系统应用…</string>
+    <string name="app_processing_exclude_system_result">已新增 %1$d 项排除规则；%2$d 项已指定应用保持不变。</string>
+    <string name="output_scope_empty">处理暂停：未指定应用</string>
+    <string name="output_scope_add">点击添加应用</string>
+</resources>

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menu B proposal: native 24-unit geometry, existing theme tint only. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <group>
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M7.4,4 H8.6 V7 H7.4 Z" />
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M15.4,11 H16.6 V14 H15.4 Z" />
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M10.4,18 H11.6 V21 H10.4 Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M3,4.5 H21 A1,1 0,0 1 22,5.5 V5.5 A1,1 0,0 1 21,6.5 H3 A1,1 0,0 1 2,5.5 V5.5 A1,1 0,0 1 3,4.5 Z" />
+    </group>
+    <group>
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M7.4,4 H8.6 V7 H7.4 Z" />
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M15.4,11 H16.6 V14 H15.4 Z" />
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M10.4,18 H11.6 V21 H10.4 Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M7,2.5 H9 A1,1 0,0 1 10,3.5 V7.5 A1,1 0,0 1 9,8.5 H7 A1,1 0,0 1 6,7.5 V3.5 A1,1 0,0 1 7,2.5 Z" />
+    </group>
+    <group>
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M15.4,11 H16.6 V14 H15.4 Z" />
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M10.4,18 H11.6 V21 H10.4 Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M3,11.5 H21 A1,1 0,0 1 22,12.5 V12.5 A1,1 0,0 1 21,13.5 H3 A1,1 0,0 1 2,12.5 V12.5 A1,1 0,0 1 3,11.5 Z" />
+    </group>
+    <group>
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M15.4,11 H16.6 V14 H15.4 Z" />
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M10.4,18 H11.6 V21 H10.4 Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M15,9.5 H17 A1,1 0,0 1 18,10.5 V14.5 A1,1 0,0 1 17,15.5 H15 A1,1 0,0 1 14,14.5 V10.5 A1,1 0,0 1 15,9.5 Z" />
+    </group>
+    <group>
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M10.4,18 H11.6 V21 H10.4 Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M3,18.5 H21 A1,1 0,0 1 22,19.5 V19.5 A1,1 0,0 1 21,20.5 H3 A1,1 0,0 1 2,19.5 V19.5 A1,1 0,0 1 3,18.5 Z" />
+    </group>
+    <group>
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M-1,-1 H25 V25 H-1 Z M10.4,18 H11.6 V21 H10.4 Z" />
+        <path
+            android:fillColor="#FF000000"
+            android:pathData="M10,16.5 H12 A1,1 0,0 1 13,17.5 V21.5 A1,1 0,0 1 12,22.5 H10 A1,1 0,0 1 9,21.5 V17.5 A1,1 0,0 1 10,16.5 Z" />
+    </group>
+</vector>

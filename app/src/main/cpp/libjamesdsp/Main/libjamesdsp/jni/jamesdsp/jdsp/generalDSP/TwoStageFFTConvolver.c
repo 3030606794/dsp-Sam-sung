@@ -26,40 +26,16 @@ void TwoStageFFTConvolver1x1Init(TwoStageFFTConvolver1x1 *conv)
 }
 void TwoStageFFTConvolver2x4x2Init(TwoStageFFTConvolver2x4x2 *conv)
 {
-	conv->_headBlockSize = 0;
-	conv->_tailBlockSize = 0;
-	FFTConvolver2x4x2Init(&conv->_headConvolver);
-	FFTConvolver2x4x2Init(&conv->_tailConvolver0);
-	FFTConvolver2x4x2Init(&conv->_tailConvolver);
-	conv->_tailInputFill = 0;
-	conv->_precalculatedPos = 0;
-	conv->_tailOutput0[0] = 0;
-	conv->_tailPrecalculated0[0] = 0;
-	conv->_tailOutput[0] = 0;
-	conv->_tailInput[0] = 0;
-	conv->_tailPrecalculated[0] = 0;
-	conv->_backgroundProcessingInput[0] = 0;
+    memset(conv, 0, sizeof(*conv));
 #ifdef THREAD
-	conv->shared_info.state = NOTHING;
+    conv->shared_info.state = NOTHING;
 #endif
 }
 void TwoStageFFTConvolver2x2Init(TwoStageFFTConvolver2x2 *conv)
 {
-	conv->_headBlockSize = 0;
-	conv->_tailBlockSize = 0;
-	FFTConvolver2x2Init(&conv->_headConvolver);
-	FFTConvolver2x2Init(&conv->_tailConvolver0);
-	FFTConvolver2x2Init(&conv->_tailConvolver);
-	conv->_tailInputFill = 0;
-	conv->_precalculatedPos = 0;
-	conv->_tailOutput0[0] = 0;
-	conv->_tailPrecalculated0[0] = 0;
-	conv->_tailOutput[0] = 0;
-	conv->_tailInput[0] = 0;
-	conv->_tailPrecalculated[0] = 0;
-	conv->_backgroundProcessingInput[0] = 0;
+    memset(conv, 0, sizeof(*conv));
 #ifdef THREAD
-	conv->shared_info.state = NOTHING;
+    conv->shared_info.state = NOTHING;
 #endif
 }
 void TwoStageFFTConvolver1x2Init(TwoStageFFTConvolver1x2 *conv)
@@ -93,25 +69,23 @@ inline void task_wait1x1(TwoStageFFTConvolver1x1 *conv)
 			break;
 	}
 }
-inline void task_wait2x4x2(TwoStageFFTConvolver2x4x2 *conv)
+static inline void task_wait2x4x2(TwoStageFFTConvolver2x4x2 *conv)
 {
-	pt_info2x4x2 *info = &conv->shared_info;
-	while (1)
-	{
-		pthread_cond_wait(&(info->boss_cond), &(info->boss_mtx));
-		if (IDLE == info->state)
-			break;
-	}
+    if(!conv->workerStarted)return;
+    pt_info2x4x2 *info=&conv->shared_info;
+    pthread_mutex_lock(&info->work_mtx);
+    while(info->state==SETUP || info->state==WORKING)
+        pthread_cond_wait(&info->boss_cond,&info->work_mtx);
+    pthread_mutex_unlock(&info->work_mtx);
 }
-inline void task_wait2x2(TwoStageFFTConvolver2x2 *conv)
+static inline void task_wait2x2(TwoStageFFTConvolver2x2 *conv)
 {
-	pt_info2x2 *info = &conv->shared_info;
-	while (1)
-	{
-		pthread_cond_wait(&(info->boss_cond), &(info->boss_mtx));
-		if (IDLE == info->state)
-			break;
-	}
+    if(!conv->workerStarted)return;
+    pt_info2x2 *info=&conv->shared_info;
+    pthread_mutex_lock(&info->work_mtx);
+    while(info->state==SETUP || info->state==WORKING)
+        pthread_cond_wait(&info->boss_cond,&info->work_mtx);
+    pthread_mutex_unlock(&info->work_mtx);
 }
 inline void task_wait1x2(TwoStageFFTConvolver1x2 *conv)
 {
@@ -144,41 +118,33 @@ void thread_exit1x1(TwoStageFFTConvolver1x1 *conv)
 }
 void thread_exit2x4x2(TwoStageFFTConvolver2x4x2 *conv)
 {
-	pt_info2x4x2 *info = NULL;
-	//		GFT->sa_log_d(TAG, "Thread %d get off from work", i + 1);
-	info = &conv->shared_info;
-	// ensure the worker is waiting
-	pthread_mutex_lock(&(info->work_mtx));
-	info->state = GET_OFF_FROM_WORK;
-	// wake-up signal
-	pthread_cond_signal(&(info->work_cond));
-	pthread_mutex_unlock(&(info->work_mtx));
-	// wait for thread to exit
-	pthread_join(conv->threads, NULL);
-	pthread_mutex_destroy(&(info->work_mtx));
-	pthread_cond_destroy(&(info->work_cond));
-	pthread_mutex_unlock(&(info->boss_mtx));
-	pthread_mutex_destroy(&(info->boss_mtx));
-	pthread_cond_destroy(&(info->boss_cond));
+    if(!conv->workerStarted)return;
+    pt_info2x4x2 *info=&conv->shared_info;
+    pthread_mutex_lock(&info->work_mtx);
+    while(info->state==SETUP || info->state==WORKING)
+        pthread_cond_wait(&info->boss_cond,&info->work_mtx);
+    info->state=GET_OFF_FROM_WORK;
+    pthread_cond_signal(&info->work_cond);
+    pthread_mutex_unlock(&info->work_mtx);
+    pthread_join(conv->threads,NULL);
+    pthread_cond_destroy(&info->work_cond);pthread_cond_destroy(&info->boss_cond);
+    pthread_mutex_destroy(&info->work_mtx);
+    conv->workerStarted=0;info->state=NOTHING;
 }
 void thread_exit2x2(TwoStageFFTConvolver2x2 *conv)
 {
-	pt_info2x2 *info = NULL;
-	//		GFT->sa_log_d(TAG, "Thread %d get off from work", i + 1);
-	info = &conv->shared_info;
-	// ensure the worker is waiting
-	pthread_mutex_lock(&(info->work_mtx));
-	info->state = GET_OFF_FROM_WORK;
-	// wake-up signal
-	pthread_cond_signal(&(info->work_cond));
-	pthread_mutex_unlock(&(info->work_mtx));
-	// wait for thread to exit
-	pthread_join(conv->threads, NULL);
-	pthread_mutex_destroy(&(info->work_mtx));
-	pthread_cond_destroy(&(info->work_cond));
-	pthread_mutex_unlock(&(info->boss_mtx));
-	pthread_mutex_destroy(&(info->boss_mtx));
-	pthread_cond_destroy(&(info->boss_cond));
+    if(!conv->workerStarted)return;
+    pt_info2x2 *info=&conv->shared_info;
+    pthread_mutex_lock(&info->work_mtx);
+    while(info->state==SETUP || info->state==WORKING)
+        pthread_cond_wait(&info->boss_cond,&info->work_mtx);
+    info->state=GET_OFF_FROM_WORK;
+    pthread_cond_signal(&info->work_cond);
+    pthread_mutex_unlock(&info->work_mtx);
+    pthread_join(conv->threads,NULL);
+    pthread_cond_destroy(&info->work_cond);pthread_cond_destroy(&info->boss_cond);
+    pthread_mutex_destroy(&info->work_mtx);
+    conv->workerStarted=0;info->state=NOTHING;
 }
 void thread_exit1x2(TwoStageFFTConvolver1x2 *conv)
 {
@@ -243,71 +209,33 @@ void *task_type2(void *arg)
 }
 void *task_type22x4x2(void *arg)
 {
-	pt_info2x4x2 *conv = (pt_info2x4x2*)arg;
-	// cond_wait mutex must be locked before we can wait
-	pthread_mutex_lock(&(conv->work_mtx));
-	//	printf("<worker %i> start\n", task);
-		// ensure boss is waiting
-	pthread_mutex_lock(&(conv->boss_mtx));
-	// signal to boss that setup is complete
-	conv->state = IDLE;
-	// wake-up signal
-	pthread_cond_signal(&(conv->boss_cond));
-	pthread_mutex_unlock(&(conv->boss_mtx));
-	while (1)
-	{
-		pthread_cond_wait(&(conv->work_cond), &(conv->work_mtx));
-		if (GET_OFF_FROM_WORK == conv->state)
-			break; // kill thread
-		if (IDLE == conv->state)
-			continue; // accidental wake-up
-		// do blocking task
-		FFTConvolver2x4x2Process(conv->_tailConvolver, conv->_backgroundProcessingInput[0], conv->_backgroundProcessingInput[1], conv->_tailOutput[0], conv->_tailOutput[1], conv->_tailBlockSize);
-		// ensure boss is waiting
-		pthread_mutex_lock(&(conv->boss_mtx));
-		// indicate that job is done
-		conv->state = IDLE;
-		// wake-up signal
-		pthread_cond_signal(&(conv->boss_cond));
-		pthread_mutex_unlock(&(conv->boss_mtx));
-	}
-	pthread_mutex_unlock(&(conv->work_mtx));
-	pthread_exit(NULL);
-	return 0;
+    pt_info2x4x2 *info=(pt_info2x4x2*)arg;
+    pthread_mutex_lock(&info->work_mtx);
+    info->state=IDLE;pthread_cond_broadcast(&info->boss_cond);
+    for(;;){
+        while(info->state!=WORKING && info->state!=GET_OFF_FROM_WORK)
+            pthread_cond_wait(&info->work_cond,&info->work_mtx);
+        if(info->state==GET_OFF_FROM_WORK)break;
+        FFTConvolver2x4x2Process(info->_tailConvolver,info->_backgroundProcessingInput[0],info->_backgroundProcessingInput[1],
+            info->_tailOutput[0],info->_tailOutput[1],info->_tailBlockSize);
+        info->state=IDLE;pthread_cond_broadcast(&info->boss_cond);
+    }
+    pthread_mutex_unlock(&info->work_mtx);return NULL;
 }
 void *task_type22x2(void *arg)
 {
-	pt_info2x2 *conv = (pt_info2x2*)arg;
-	// cond_wait mutex must be locked before we can wait
-	pthread_mutex_lock(&(conv->work_mtx));
-	//	printf("<worker %i> start\n", task);
-		// ensure boss is waiting
-	pthread_mutex_lock(&(conv->boss_mtx));
-	// signal to boss that setup is complete
-	conv->state = IDLE;
-	// wake-up signal
-	pthread_cond_signal(&(conv->boss_cond));
-	pthread_mutex_unlock(&(conv->boss_mtx));
-	while (1)
-	{
-		pthread_cond_wait(&(conv->work_cond), &(conv->work_mtx));
-		if (GET_OFF_FROM_WORK == conv->state)
-			break; // kill thread
-		if (IDLE == conv->state)
-			continue; // accidental wake-up
-		// do blocking task
-		FFTConvolver2x2Process(conv->_tailConvolver, conv->_backgroundProcessingInput[0], conv->_backgroundProcessingInput[1], conv->_tailOutput[0], conv->_tailOutput[1], conv->_tailBlockSize);
-		// ensure boss is waiting
-		pthread_mutex_lock(&(conv->boss_mtx));
-		// indicate that job is done
-		conv->state = IDLE;
-		// wake-up signal
-		pthread_cond_signal(&(conv->boss_cond));
-		pthread_mutex_unlock(&(conv->boss_mtx));
-	}
-	pthread_mutex_unlock(&(conv->work_mtx));
-	pthread_exit(NULL);
-	return 0;
+    pt_info2x2 *info=(pt_info2x2*)arg;
+    pthread_mutex_lock(&info->work_mtx);
+    info->state=IDLE;pthread_cond_broadcast(&info->boss_cond);
+    for(;;){
+        while(info->state!=WORKING && info->state!=GET_OFF_FROM_WORK)
+            pthread_cond_wait(&info->work_cond,&info->work_mtx);
+        if(info->state==GET_OFF_FROM_WORK)break;
+        FFTConvolver2x2Process(info->_tailConvolver,info->_backgroundProcessingInput[0],info->_backgroundProcessingInput[1],
+            info->_tailOutput[0],info->_tailOutput[1],info->_tailBlockSize);
+        info->state=IDLE;pthread_cond_broadcast(&info->boss_cond);
+    }
+    pthread_mutex_unlock(&info->work_mtx);return NULL;
 }
 void *task_type21x2(void *arg)
 {
@@ -360,43 +288,65 @@ void thread_init1x1(TwoStageFFTConvolver1x1 *conv)
 	pthread_create(&conv->threads, NULL, task_type2, (void *)info);
 	task_wait1x1(conv);
 }
-void thread_init2x4x2(TwoStageFFTConvolver2x4x2 *conv)
-{
-	pt_info2x4x2 *info = NULL;
-	info = &conv->shared_info;
-	info->state = SETUP;
-	pthread_cond_init(&(info->work_cond), NULL);
-	pthread_mutex_init(&(info->work_mtx), NULL);
-	pthread_cond_init(&(info->boss_cond), NULL);
-	pthread_mutex_init(&(info->boss_mtx), NULL);
-	pthread_mutex_lock(&(info->boss_mtx));
-	info->_tailConvolver = &conv->_tailConvolver;
-	info->_backgroundProcessingInput[0] = conv->_backgroundProcessingInput[0];
-	info->_backgroundProcessingInput[1] = conv->_backgroundProcessingInput[1];
-	info->_tailOutput[0] = conv->_tailOutput[0];
-	info->_tailOutput[1] = conv->_tailOutput[1];
-	info->_tailBlockSize = conv->_tailBlockSize;
-	pthread_create(&conv->threads, NULL, task_type22x4x2, (void *)info);
-	task_wait2x4x2(conv);
+#ifdef DSP_FUSION_TEST_ALLOCATIONS
+static int crossfeedThreadFailureAfter=-1;
+void FFTConvolver2x4x2TestThreadFailure(int after){crossfeedThreadFailureAfter=after;}
+static int crossfeedThreadStepFails(void){
+    if(crossfeedThreadFailureAfter==0){crossfeedThreadFailureAfter=-1;return 1;}
+    if(crossfeedThreadFailureAfter>0)--crossfeedThreadFailureAfter;
+    return 0;
 }
-void thread_init2x2(TwoStageFFTConvolver2x2 *conv)
+#else
+#define crossfeedThreadStepFails() 0
+#endif
+int thread_init2x4x2(TwoStageFFTConvolver2x4x2 *conv)
 {
-	pt_info2x2 *info = NULL;
-	info = &conv->shared_info;
-	info->state = SETUP;
-	pthread_cond_init(&(info->work_cond), NULL);
-	pthread_mutex_init(&(info->work_mtx), NULL);
-	pthread_cond_init(&(info->boss_cond), NULL);
-	pthread_mutex_init(&(info->boss_mtx), NULL);
-	pthread_mutex_lock(&(info->boss_mtx));
-	info->_tailConvolver = &conv->_tailConvolver;
-	info->_backgroundProcessingInput[0] = conv->_backgroundProcessingInput[0];
-	info->_backgroundProcessingInput[1] = conv->_backgroundProcessingInput[1];
-	info->_tailOutput[0] = conv->_tailOutput[0];
-	info->_tailOutput[1] = conv->_tailOutput[1];
-	info->_tailBlockSize = conv->_tailBlockSize;
-	pthread_create(&conv->threads, NULL, task_type22x2, (void *)info);
-	task_wait2x2(conv);
+    pt_info2x4x2 *info=&conv->shared_info;
+    info->state=NOTHING;conv->workerStarted=0;
+    if(crossfeedThreadStepFails() || pthread_cond_init(&info->work_cond,NULL))goto failed;
+    if(crossfeedThreadStepFails() || pthread_mutex_init(&info->work_mtx,NULL))goto destroy_work_cond;
+    if(crossfeedThreadStepFails() || pthread_cond_init(&info->boss_cond,NULL))goto destroy_work_mutex;
+    info->_tailConvolver=&conv->_tailConvolver;
+    info->_backgroundProcessingInput[0]=conv->_backgroundProcessingInput[0];
+    info->_backgroundProcessingInput[1]=conv->_backgroundProcessingInput[1];
+    info->_tailOutput[0]=conv->_tailOutput[0];info->_tailOutput[1]=conv->_tailOutput[1];
+    info->_tailBlockSize=conv->_tailBlockSize;info->state=SETUP;
+    if(crossfeedThreadStepFails() || pthread_create(&conv->threads,NULL,task_type22x4x2,info))goto destroy_boss_cond;
+    conv->workerStarted=1;task_wait2x4x2(conv);return 1;
+destroy_boss_cond: pthread_cond_destroy(&info->boss_cond);
+destroy_work_mutex: pthread_mutex_destroy(&info->work_mtx);
+destroy_work_cond: pthread_cond_destroy(&info->work_cond);
+failed: info->state=NOTHING;return 0;
+}
+#ifdef DSP_FUSION_TEST_ALLOCATIONS
+static int stereoThreadFailureAfter=-1;
+void FFTConvolver2x2TestThreadFailure(int after){stereoThreadFailureAfter=after;}
+static int stereoThreadStepFails(void){
+    if(stereoThreadFailureAfter==0){stereoThreadFailureAfter=-1;return 1;}
+    if(stereoThreadFailureAfter>0)--stereoThreadFailureAfter;
+    return 0;
+}
+#else
+#define stereoThreadStepFails() 0
+#endif
+int thread_init2x2(TwoStageFFTConvolver2x2 *conv)
+{
+    pt_info2x2 *info=&conv->shared_info;
+    info->state=NOTHING;conv->workerStarted=0;
+    if(stereoThreadStepFails() || pthread_cond_init(&info->work_cond,NULL))goto failed;
+    if(stereoThreadStepFails() || pthread_mutex_init(&info->work_mtx,NULL))goto destroy_work_cond;
+    if(stereoThreadStepFails() || pthread_cond_init(&info->boss_cond,NULL))goto destroy_work_mutex;
+    info->_tailConvolver=&conv->_tailConvolver;
+    info->_backgroundProcessingInput[0]=conv->_backgroundProcessingInput[0];
+    info->_backgroundProcessingInput[1]=conv->_backgroundProcessingInput[1];
+    info->_tailOutput[0]=conv->_tailOutput[0];info->_tailOutput[1]=conv->_tailOutput[1];
+    info->_tailBlockSize=conv->_tailBlockSize;info->state=SETUP;
+    if(stereoThreadStepFails() || pthread_create(&conv->threads,NULL,task_type22x2,info))goto destroy_boss_cond;
+    conv->workerStarted=1;task_wait2x2(conv);return 1;
+destroy_boss_cond: pthread_cond_destroy(&info->boss_cond);
+destroy_work_mutex: pthread_mutex_destroy(&info->work_mtx);
+destroy_work_cond: pthread_cond_destroy(&info->work_cond);
+failed: info->state=NOTHING;return 0;
 }
 void thread_init1x2(TwoStageFFTConvolver1x2 *conv)
 {
@@ -427,27 +377,23 @@ inline void task_start1x1(TwoStageFFTConvolver1x1 *conv)
 	pthread_cond_signal(&(info->work_cond));
 	pthread_mutex_unlock(&(info->work_mtx));
 }
-inline void task_start2x4x2(TwoStageFFTConvolver2x4x2 *conv)
+static inline void task_start2x4x2(TwoStageFFTConvolver2x4x2 *conv)
 {
-	pt_info2x4x2 *info = &(conv->shared_info);
-	// ensure worker is waiting
-	pthread_mutex_lock(&(info->work_mtx));
-	// set job information & state
-	info->state = WORKING;
-	// wake-up signal
-	pthread_cond_signal(&(info->work_cond));
-	pthread_mutex_unlock(&(info->work_mtx));
+    pt_info2x4x2 *info=&conv->shared_info;
+    pthread_mutex_lock(&info->work_mtx);
+    while(info->state==WORKING || info->state==SETUP)
+        pthread_cond_wait(&info->boss_cond,&info->work_mtx);
+    info->state=WORKING;pthread_cond_signal(&info->work_cond);
+    pthread_mutex_unlock(&info->work_mtx);
 }
-inline void task_start2x2(TwoStageFFTConvolver2x2 *conv)
+static inline void task_start2x2(TwoStageFFTConvolver2x2 *conv)
 {
-	pt_info2x2 *info = &(conv->shared_info);
-	// ensure worker is waiting
-	pthread_mutex_lock(&(info->work_mtx));
-	// set job information & state
-	info->state = WORKING;
-	// wake-up signal
-	pthread_cond_signal(&(info->work_cond));
-	pthread_mutex_unlock(&(info->work_mtx));
+    pt_info2x2 *info=&conv->shared_info;
+    pthread_mutex_lock(&info->work_mtx);
+    while(info->state==WORKING || info->state==SETUP)
+        pthread_cond_wait(&info->boss_cond,&info->work_mtx);
+    info->state=WORKING;pthread_cond_signal(&info->work_cond);
+    pthread_mutex_unlock(&info->work_mtx);
 }
 inline void task_start1x2(TwoStageFFTConvolver1x2 *conv)
 {
@@ -517,129 +463,53 @@ void TwoStageFFTConvolver1x1Free(TwoStageFFTConvolver1x1 *conv)
 	conv->_tailInputFill = 0;
 	conv->_precalculatedPos = 0;
 }
+void TwoStageFFTConvolver2x4x2ResetHistory(TwoStageFFTConvolver2x4x2* conv){
+    if(!conv)return;
+#ifdef THREAD
+    if(conv->workerStarted)task_wait2x4x2(conv);
+#endif
+    FFTConvolver2x4x2ResetHistory(&conv->_headConvolver);
+    FFTConvolver2x4x2ResetHistory(&conv->_tailConvolver0);
+    FFTConvolver2x4x2ResetHistory(&conv->_tailConvolver);
+    for(unsigned int c=0;c<2;++c){
+        if(conv->_tailOutput0[c])memset(conv->_tailOutput0[c],0,conv->_tailBlockSize*sizeof(float));
+        if(conv->_tailPrecalculated0[c])memset(conv->_tailPrecalculated0[c],0,conv->_tailBlockSize*sizeof(float));
+        if(conv->_tailOutput[c])memset(conv->_tailOutput[c],0,conv->_tailBlockSize*sizeof(float));
+        if(conv->_tailPrecalculated[c])memset(conv->_tailPrecalculated[c],0,conv->_tailBlockSize*sizeof(float));
+        if(conv->_tailInput[c])memset(conv->_tailInput[c],0,conv->_tailBlockSize*sizeof(float));
+        if(conv->_backgroundProcessingInput[c])memset(conv->_backgroundProcessingInput[c],0,conv->_tailBlockSize*sizeof(float));
+    }
+    conv->_tailInputFill=0;conv->_precalculatedPos=0;
+}
 void TwoStageFFTConvolver2x4x2Free(TwoStageFFTConvolver2x4x2 *conv)
 {
 #ifdef THREAD
-	if (conv->shared_info.state != NOTHING)
-	{
-		if (conv->shared_info.state == WORKING)
-		{
-			task_wait2x4x2(conv);
-			thread_exit2x4x2(conv);
-		}
-		else
-			thread_exit2x4x2(conv);
-	}
+    if(conv->workerStarted)thread_exit2x4x2(conv);
 #endif
-	conv->_headBlockSize = 0;
-	conv->_tailBlockSize = 0;
-	if (conv->_headConvolver.bit)
-		FFTConvolver2x4x2Free(&conv->_headConvolver);
-	if (conv->_tailConvolver0.bit)
-		FFTConvolver2x4x2Free(&conv->_tailConvolver0);
-	if (conv->_tailOutput0[0])
-	{
-		free(conv->_tailOutput0[0]);
-		free(conv->_tailOutput0[1]);
-		conv->_tailOutput0[0] = 0;
-	}
-	if (conv->_tailPrecalculated0[0])
-	{
-		free(conv->_tailPrecalculated0[0]);
-		free(conv->_tailPrecalculated0[1]);
-		conv->_tailPrecalculated0[0] = 0;
-	}
-	if (conv->_tailOutput[0])
-	{
-		free(conv->_tailOutput[0]);
-		free(conv->_tailOutput[1]);
-		conv->_tailOutput[0] = 0;
-	}
-	if (conv->_tailPrecalculated[0])
-	{
-		free(conv->_tailPrecalculated[0]);
-		free(conv->_tailPrecalculated[1]);
-		conv->_tailPrecalculated[0] = 0;
-	}
-	if (conv->_tailInput[0])
-	{
-		free(conv->_tailInput[0]);
-		free(conv->_tailInput[1]);
-		conv->_tailInput[0] = 0;
-	}
-	if (conv->_backgroundProcessingInput[0])
-	{
-		free(conv->_backgroundProcessingInput[0]);
-		free(conv->_backgroundProcessingInput[1]);
-		conv->_backgroundProcessingInput[0] = 0;
-	}
-	if (conv->_tailConvolver.bit)
-	FFTConvolver2x4x2Free(&conv->_tailConvolver);
-	conv->_tailInputFill = 0;
-	conv->_tailInputFill = 0;
-	conv->_precalculatedPos = 0;
+    FFTConvolver2x4x2Free(&conv->_headConvolver);
+    FFTConvolver2x4x2Free(&conv->_tailConvolver0);
+    FFTConvolver2x4x2Free(&conv->_tailConvolver);
+    for (unsigned int c=0;c<2;++c) {
+        free(conv->_tailOutput0[c]); free(conv->_tailPrecalculated0[c]);
+        free(conv->_tailOutput[c]); free(conv->_tailPrecalculated[c]);
+        free(conv->_tailInput[c]); free(conv->_backgroundProcessingInput[c]);
+    }
+    TwoStageFFTConvolver2x4x2Init(conv);
 }
 void TwoStageFFTConvolver2x2Free(TwoStageFFTConvolver2x2 *conv)
 {
 #ifdef THREAD
-	if (conv->shared_info.state != NOTHING)
-	{
-		if (conv->shared_info.state == WORKING)
-		{
-			task_wait2x2(conv);
-			thread_exit2x2(conv);
-		}
-		else
-			thread_exit2x2(conv);
-	}
+    if(conv->workerStarted)thread_exit2x2(conv);
 #endif
-	conv->_headBlockSize = 0;
-	conv->_tailBlockSize = 0;
-	if (conv->_headConvolver.bit)
-		FFTConvolver2x2Free(&conv->_headConvolver);
-	if (conv->_tailConvolver0.bit)
-		FFTConvolver2x2Free(&conv->_tailConvolver0);
-	if (conv->_tailOutput0[0])
-	{
-		free(conv->_tailOutput0[0]);
-		free(conv->_tailOutput0[1]);
-		conv->_tailOutput0[0] = 0;
-	}
-	if (conv->_tailPrecalculated0[0])
-	{
-		free(conv->_tailPrecalculated0[0]);
-		free(conv->_tailPrecalculated0[1]);
-		conv->_tailPrecalculated0[0] = 0;
-	}
-	if (conv->_tailOutput[0])
-	{
-		free(conv->_tailOutput[0]);
-		free(conv->_tailOutput[1]);
-		conv->_tailOutput[0] = 0;
-	}
-	if (conv->_tailPrecalculated[0])
-	{
-		free(conv->_tailPrecalculated[0]);
-		free(conv->_tailPrecalculated[1]);
-		conv->_tailPrecalculated[0] = 0;
-	}
-	if (conv->_tailInput[0])
-	{
-		free(conv->_tailInput[0]);
-		free(conv->_tailInput[1]);
-		conv->_tailInput[0] = 0;
-	}
-	if (conv->_backgroundProcessingInput[0])
-	{
-		free(conv->_backgroundProcessingInput[0]);
-		free(conv->_backgroundProcessingInput[1]);
-		conv->_backgroundProcessingInput[0] = 0;
-	}
-	if (conv->_tailConvolver.bit)
-		FFTConvolver2x2Free(&conv->_tailConvolver);
-	conv->_tailInputFill = 0;
-	conv->_tailInputFill = 0;
-	conv->_precalculatedPos = 0;
+    FFTConvolver2x2Free(&conv->_headConvolver);
+    FFTConvolver2x2Free(&conv->_tailConvolver0);
+    FFTConvolver2x2Free(&conv->_tailConvolver);
+    for (unsigned int c=0;c<2;++c) {
+        free(conv->_tailOutput0[c]); free(conv->_tailPrecalculated0[c]);
+        free(conv->_tailOutput[c]); free(conv->_tailPrecalculated[c]);
+        free(conv->_tailInput[c]); free(conv->_backgroundProcessingInput[c]);
+    }
+    TwoStageFFTConvolver2x2Init(conv);
 }
 void TwoStageFFTConvolver1x2Free(TwoStageFFTConvolver1x2 *conv)
 {
@@ -761,7 +631,7 @@ int TwoStageFFTConvolver1x1LoadImpulseResponse(TwoStageFFTConvolver1x1 *conv, un
 }
 int TwoStageFFTConvolver2x4x2LoadImpulseResponse(TwoStageFFTConvolver2x4x2 *conv, unsigned int headBlockSize, unsigned int tailBlockSize, const float* irLL, const float* irLR, const float* irRL, const float* irRR, unsigned int irLen)
 {
-	if (headBlockSize == 0 || tailBlockSize == 0)
+	if (!conv || !irLL || !irLR || !irRL || !irRR || headBlockSize == 0 || tailBlockSize == 0)
 		return 0;
 	if (headBlockSize < (unsigned int)1)
 		headBlockSize = (unsigned int)1;
@@ -772,7 +642,9 @@ int TwoStageFFTConvolver2x4x2LoadImpulseResponse(TwoStageFFTConvolver2x4x2 *conv
 		tailBlockSize = tmp;
 	}
 	// Ignore zeros at the end of the impulse response because they only waste computation time
-	while (irLen > 0 && (fabsf(irLL[irLen - 1]) + fabsf(irLR[irLen - 1]) + fabsf(irRL[irLen - 1]) + fabsf(irRR[irLen - 1])) < (FLT_EPSILON * 4.0f))
+	// A valid muted kernel still needs one zero FFT partition. Keep its external
+	// frame count and CRC intact; an empty input (irLen == 0) remains invalid.
+	while (irLen > 1 && (fabsf(irLL[irLen - 1]) + fabsf(irLR[irLen - 1]) + fabsf(irRL[irLen - 1]) + fabsf(irRR[irLen - 1])) < (FLT_EPSILON * 4.0f))
 		--irLen;
 	if (irLen == 0)
 		return 0;
@@ -787,111 +659,96 @@ int TwoStageFFTConvolver2x4x2LoadImpulseResponse(TwoStageFFTConvolver2x4x2 *conv
 	if (conv->_tailBlockSize > 524288)
 		conv->_tailBlockSize = 524288;
 	const unsigned int headIrLen = min(irLen, conv->_tailBlockSize);
-	FFTConvolver2x4x2LoadImpulseResponse(&conv->_headConvolver, conv->_headBlockSize, irLL, irLR, irRL, irRR, headIrLen);
+	if (!FFTConvolver2x4x2LoadImpulseResponse(&conv->_headConvolver, conv->_headBlockSize, irLL, irLR, irRL, irRR, headIrLen)) goto allocation_failed;
 	if (irLen > conv->_tailBlockSize)
 	{
 		const unsigned int conv1IrLen = min(irLen - conv->_tailBlockSize, conv->_tailBlockSize);
-		FFTConvolver2x4x2LoadImpulseResponse(&conv->_tailConvolver0, conv->_headBlockSize, irLL + conv->_tailBlockSize, irLR + conv->_tailBlockSize, irRL + conv->_tailBlockSize, irRR + conv->_tailBlockSize, conv1IrLen);
-		conv->_tailOutput0[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailOutput0[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailPrecalculated0[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailPrecalculated0[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
+		if (!FFTConvolver2x4x2LoadImpulseResponse(&conv->_tailConvolver0, conv->_headBlockSize, irLL + conv->_tailBlockSize, irLR + conv->_tailBlockSize, irRL + conv->_tailBlockSize, irRR + conv->_tailBlockSize, conv1IrLen)) goto allocation_failed;
+		conv->_tailOutput0[0] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_tailOutput0[0]) goto allocation_failed;
+		conv->_tailOutput0[1] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_tailOutput0[1]) goto allocation_failed;
+		conv->_tailPrecalculated0[0] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_tailPrecalculated0[0]) goto allocation_failed;
+		conv->_tailPrecalculated0[1] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_tailPrecalculated0[1]) goto allocation_failed;
 		memset(conv->_tailPrecalculated0[0], 0, conv->_tailBlockSize * sizeof(float));
 		memset(conv->_tailPrecalculated0[1], 0, conv->_tailBlockSize * sizeof(float));
 	}
 	if (irLen > 2 * conv->_tailBlockSize)
 	{
 		const unsigned int tailIrLen = irLen - (2 * conv->_tailBlockSize);
-		FFTConvolver2x4x2LoadImpulseResponse(&conv->_tailConvolver, conv->_tailBlockSize, irLL + (2 * conv->_tailBlockSize), irLR + (2 * conv->_tailBlockSize), irRL + (2 * conv->_tailBlockSize), irRR + (2 * conv->_tailBlockSize), tailIrLen);
-		conv->_tailOutput[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailOutput[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
+		if (!FFTConvolver2x4x2LoadImpulseResponse(&conv->_tailConvolver, conv->_tailBlockSize, irLL + (2 * conv->_tailBlockSize), irLR + (2 * conv->_tailBlockSize), irRL + (2 * conv->_tailBlockSize), irRR + (2 * conv->_tailBlockSize), tailIrLen)) goto allocation_failed;
+		conv->_tailOutput[0] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_tailOutput[0]) goto allocation_failed;
+		conv->_tailOutput[1] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_tailOutput[1]) goto allocation_failed;
 		memset(conv->_tailOutput[0], 0, conv->_tailBlockSize * sizeof(float));
 		memset(conv->_tailOutput[1], 0, conv->_tailBlockSize * sizeof(float));
-		conv->_tailPrecalculated[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailPrecalculated[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
+		conv->_tailPrecalculated[0] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_tailPrecalculated[0]) goto allocation_failed;
+		conv->_tailPrecalculated[1] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_tailPrecalculated[1]) goto allocation_failed;
 		memset(conv->_tailPrecalculated[0], 0, conv->_tailBlockSize * sizeof(float));
 		memset(conv->_tailPrecalculated[1], 0, conv->_tailBlockSize * sizeof(float));
-		conv->_backgroundProcessingInput[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_backgroundProcessingInput[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
+		conv->_backgroundProcessingInput[0] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_backgroundProcessingInput[0]) goto allocation_failed;
+		conv->_backgroundProcessingInput[1] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_backgroundProcessingInput[1]) goto allocation_failed;
 #ifdef THREAD
-		thread_init2x4x2(conv);
+		if(!thread_init2x4x2(conv))goto allocation_failed;
 #endif
 	}
 	if (conv->_tailPrecalculated0[0] || conv->_tailPrecalculated[0])
 	{
-		conv->_tailInput[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailInput[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
+		conv->_tailInput[0] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_tailInput[0]) goto allocation_failed;
+		conv->_tailInput[1] = (float*)FFTConvolver2x4x2Allocate(conv->_tailBlockSize,sizeof(float));
+		if (!conv->_tailInput[1]) goto allocation_failed;
 	}
 	conv->_tailInputFill = 0;
 	conv->_precalculatedPos = 0;
 	return 1;
+allocation_failed:
+    TwoStageFFTConvolver2x4x2Free(conv);
+    return 0;
 }
 int TwoStageFFTConvolver2x2LoadImpulseResponse(TwoStageFFTConvolver2x2 *conv, unsigned int headBlockSize, unsigned int tailBlockSize, const float* irL, const float* irR, unsigned int irLen)
 {
-	if (headBlockSize == 0 || tailBlockSize == 0)
-		return 0;
-	if (headBlockSize < (unsigned int)1)
-		headBlockSize = (unsigned int)1;
-	if (headBlockSize > tailBlockSize)
-	{
-		unsigned int tmp = headBlockSize;
-		headBlockSize = tailBlockSize;
-		tailBlockSize = tmp;
-	}
-	// Ignore zeros at the end of the impulse response because they only waste computation time
-	while (irLen > 0 && (fabsf(irL[irLen - 1]) + fabsf(irR[irLen - 1])) < (FLT_EPSILON * 2.0f))
-		--irLen;
-	if (irLen == 0)
-		return 0;
-
-	if (conv->_headConvolver.bit)
-		TwoStageFFTConvolver2x2Free(conv);
-
-	conv->_headBlockSize = upper_power_of_two(headBlockSize);
-	conv->_tailBlockSize = upper_power_of_two(tailBlockSize);
-	if (conv->_headBlockSize > 524288)
-		conv->_headBlockSize = 524288;
-	if (conv->_tailBlockSize > 524288)
-		conv->_tailBlockSize = 524288;
-	const unsigned int headIrLen = min(irLen, conv->_tailBlockSize);
-	FFTConvolver2x2LoadImpulseResponse(&conv->_headConvolver, conv->_headBlockSize, irL, irR, headIrLen);
-	if (irLen > conv->_tailBlockSize)
-	{
-		const unsigned int conv1IrLen = min(irLen - conv->_tailBlockSize, conv->_tailBlockSize);
-		FFTConvolver2x2LoadImpulseResponse(&conv->_tailConvolver0, conv->_headBlockSize, irL + conv->_tailBlockSize, irR + conv->_tailBlockSize, conv1IrLen);
-		conv->_tailOutput0[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailOutput0[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailPrecalculated0[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailPrecalculated0[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		memset(conv->_tailPrecalculated0[0], 0, conv->_tailBlockSize * sizeof(float));
-		memset(conv->_tailPrecalculated0[1], 0, conv->_tailBlockSize * sizeof(float));
-	}
-	if (irLen > 2 * conv->_tailBlockSize)
-	{
-		const unsigned int tailIrLen = irLen - (2 * conv->_tailBlockSize);
-		FFTConvolver2x2LoadImpulseResponse(&conv->_tailConvolver, conv->_tailBlockSize, irL + (2 * conv->_tailBlockSize), irR + (2 * conv->_tailBlockSize), tailIrLen);
-		conv->_tailOutput[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailOutput[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		memset(conv->_tailOutput[0], 0, conv->_tailBlockSize * sizeof(float));
-		memset(conv->_tailOutput[1], 0, conv->_tailBlockSize * sizeof(float));
-		conv->_tailPrecalculated[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailPrecalculated[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		memset(conv->_tailPrecalculated[0], 0, conv->_tailBlockSize * sizeof(float));
-		memset(conv->_tailPrecalculated[1], 0, conv->_tailBlockSize * sizeof(float));
-		conv->_backgroundProcessingInput[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_backgroundProcessingInput[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
+    if (!conv || !irL || !irR || !headBlockSize || !tailBlockSize || !irLen) return 0;
+    if (headBlockSize > tailBlockSize) {unsigned int t=headBlockSize;headBlockSize=tailBlockSize;tailBlockSize=t;}
+    // A silent kernel is valid; retain one real zero partition.
+    while(irLen>1 && fabsf(irL[irLen-1])+fabsf(irR[irLen-1])<FLT_EPSILON*2) --irLen;
+    TwoStageFFTConvolver2x2Free(conv);
+    conv->_headBlockSize=min(upper_power_of_two(headBlockSize),524288u);
+    conv->_tailBlockSize=min(upper_power_of_two(tailBlockSize),524288u);
+    const unsigned int tail=conv->_tailBlockSize;
+    if(!FFTConvolver2x2LoadImpulseResponse(&conv->_headConvolver,conv->_headBlockSize,irL,irR,min(irLen,tail)))goto allocation_failed;
+    if(irLen>tail){
+        if(!FFTConvolver2x2LoadImpulseResponse(&conv->_tailConvolver0,conv->_headBlockSize,irL+tail,irR+tail,min(irLen-tail,tail)))goto allocation_failed;
+        for(unsigned c=0;c<2;++c){
+            conv->_tailOutput0[c]=(float*)calloc(tail,sizeof(float));
+            conv->_tailPrecalculated0[c]=(float*)calloc(tail,sizeof(float));
+            conv->_tailInput[c]=(float*)calloc(tail,sizeof(float));
+            if(!conv->_tailOutput0[c] || !conv->_tailPrecalculated0[c] || !conv->_tailInput[c])goto allocation_failed;
+        }
+    }
+    if(irLen>2*tail){
+        if(!FFTConvolver2x2LoadImpulseResponse(&conv->_tailConvolver,tail,irL+2*tail,irR+2*tail,irLen-2*tail))goto allocation_failed;
+        for(unsigned c=0;c<2;++c){
+            conv->_tailOutput[c]=(float*)calloc(tail,sizeof(float));
+            conv->_tailPrecalculated[c]=(float*)calloc(tail,sizeof(float));
+            conv->_backgroundProcessingInput[c]=(float*)calloc(tail,sizeof(float));
+            if(!conv->_tailOutput[c] || !conv->_tailPrecalculated[c] || !conv->_backgroundProcessingInput[c])goto allocation_failed;
+        }
 #ifdef THREAD
-		thread_init2x2(conv);
+        if(!thread_init2x2(conv))goto allocation_failed;
 #endif
-	}
-	if (conv->_tailPrecalculated0[0] || conv->_tailPrecalculated[0])
-	{
-		conv->_tailInput[0] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-		conv->_tailInput[1] = (float*)malloc(conv->_tailBlockSize * sizeof(float));
-	}
-	conv->_tailInputFill = 0;
-	conv->_precalculatedPos = 0;
-	return 1;
+    }
+    return 1;
+allocation_failed:
+    TwoStageFFTConvolver2x2Free(conv);
+    return 0;
 }
 int TwoStageFFTConvolver1x2LoadImpulseResponse(TwoStageFFTConvolver1x2 *conv, unsigned int headBlockSize, unsigned int tailBlockSize, const float* irL, const float* irR, unsigned int irLen)
 {
@@ -1409,8 +1266,7 @@ void TwoStageFFTConvolver2x4x2Process(TwoStageFFTConvolver2x4x2 *conv, const flo
 			if (conv->_tailPrecalculated[0] && conv->_tailInputFill == conv->_tailBlockSize && conv->_backgroundProcessingInput[0])
 			{
 #ifdef THREAD
-				if (conv->shared_info.state == WORKING)
-					task_wait2x4x2(conv);
+                task_wait2x4x2(conv);
 				//        SampleBuffer::Swap(_tailPrecalculated, _tailOutput);
 				float *tmp = conv->_tailOutput[0];
 				conv->shared_info._tailOutput[0] = conv->_tailOutput[0] = conv->_tailPrecalculated[0];
@@ -1710,8 +1566,7 @@ void TwoStageFFTConvolver2x2Process(TwoStageFFTConvolver2x2 *conv, const float* 
 			if (conv->_tailPrecalculated[0] && conv->_tailInputFill == conv->_tailBlockSize && conv->_backgroundProcessingInput[0])
 			{
 #ifdef THREAD
-				if (conv->shared_info.state == WORKING)
-					task_wait2x2(conv);
+				task_wait2x2(conv);
 				//        SampleBuffer::Swap(_tailPrecalculated, _tailOutput);
 				float *tmp = conv->_tailOutput[0];
 				conv->shared_info._tailOutput[0] = conv->_tailOutput[0] = conv->_tailPrecalculated[0];

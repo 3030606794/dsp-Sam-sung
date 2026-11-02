@@ -1,6 +1,7 @@
 package me.timschneeberger.rootlessjamesdsp.interop
 
 object JdspImpResToolbox {
+    /** audioInfo: channels, working frames, legacy CRC, validity, optional original file sample rate. */
     external fun ReadImpulseResponseToFloat(
         path: String?,
         targetSampleRate: Int,

@@ -1,6 +1,8 @@
 package me.timschneeberger.rootlessjamesdsp.adapter
 
 import android.annotation.SuppressLint
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,15 +15,45 @@ import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.model.AppInfo
 
 class AppsListAdapter: RecyclerView.Adapter<AppsListAdapter.ViewHolder>(), Filterable {
-    var dataList: List<AppInfo> = emptyList()
-        @SuppressLint("NotifyDataSetChanged")
+    private data class Source(val revision: Long, val items: List<AppInfo>)
+    private data class FilteredResult(val sourceRevision: Long, val items: List<AppInfo>)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile private var source = Source(0L, emptyList())
+    @Volatile private var disposed = false
+
+    var dataList: List<AppInfo>
+        get() = source.items
         set(value) {
-            field = value
-            filteredDataList = value
-            notifyDataSetChanged()
+            val snapshot = value.toList()
+            onMain {
+                if (!disposed) {
+                    source = Source(source.revision + 1L, snapshot)
+                    replaceVisibleItems(snapshot)
+                }
+            }
         }
 
     private var filteredDataList: List<AppInfo> = emptyList()
+
+    private fun onMain(action: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) action() else mainHandler.post { action() }
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private fun replaceVisibleItems(items: List<AppInfo>) {
+        // RecyclerView must see the new count and its notification in one main-thread turn.
+        filteredDataList = items
+        notifyDataSetChanged()
+    }
+
+    fun dispose() {
+        onMain {
+            disposed = true
+            source = Source(source.revision + 1L, emptyList())
+            replaceVisibleItems(emptyList())
+            onItemClickListener = null
+        }
+    }
 
     inner class ViewHolder(rootView: ViewGroup): RecyclerView.ViewHolder(rootView), View.OnClickListener {
 
@@ -41,7 +73,9 @@ class AppsListAdapter: RecyclerView.Adapter<AppsListAdapter.ViewHolder>(), Filte
             }
 
         override fun onClick(v: View) {
-            data?.let {
+            val position = bindingAdapterPosition
+            if (position == RecyclerView.NO_POSITION) return
+            filteredDataList.getOrNull(position)?.let {
                 onItemClickListener?.onItemClick(it)
             }
         }
@@ -64,42 +98,37 @@ class AppsListAdapter: RecyclerView.Adapter<AppsListAdapter.ViewHolder>(), Filte
         )
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        if(position >= itemCount)
-            return
         holder.data = filteredDataList[position]
     }
 
     override fun getItemCount(): Int = filteredDataList.size
 
-    override fun getFilter(): Filter {
-        return object : Filter() {
+    private val appFilter = object : Filter() {
             override fun performFiltering(constraint: CharSequence?): FilterResults {
                 val charString = constraint?.toString() ?: ""
-                filteredDataList =
+                val snapshot = source
+                // Android Filter runs here on its worker thread. Never mutate the list used
+                // by getItemCount()/onBindViewHolder() before publishResults notifies the UI.
+                val filtered =
                     if (charString.isEmpty())
-                        dataList
-                    else {
-                        val filteredList = arrayListOf<AppInfo>()
-                        dataList
-                            .filter {
-                                it.appName.contains(constraint!!, true)
-                            }
-                            .forEach { filteredList.add(it) }
-                        filteredList
+                        snapshot.items
+                    else snapshot.items.filter {
+                        it.appName.contains(charString,true) || it.packageName.contains(charString,true)
                     }
-                return FilterResults().apply { values = filteredDataList }
+                return FilterResults().apply {
+                    values = FilteredResult(snapshot.revision, filtered)
+                    count = filtered.size
+                }
             }
 
-            @SuppressLint("NotifyDataSetChanged")
-            @Suppress("UNCHECKED_CAST")
             override fun publishResults(constraint: CharSequence?, results: FilterResults?) {
-
-                filteredDataList = if (results?.values == null)
-                    emptyList()
-                else
-                    results.values as List<AppInfo>
-                notifyDataSetChanged()
+                val result = results?.values as? FilteredResult ?: return
+                onMain {
+                    if (!disposed && result.sourceRevision == source.revision)
+                        replaceVisibleItems(result.items)
+                }
             }
-        }
     }
+
+    override fun getFilter(): Filter = appFilter
 }

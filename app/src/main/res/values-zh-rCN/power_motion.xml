@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="power_motion_category_title">总电源开关动效</string>
+    <string name="power_motion_enabled_title">总开关动效</string>
+    <string name="power_motion_enabled_summary">关闭后仅保留基础变色与轻微按压反馈。</string>
+    <string name="power_motion_style_title">动效风格选择</string>
+    <string-array name="power_motion_style_entries">
+        <item>全频冲击</item>
+        <item>频谱幕墙</item>
+        <item>相位交汇</item>
+        <item>信号矩阵</item>
+        <item>频带折光</item>
+        <item>声场穹顶</item>
+    </string-array>
+    <string-array name="power_motion_style_summaries">
+        <item>@string/power_motion_style_wave_summary</item>
+        <item>@string/power_motion_style_spectrum_summary</item>
+        <item>@string/power_motion_style_phase_summary</item>
+        <item>@string/power_motion_style_matrix_summary</item>
+        <item>@string/power_motion_style_refraction_summary</item>
+        <item>@string/power_motion_style_dome_summary</item>
+    </string-array>
+
+    <string name="power_motion_style_wave_summary">全频冲击 · 开启时声波扩满全屏，关闭时吸回总开关。</string>
+    <string name="power_motion_style_spectrum_summary">频谱幕墙 · 开启时频带升起铺满全屏，关闭时回落并收回总开关。</string>
+    <string name="power_motion_style_phase_summary">相位交汇 · 开启时双波交汇扩满全屏，关闭时从四周收束并合回总开关。</string>
+    <string name="power_motion_style_matrix_summary">信号矩阵 · 开启时信号逐级点亮全屏通路，关闭时沿通路退回总开关。</string>
+    <string name="power_motion_style_refraction_summary">频带折光 · 开启时频带扇叶旋展至全屏，关闭时折叠并合回总开关。</string>
+    <string name="power_motion_style_dome_summary">声场穹顶 · 开启时立体声场撑开覆盖全屏，关闭时逐层塌落并吸回总开关。</string>
+</resources>

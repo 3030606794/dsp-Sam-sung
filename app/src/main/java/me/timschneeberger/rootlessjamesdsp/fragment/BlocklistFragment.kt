@@ -8,10 +8,13 @@ import android.view.ViewGroup
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.timschneeberger.rootlessjamesdsp.MainApplication
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.adapter.AppBlocklistAdapter
@@ -28,6 +31,8 @@ import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.ge
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.showAlert
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.showYesNoAlert
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.asHtml
+import me.timschneeberger.rootlessjamesdsp.utils.AppProcessingLists
+import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.toast
 import me.timschneeberger.rootlessjamesdsp.utils.isRootless
 import me.timschneeberger.rootlessjamesdsp.utils.preferences.Preferences
 import org.koin.android.ext.android.inject
@@ -49,7 +54,9 @@ class BlocklistFragment : Fragment() {
     private val iconCache: HashMap<Int, Drawable> = hashMapOf()
 
     private lateinit var sessionRecordingPolicyManager: SessionRecordingPolicyManager
-    private val policyPollingScope = CoroutineScope(Dispatchers.Main)
+    private var appLoadJob:Job?=null
+    private var policyPollingJob:Job?=null
+    private var systemExclusionJob:Job?=null
     private var restrictedApps = arrayOf<String>()
 
     override fun onCreateView(
@@ -61,17 +68,19 @@ class BlocklistFragment : Fragment() {
 
         sessionRecordingPolicyManager = SessionRecordingPolicyManager(requireContext())
 
-        appsListFragment = AppsListFragment()
-        appListViewModel.selectedItem.observe(viewLifecycleOwner) { (appName, packageName, _, _, uid) ->
+        appsListFragment = AppsListFragment.newInstance(AppProcessingLists.Target.EXCLUDED)
+        appListViewModel.selectedItem.observe(viewLifecycleOwner) { selected ->
+            selected ?: return@observe
+            appListViewModel.clearSelection()
             // TODO merge BlockedApp and AppInfo?
-            viewModel.insert(BlockedApp(uid, packageName, appName))
+            editList {AppProcessingLists.select(it,selected,AppProcessingLists.Target.EXCLUDED)}
         }
 
         adapter = AppBlocklistAdapter()
         adapter.setOnItemClickListener {
             requireContext().showYesNoAlert(R.string.blocklist_delete_title, R.string.blocklist_delete) { confirm ->
                 if(confirm)
-                    viewModel.delete(it)
+                    editList {context->AppProcessingLists.removeExcluded(context,it)}
             }
         }
 
@@ -79,6 +88,7 @@ class BlocklistFragment : Fragment() {
         binding.recyclerview.layoutManager = LinearLayoutManager(requireContext())
 
         binding.notice.isVisible = false
+        binding.excludeSystemApps.setOnClickListener { excludeSystemApps() }
         binding.notice.setOnClickListener {
             requireContext().showAlert(
                 getString(R.string.blocklist_unsupported_apps),
@@ -87,34 +97,84 @@ class BlocklistFragment : Fragment() {
         }
         updateUnsupportedApps()
 
-        viewModel.blockedApps.observe(requireActivity()) { apps ->
-            val isEmpty = apps == null || apps.isEmpty()
-
-            // Update the cached copy of the blocked apps in the adapter.
-            apps?.let { list ->
-                list.forEach {
-                    it.appIcon = if(iconCache.containsKey(it.uid))
-                        iconCache[it.uid]
-                    else {
-                        it.packageName?.let { pkg ->
-                            val icon = requireContext().getAppIcon(pkg)
-                            icon?.let { i ->
-                                iconCache[it.uid] = i
-                            }
-                            icon
-                        }
-                    }
-                }
-                adapter.submitList(list.sortedBy { it.appName })
-            }
-            binding.recyclerview.isVisible = !isEmpty
-            binding.emptyview.isVisible = isEmpty
+        editList {
+            AppProcessingLists.normalize(it)
+            observeBlockedApps()
         }
 
         return binding.root
     }
 
+    private fun observeBlockedApps() {
+        viewModel.blockedApps.observe(viewLifecycleOwner) { apps ->
+            val isEmpty = apps == null || apps.isEmpty()
+            appLoadJob?.cancel()
+            val appContext=requireContext().applicationContext
+            val cache=iconCache.toMap()
+            val currentBinding=binding
+            binding.loader.isVisible=!isEmpty && adapter.itemCount==0
+            appLoadJob=viewLifecycleOwner.lifecycleScope.launch {
+                // PackageManager label/icon calls can involve disk/Binder; never run them
+                // in the LiveData callback while opening or scrolling this page.
+                val items=withContext(Dispatchers.IO) {
+                    apps.orEmpty().map {app->
+                        ensureActive()
+                        BlockedApp(app.uid,app.packageName,app.appName).apply {
+                            appIcon=cache[uid] ?: packageName?.let {pkg->runCatching {appContext.getAppIcon(pkg)}.getOrNull()}
+                        }
+                    }.sortedBy {it.appName}
+                }
+                if(binding !== currentBinding)return@launch
+                items.forEach {app->app.appIcon?.let {iconCache[app.uid]=it}}
+                adapter.submitList(items)
+                binding.loader.isVisible=false
+            }
+            binding.recyclerview.isVisible = !isEmpty
+            binding.emptyview.isVisible = isEmpty
+        }
+    }
+
+    private fun editList(action:suspend(android.content.Context)->Unit) {
+        val appContext=requireContext().applicationContext
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {action(appContext)}
+            catch(error:kotlinx.coroutines.CancellationException) {throw error}
+            catch(error:Exception) {context?.toast(getString(R.string.app_processing_list_save_failed))}
+        }
+    }
+
+    private fun excludeSystemApps() {
+        if (systemExclusionJob?.isActive == true) return
+        val appContext = requireContext().applicationContext
+        val ui = binding
+        ui.excludeSystemApps.isEnabled = false
+        ui.excludeSystemApps.setText(R.string.app_processing_exclude_system_busy)
+        systemExclusionJob = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val result = AppProcessingLists.excludeSystemApps(appContext)
+                if (binding === ui && view != null) {
+                    ui.excludeSystemStatus.text = getString(R.string.app_processing_exclude_system_result,
+                        result.addedCount, result.skippedSpecifiedCount)
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (binding === ui && view != null)
+                    context?.toast(getString(R.string.app_processing_list_save_failed))
+            } finally {
+                if (binding === ui && view != null) {
+                    ui.excludeSystemApps.isEnabled = true
+                    ui.excludeSystemApps.setText(R.string.app_processing_exclude_system)
+                }
+            }
+        }
+    }
+
     override fun onDestroyView() {
+        appLoadJob?.cancel()
+        systemExclusionJob?.cancel()
+        policyPollingJob?.cancel()
+        binding.recyclerview.adapter=null
         sessionRecordingPolicyManager.destroy()
         super.onDestroyView()
     }
@@ -131,7 +191,8 @@ class BlocklistFragment : Fragment() {
 
     private fun updateUnsupportedApps() {
         if(isRootless()) {
-            policyPollingScope.launch {
+            policyPollingJob?.cancel()
+            policyPollingJob=viewLifecycleOwner.lifecycleScope.launch {
                 val isAllowed = preferences.get<Boolean>(R.string.key_session_exclude_restricted)
 
                 restrictedApps = if (!isAllowed) {

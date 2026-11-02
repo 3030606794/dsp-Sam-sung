@@ -35,6 +35,7 @@ typedef struct
 	float threshold;
 	float relCoef;
 	float envOverThreshold;
+	double releaseMs;
 } JLimiter;
 #define FFTSIZE_DRS (8192)
 #define ANALYSIS_OVERLAP_DRS_MAX (8)
@@ -134,6 +135,23 @@ typedef struct str_dynfreqdomain
 	float real[2][HALFWNDLEN_DRS], imag[2][HALFWNDLEN_DRS];
 	float specHannReal[2][PREPAD + HALFWNDLEN_DRS + POSPAD - 1], specHannImag[2][PREPAD + HALFWNDLEN_DRS + POSPAD - 1];
 	cplx tmp[2][PREPAD + HALFWNDLEN_DRS + POSPAD - 1];
+	// Optional professional gain controller. Disabled fields never alter the
+	// legacy expressions or background estimator, preserving ui35 audio.
+	int proCore, proTime, proDetect, proLinkMax;
+	float proAmount, proBoost, proCut, proRelative, proKnee, proFloor;
+	float proLow, proHigh, proInputDb, proAttack, proRelease;
+	unsigned int proHold;
+	float proFrequency[HALFWNDLEN_DRS], proGain[HALFWNDLEN_DRS];
+	unsigned int proHeld[HALFWNDLEN_DRS];
+	int proLimits, proTrackRaw, proExact;
+	float proDetector[HALFWNDLEN_DRS];
+	uint64_t proInputSamples;
+	int64_t proOutputSource[2];
+	float proRawHistory[2][16384];
+	float* proRawOutput[2];
+	unsigned int proRawDelay;
+
+
 } FFTCompander;
 typedef struct
 {
@@ -173,6 +191,9 @@ typedef struct
 	float boostdB;
 	double fs;
 	float gainSmoothingFactor, minusgainSmoothingFactor;
+	float minFreq, maxFreq, q, currentQ;
+	float trackingMs, riseMs, fallMs, fallSmoothingFactor;
+	int initialized, advanced, processed;
 	StateVariable2ndOrder svf[2];
 	integerDelayLine dL[2];
 } DBB;
@@ -359,6 +380,23 @@ typedef struct
 	float erefwet;
 	float dry;
 } sf_reverb_state_st;
+// Dedicated professional early history. Original fixed legacy buffers remain unchanged.
+#define SF_ROOM_EARLY_CAPACITY 24000
+typedef struct {
+    sf_rv_oversample_st rawL, rawR;
+    sf_rv_delay_st rawDelayL, rawDelayR;
+    float earlyHistory[2][SF_ROOM_EARLY_CAPACITY];
+    int earlyPosition, effectiveTaps[2][18];
+    float earlyRatio, targetEarlyRatio, smoothing;
+} sf_room_split_st;
+extern void sf_room_split_init(sf_room_split_st*, const sf_reverb_state_st*, int);
+extern void sf_room_retune(sf_reverb_state_st*, float, float, float, int, float);
+extern void sf_room_track_original(sf_room_split_st*, float, float);
+/* Same original tracker, optionally exposing its exact full-rate dry contribution. */
+extern void sf_room_track_original_observed(sf_room_split_st*, float, float, float*, float);
+extern void sf_room_process_parts(sf_reverb_state_st*, sf_room_split_st*, float, float, float*);
+extern void sf_reverb_process(sf_reverb_state_st*, float, float, float*, float*);
+
 typedef enum
 {
 	SF_REVERB_PRESET_DEFAULT,
@@ -383,21 +421,35 @@ typedef enum
 } sf_reverb_preset;
 extern void sf_advancereverb(sf_reverb_state_st *rv, int rate, int oversamplefactor, float ertolate, float erefwet, float dry, float ereffactor, float erefwidth, float width, float wet, float wander, float bassb, float spin, float inputlpf, float basslpf, float damplpf, float outputlpf, float rt60, float delay);
 
+#include "Effects/stereoWidthControl.h"
 typedef struct
 {
+	StereoWidthControl professionalWidth;
 	char subband[2][getMemSizeWarpedPFB(5, 2)];
 	float emaAlpha[5];
 	float sumStates[5];
 	float diffStates[5];
 	float mix, minusMix, gain;
 } stereoEnhancement;
+typedef struct LiveProgParameter
+{
+	char name[64];
+	float value;
+	struct LiveProgParameter *next;
+} LiveProgParameter;
 typedef struct
 {
 	NSEEL_VMCTX vm;
-	NSEEL_CODEHANDLE codehandleInit, codehandleProcess;
+	NSEEL_CODEHANDLE codehandleInit, codehandleSlider, codehandleProcess;
 	float *vmFs, *input1, *input2;
 	int compileSucessfully;
     int active;
+	char *sourceInit, *sourceSlider, *sourceProcess;
+	LiveProgParameter *parameters;
+	int lastCompileResult;
+	float compiledSampleRate;
+    uint32_t sourceHash;
+	char lastError[256];
 } LiveProg;
 typedef struct
 {
@@ -409,6 +461,9 @@ typedef struct
 	char *oldFile;
 	int usedSOSCount;
 	DirectForm2 *sosPointer;
+	DirectForm2 *sos441, *sos480;
+	int fileSOSCount;
+	void *professional;
 } DDC;
 /* Minimum/maximum cut frequency (Hz) */
 /* bs2b_set_level_fcut() */
@@ -444,11 +499,14 @@ struct dspsys;
 typedef struct
 {
 	int mode; // 0: BS2B Lv 1, 1: BS2B Lv 2, 2: HRTF crossfeed, 2: HRTF surround 1, 2: HRTF surround 2, 2: HRTF surround 3
+    void* professional; // Opaque Fusion state; keep one struct layout in JNI and host harnesses.
 	t_bs2bdp bs2b[2];
 	FFTConvolver2x4x2 *conv[3];
 	TwoStageFFTConvolver2x4x2 *convLong_T_S;
 	FFTConvolver2x4x2 *convLong_S_S;
 	void(*process)(struct dspsys *, size_t);
+    float preparedRate;
+    unsigned int preparedBlock, preparedShortLength, preparedLongLength;
 } Crossfeed;
 typedef struct dspsys dspsys;
 typedef struct
@@ -508,6 +566,7 @@ typedef struct dspsys
 	// Effect
 	// Compressor
 	int compEnabled, compForceRefresh;
+	void* companderNative;
 	FFTCompander comp;
 	// Bass boost
 	int bassBoostEnabled;
@@ -517,12 +576,15 @@ typedef struct dspsys
 	MultimodalEQ mEQ;
 	// Reverb
 	int reverbEnabled;
+	void* roomReverb;
+	int roomReverbBase;
 	sf_reverb_state_st reverb;
 	// Stereo enhancement
 	int sterEnhEnabled;
 	stereoEnhancement sterEnh;
 	// Vacuum tube
 	int tubeEnabled;
+	void* timbre;
 	VacuumTube tube;
 	// Crossfeed
 	int crossfeedEnabled, crossfeedForceRefresh;
@@ -533,9 +595,13 @@ typedef struct dspsys
 	// Convolver
 	int convolverEnabled;
 	Convolver1D conv;
+	void *convolverControl;
 	// Live programmable effect
 	int liveprogEnabled;
 	LiveProg eel;
+    void *liveprogCapture;
+    // Read-only module-boundary observer, allocated outside the audio callback.
+    void *equalizerCapture;
 	// Arbitrary magnitude response
 	int arbitraryMagEnabled, arbMagForceRefresh;
 	arbitraryMagnitude arbMag;
@@ -600,14 +666,29 @@ extern void CompressorSetGain(JamesDSPLib *jdsp, double *freq, double *gains, ch
 extern void CompressorEnable(JamesDSPLib *jdsp, char enable);
 extern void CompressorDisable(JamesDSPLib *jdsp);
 extern void CompressorProcess(JamesDSPLib *jdsp, size_t n);
+extern void CompressorLegacyConstructor(JamesDSPLib *jdsp);
+extern void CompressorLegacyDestructor(JamesDSPLib *jdsp);
+extern void CompressorLegacySetParam(JamesDSPLib *jdsp, float fgt_facT, int granularity, int tfresolution, char forceRefresh);
+extern void CompressorLegacySetGain(JamesDSPLib *jdsp, double *freq, double *gains, char cpy);
+extern void CompressorLegacyEnable(JamesDSPLib *jdsp, char enable);
+extern void CompressorLegacyDisable(JamesDSPLib *jdsp);
+extern void CompressorLegacyProcess(JamesDSPLib *jdsp, size_t n);
+extern void FFTCompanderConfigure(FFTCompander*, float, float, int, int);
+extern void FFTCompanderCurve(FFTCompander*, float, const double*, const double*);
+extern void FFTCompanderRender(FFTCompander*, float*, float*, size_t, float*, float*);
+
+
 // Bass boost
 extern void BassBoostEnable(JamesDSPLib *jdsp);
 extern void BassBoostDisable(JamesDSPLib *jdsp);
 extern void BassBoostConstructor(JamesDSPLib *jdsp);
 extern void BassBoostSetParam(JamesDSPLib *jdsp, float maxG);
+// Atomic seven-word bass packet; returns 0 for invalid input without any mutation.
+extern int BassBoostSetAdvanced(JamesDSPLib *jdsp, const int32_t values[7]);
 extern void BassBoostProcess(JamesDSPLib *jdsp, size_t n);
 // Reverb
-extern void Reverb_SetParam(JamesDSPLib *jdsp, int presets);
+extern int Reverb_SetParam(JamesDSPLib *jdsp, int presets);
+extern void ReverbRefresh(JamesDSPLib *jdsp);
 extern void ReverbEnable(JamesDSPLib *jdsp);
 extern void ReverbDisable(JamesDSPLib *jdsp);
 extern void ReverbProcess(JamesDSPLib *jdsp, size_t n);
@@ -615,6 +696,7 @@ extern void ReverbProcess(JamesDSPLib *jdsp, size_t n);
 extern void StereoEnhancementDestructor(JamesDSPLib *jdsp);
 extern void StereoEnhancementConstructor(JamesDSPLib *jdsp);
 extern void StereoEnhancementRefresh(JamesDSPLib *jdsp);
+extern void StereoEnhancementRefreshLocked(JamesDSPLib *jdsp); // Caller owns the DSP mutex.
 extern void StereoEnhancementSetParam(JamesDSPLib *jdsp, float mix);
 extern void StereoEnhancementEnable(JamesDSPLib *jdsp);
 extern void StereoEnhancementDisable(JamesDSPLib *jdsp);
@@ -629,6 +711,13 @@ extern const char* checkErrorCode(int errCode);
 extern void LiveProgConstructor(JamesDSPLib *jdsp);
 extern void LiveProgDestructor(JamesDSPLib *jdsp);
 extern int LiveProgStringParser(JamesDSPLib *jdsp, char *eelCode);
+extern int LiveProgSetParameter(JamesDSPLib *jdsp, const char *name, double value);
+extern int LiveProgRefreshLocked(JamesDSPLib *jdsp);
+extern int LiveProgGetStatus(JamesDSPLib *jdsp);
+extern const char *LiveProgGetLastError(JamesDSPLib *jdsp);
+#ifdef DSP_FUSION_TEST_ALLOCATIONS
+extern void LiveProgFailNextPreparationForTest(void);
+#endif
 extern void LiveProgEnable(JamesDSPLib *jdsp);
 extern void LiveProgDisable(JamesDSPLib *jdsp);
 extern void LiveProgProcess(JamesDSPLib *jdsp, size_t n);
@@ -638,11 +727,13 @@ extern void DDCDestructor(JamesDSPLib *jdsp);
 extern int DDCEnable(JamesDSPLib *jdsp, char enable);
 extern void DDCDisable(JamesDSPLib *jdsp);
 extern int DDCStringParser(JamesDSPLib *jdsp, char *newStr);
+extern int DDCRefresh(JamesDSPLib *jdsp, char *unused);
 extern void DDCProcess(JamesDSPLib *jdsp, size_t n);
 // Crossfeed
 extern void CrossfeedConstructor(JamesDSPLib *jdsp);
 extern void CrossfeedDestructor(JamesDSPLib *jdsp);
 extern void CrossfeedEnable(JamesDSPLib *jdsp, char enable);
+extern void CrossfeedEnableLocked(JamesDSPLib *jdsp, char enable); // Caller owns jdsp mutex.
 extern void CrossfeedDisable(JamesDSPLib *jdsp);
 extern void CrossfeedChangeMode(JamesDSPLib *jdsp, int nMode);
 extern void CrossfeedProcess(JamesDSPLib *jdsp, size_t n);
@@ -657,6 +748,7 @@ extern void ArbitraryResponseEqualizerConstructor(JamesDSPLib *jdsp);
 extern void ArbitraryResponseEqualizerDestructor(JamesDSPLib *jdsp);
 extern void ArbitraryResponseEqualizerStringParser(JamesDSPLib *jdsp, char *stringEq);
 extern void ArbitraryResponseEqualizerEnable(JamesDSPLib *jdsp, char enable);
+extern void ArbitraryResponseEqualizerEnableLocked(JamesDSPLib *jdsp, char enable); // Caller owns the DSP mutex.
 extern void ArbitraryResponseEqualizerDisable(JamesDSPLib *jdsp);
 extern void ArbitraryResponseEqualizerProcess(JamesDSPLib *jdsp, size_t n);
 // FIR Equalizer

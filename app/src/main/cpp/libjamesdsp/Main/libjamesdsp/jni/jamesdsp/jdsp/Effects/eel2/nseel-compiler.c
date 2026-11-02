@@ -3328,6 +3328,40 @@ static float NSEEL_CGEN_CALL _eel_iirBandSplitterInit(void *opaque, INT_PTR num_
 	free(ptr);
 	return (float)(1 + requireMemSize / sizeof(float));
 }
+// Alter only coefficients. IIRBandSplitterInit explicitly clears delay states
+// and is therefore unsuitable for a LiveProg @slider parameter update.
+static float NSEEL_CGEN_CALL _eel_iirBandSplitterSetFrequency(void *opaque, INT_PTR num_param, float **parms)
+{
+    if (num_param < 3 || num_param > 9 || !isfinite(*parms[0]) || *parms[0] < 0 ||
+        !isfinite(*parms[1]) || *parms[1] <= 0) return -1;
+    const size_t offset = (size_t)*parms[0];
+    const size_t sizes[] = {sizeof(LinkwitzRileyCrossover), sizeof(ThreeBandsCrossover),
+        sizeof(FourBandsCrossover), sizeof(FiveBandsCrossover), sizeof(SixBandsCrossover),
+        sizeof(SevenBandsCrossover), sizeof(EightBandsCrossover)};
+    const size_t words = 1 + sizes[num_param - 3] / sizeof(float);
+    if (offset > NSEEL_RAM_ITEMSPERBLOCK - words) return -1;
+    double cutoff[7];
+    for (int i = 2; i < num_param; ++i) {
+        if (!isfinite(*parms[i]) || *parms[i] <= 0) return -1;
+        // Retain requested controls across rate changes, bound actual filters.
+        cutoff[i - 2] = fmin(*parms[i], *parms[1] * .49);
+    }
+    compileContext *ctx = (compileContext *)opaque;
+    float *data = ctx->ram_state + offset;
+    if (data[0] != (float)(num_param - 1)) return -1;
+    void *state = data + 1;
+    const double fs = *parms[1];
+    switch (num_param) {
+    case 3: LWZRCalculateCoefficients((LinkwitzRileyCrossover *)state, fs, cutoff[0], 0); break;
+    case 4: init3BandsCrossover((ThreeBandsCrossover *)state, fs, cutoff[0], cutoff[1]); break;
+    case 5: init4BandsCrossover((FourBandsCrossover *)state, fs, cutoff[0], cutoff[1], cutoff[2]); break;
+    case 6: init5BandsCrossover((FiveBandsCrossover *)state, fs, cutoff[0], cutoff[1], cutoff[2], cutoff[3]); break;
+    case 7: init6BandsCrossover((SixBandsCrossover *)state, fs, cutoff[0], cutoff[1], cutoff[2], cutoff[3], cutoff[4]); break;
+    case 8: init7BandsCrossover((SevenBandsCrossover *)state, fs, cutoff[0], cutoff[1], cutoff[2], cutoff[3], cutoff[4], cutoff[5]); break;
+    case 9: init8BandsCrossover((EightBandsCrossover *)state, fs, cutoff[0], cutoff[1], cutoff[2], cutoff[3], cutoff[4], cutoff[5], cutoff[6]); break;
+    }
+    return (float)words;
+}
 static float NSEEL_CGEN_CALL _eel_iirBandSplitterClearState(float *blocks, float *start)
 {
 	float *tdsbStruct = __NSEEL_RAMAlloc(blocks, (uint64_t)(uint32_t)(*start + NSEEL_CLOSEFACTOR));
@@ -4619,6 +4653,7 @@ static functionType fnTable1[] = {
   {"roots",_asm_generic2parm_retd,_asm_generic2parm_retd_end,5 | BIF_TAKES_VARPARM_EX | BIF_RETURNSONSTACK,{(void**)&_eel_roots},NSEEL_PProc_THIS},
   {"cplxpair",_asm_generic2parm_retd,_asm_generic2parm_retd_end,5 | BIF_TAKES_VARPARM_EX | BIF_RETURNSONSTACK,{(void**)&_eel_cplxpair},NSEEL_PProc_THIS},
   {"IIRBandSplitterInit",_asm_generic2parm_retd,_asm_generic2parm_retd_end,3 | BIF_TAKES_VARPARM | BIF_RETURNSONSTACK,{(void**)&_eel_iirBandSplitterInit},NSEEL_PProc_THIS},
+  {"IIRBandSplitterSetFrequency",_asm_generic2parm_retd,_asm_generic2parm_retd_end,3 | BIF_TAKES_VARPARM | BIF_RETURNSONSTACK,{(void**)&_eel_iirBandSplitterSetFrequency},NSEEL_PProc_THIS},
   {"IIRBandSplitterClearState",_asm_generic1parm_retd,_asm_generic1parm_retd_end, 1 | BIF_RETURNSONSTACK,{(void**)&_eel_iirBandSplitterClearState},NSEEL_PProc_RAM},
   {"IIRBandSplitterProcess",_asm_generic2parm_retd,_asm_generic2parm_retd_end,2 | BIF_TAKES_VARPARM | BIF_RETURNSONSTACK,{(void**)&_eel_iirBandSplitterProcess},NSEEL_PProc_THIS},
   {"decodeFLACFromFile",_asm_generic2parm_retd,_asm_generic2parm_retd_end,4 | BIF_TAKES_VARPARM | BIF_RETURNSONSTACK,{(void**)&_eel_flacDecodeFile},NSEEL_PProc_THIS},

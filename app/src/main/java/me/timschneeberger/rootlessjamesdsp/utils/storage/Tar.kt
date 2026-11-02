@@ -18,9 +18,18 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 
 object Tar {
     private const val FILE_METADATA = "metadata"
+    // jtar's header API stores one character per raw byte; bridge real UTF-8 paths explicitly.
+    private fun encodedName(name: String) = name.toByteArray(Charsets.UTF_8).toString(Charsets.ISO_8859_1)
+    private fun decodedName(raw: String): String = try {
+        val bytes = ByteArray(raw.length) { raw[it].code.toByte() }
+        Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
+    } catch (_: java.nio.charset.CharacterCodingException) { raw }
 
     /**
      * Create tar composer
@@ -47,7 +56,7 @@ object Tar {
                 return false
             }
 
-            stream.putNextEntry(TarEntry(file, (entryPath ?: file.name)))
+            stream.putNextEntry(TarEntry(file, encodedName(entryPath ?: file.name)))
             BufferedInputStream(FileInputStream(file)).use { origin ->
                 var count: Int
                 val data = ByteArray(2048)
@@ -82,7 +91,7 @@ object Tar {
             TarInputStream(BufferedInputStream(inStream)).use { tis ->
                 var entry: TarEntry?
                 while (tis.nextEntry.also { entry = it } != null) {
-                    val entryName = entry?.name
+                    val entryName = entry?.name?.let(::decodedName)
                     entryName ?: break
 
                     if (!shouldExtract(entryName) && entryName != FILE_METADATA) {
@@ -126,11 +135,13 @@ object Tar {
                 process { stream, name ->
                     var count: Int
                     val data = ByteArray(2048)
-                    // create subdirectories in archive entry name
-                    File(targetFolder.absolutePath + "/" + name).parentFile?.mkdirs()
-                    BufferedOutputStream(FileOutputStream(
-                        targetFolder.absolutePath + "/" + name
-                    )).use { dest ->
+                    val root = targetFolder.canonicalFile
+                    val destination = File(targetFolder, name).canonicalFile
+                    if (name.contains('\\') || name.startsWith('/') || Regex("^[A-Za-z]:").containsMatchIn(name) ||
+                        !destination.path.startsWith(root.path + File.separator))
+                        throw IOException("Archive entry escapes extraction directory")
+                    destination.parentFile?.mkdirs()
+                    BufferedOutputStream(FileOutputStream(destination)).use { dest ->
                         while (stream.read(data).also { count = it } != -1) {
                             if (name == FILE_METADATA)
                                 metadataBytes.write(data, 0, count)

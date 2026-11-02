@@ -47,13 +47,20 @@ open class DropDownPreference(
 
     override fun setEntries(entries: Array<CharSequence?>) {
         super.setEntries(entries)
+        updateSelectedSummary()
+        createMenu()
+    }
+
+    override fun setEntryValues(entryValues: Array<CharSequence?>) {
+        super.setEntryValues(entryValues)
+        updateSelectedSummary()
         createMenu()
     }
 
     private fun createMenu() {
         mPopup = mRoot?.let { PopupMenu(mContext, it) }
 
-        entries.forEachIndexed { index, s ->
+        entries?.forEachIndexed { index, s ->
             mPopup?.menu?.add(Menu.NONE, index, Menu.CATEGORY_CONTAINER, s)
         }
 
@@ -72,18 +79,34 @@ open class DropDownPreference(
     }
 
     override fun setValue(value: String?) {
-        val index = entryValues?.indexOf(value) ?: return
-        if(!isStatic)
-            summary = if(index < 0) mContext.getString(R.string.value_not_set) else entries[index]
         super.setValue(value)
+        updateSelectedSummary()
     }
 
     override fun setValueIndex(index: Int) {
-        value = entryValues[index].toString()
+        entryValues?.getOrNull(index)?.let { value = it.toString() }
+    }
+
+    /** Reflect another parameter editor's committed value without creating another edit. */
+    fun setValueSilently(value: String?) {
+        val persistent = isPersistent
+        isPersistent = false
+        try {
+            setValue(value)
+        } finally {
+            isPersistent = persistent
+        }
+    }
+
+    private fun updateSelectedSummary() {
+        if (isStatic) return
+        val index = entryValues?.indexOf(value) ?: -1
+        summary = entries?.getOrNull(index) ?: mContext.getString(R.string.value_not_set)
     }
 
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
         mRoot = holder.itemView
+        updateSelectedSummary()
         createMenu()
 
         super.onBindViewHolder(holder)
