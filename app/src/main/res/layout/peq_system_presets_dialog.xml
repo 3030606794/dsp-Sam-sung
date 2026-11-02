@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp">
+    <TextView android:id="@+id/peq_system_presets_count" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:textSize="13sp" />
+    <com.google.android.material.textfield.TextInputEditText
+        android:id="@+id/peq_system_presets_search" android:layout_width="match_parent"
+        android:layout_height="48dp" android:inputType="text" android:maxLines="1"
+        android:singleLine="true" android:hint="@string/peq_system_presets_search" />
+    <ListView android:id="@+id/peq_system_presets_list" android:layout_width="match_parent"
+        android:layout_height="360dp" android:layout_weight="1" android:dividerHeight="1dp" />
+    <TextView android:id="@+id/peq_system_presets_empty" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:padding="12dp" android:gravity="center"
+        android:text="@string/peq_system_presets_empty" android:visibility="gone" />
+</LinearLayout>

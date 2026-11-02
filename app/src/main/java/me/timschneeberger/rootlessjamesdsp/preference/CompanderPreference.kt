@@ -8,11 +8,21 @@ import androidx.preference.PreferenceViewHolder
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.databinding.PreferenceCompanderBinding
 import me.timschneeberger.rootlessjamesdsp.view.CompanderSurface
+import me.timschneeberger.rootlessjamesdsp.fusion.CompanderParameters
 
 class CompanderPreference : DialogPreference {
 
     private var companderView: CompanderSurface? = null
     var initialValue: String = ""
+    /** Keep the original dialog and storage while using a compact text entry in the professional list. */
+    var showInlineGraph: Boolean = true
+        set(value) {
+            if (field == value) return
+            field = value
+            companderView = null
+            layoutResource = if (value) R.layout.preference_compander else androidx.preference.R.layout.preference
+            notifyChanged()
+        }
 
     constructor(
         context: Context, attrs: AttributeSet?,
@@ -39,7 +49,7 @@ class CompanderPreference : DialogPreference {
     }
 
     override fun onSetInitialValue(defaultValue: Any?) {
-        initialValue = getPersistedString(defaultValue as? String ?: "")
+        initialValue = sharedPreferences?.all?.get(key) as? String ?: (defaultValue as? String ?: "")
     }
 
     override fun onGetDefaultValue(a: TypedArray, index: Int): Any {
@@ -49,21 +59,23 @@ class CompanderPreference : DialogPreference {
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
         super.onBindViewHolder(holder)
 
+        if (!showInlineGraph) {
+            companderView = null
+            return
+        }
         companderView = PreferenceCompanderBinding.bind(holder.itemView).layoutEqualizer
+        companderView?.alpha=if(isEnabled)1f else .38f
         setEqualizerViewValues(initialValue)
     }
 
     fun updateFromPreferences() {
-        initialValue = getPersistedString(initialValue)
+        initialValue = sharedPreferences?.all?.get(key) as? String ?: initialValue
         setEqualizerViewValues(initialValue)
     }
 
     private fun setEqualizerViewValues(value: String) {
-        value
-            .split(";")
-            .drop(7)
-            .dropLastWhile(String::isEmpty)
-            .map(String::toDoubleOrNull)
-            .forEachIndexed { index, s -> companderView?.setBand(index, s ?: 0.0) }
+        val curve=CompanderParameters.parseCurve(value) ?: return
+        companderView?.setFrequencies(curve.frequencies.toDoubleArray())
+        curve.coefficients.forEachIndexed {index,n->companderView?.setBand(index,n)}
     }
 }

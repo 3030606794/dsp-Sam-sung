@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="author_donation_title">打赏作者</string>
+    <string name="author_donation_summary">支持作者，感谢有你</string>
+    <string name="author_donation_scan_hint">微信扫一扫</string>
+    <string name="author_donation_qr_description">作者提供的打赏二维码</string>
+    <string name="author_donation_close">关闭</string>
+</resources>

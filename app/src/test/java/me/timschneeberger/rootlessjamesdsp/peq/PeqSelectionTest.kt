@@ -176,40 +176,63 @@ class PeqSelectionTest {
     }
 
     @Test fun selectedQualityUpdatesUseTheExistingQRangeAndRejectOutOfRangeValues() {
-        val ids = setOf("b", "c")
-        val result = PeqSelection.update(state, ids) {
-            PeqBulkParameters.quality(it, PeqQualityDisplay.Q, state.qRange)
-        }
-        assertEquals(state.copy(bands = state.bands.map {
-            if (it.id in ids) it.copy(q = state.qRange, qualityDisplay = PeqQualityDisplay.Q) else it
-        }), result)
-        assertThrows(IllegalArgumentException::class.java) {
-            PeqSelection.update(state, ids) {
-                PeqBulkParameters.quality(it, PeqQualityDisplay.Q, state.qRange + 0.001)
+        val before = state.copy(bands = state.bands.toList())
+        for (scope in PeqSelectionScope.entries) {
+            val ids = PeqSelection.targets(state, setOf("b", "c"), scope)
+            val result = PeqSelection.update(state, ids) {
+                PeqBulkParameters.quality(it, PeqQualityDisplay.Q, state.qRange)
             }
+            assertEquals(state.copy(bands = state.bands.map {
+                if (it.id in ids && it.qualityDisplay == PeqQualityDisplay.Q) it.copy(q = state.qRange) else it
+            }), result)
+            // The selected BW card and every card outside this scope remain completely unchanged.
+            state.bands.forEachIndexed { index, band ->
+                if (band.id !in ids || band.qualityDisplay != PeqQualityDisplay.Q)
+                    assertEquals(band, result.bands[index])
+            }
+            var committed = state
+            assertThrows(IllegalArgumentException::class.java) {
+                committed = PeqSelection.update(state, ids) {
+                    PeqBulkParameters.quality(it, PeqQualityDisplay.Q, state.qRange + 0.001)
+                }
+            }
+            assertSame(state, committed)
+            assertEquals(before, state)
         }
     }
 
     @Test fun selectedBandwidthRangeUsesOnlyTargetFrequenciesAndFailureIsAtomic() {
         // BW 2 is valid for low-frequency targets but below minimum Q at 20 kHz.
-        val ids = setOf("a", "b")
-        val range = PeqBulkParameters.bandwidthRange(PeqSelection.snapshot(state, ids))
+        val mixed = state.copy(bands = state.bands.map {
+            it.copy(qualityDisplay = if (it.id == "c") PeqQualityDisplay.Q else PeqQualityDisplay.BW)
+        })
+        val ids = PeqSelection.targets(mixed, setOf("d"), PeqSelectionScope.EXCLUDED)
+        val bandwidthIds = mixed.bands.filter { it.id in ids && it.qualityDisplay == PeqQualityDisplay.BW }
+            .mapTo(hashSetOf()) { it.id }
+        assertEquals(setOf("a", "b"), bandwidthIds)
+        val range = PeqBulkParameters.bandwidthRange(PeqSelection.snapshot(mixed, bandwidthIds))
         assertTrue(2.0 in range)
-        assertFalse(2.0 in PeqBulkParameters.bandwidthRange(state))
-        val result = PeqSelection.update(state, ids) {
+        assertFalse(2.0 in PeqBulkParameters.bandwidthRange(mixed))
+        val result = PeqSelection.update(mixed, ids) {
             PeqBulkParameters.quality(it, PeqQualityDisplay.BW, 2.0)
         }
         for (index in 0..1) {
-            assertEquals(PeqResponse.qFromBandwidth(2.0, state.bands[index].frequency), result.bands[index].q, 0.0)
+            assertEquals(PeqResponse.qFromBandwidth(2.0, mixed.bands[index].frequency), result.bands[index].q, 0.0)
             assertEquals(PeqQualityDisplay.BW, result.bands[index].qualityDisplay)
         }
-        assertEquals(state.bands.drop(2), result.bands.drop(2))
-        val before = state.copy(bands = state.bands.toList())
+        assertEquals(mixed.copy(bands = mixed.bands.map {
+            if (it.id in bandwidthIds) it.copy(q = PeqResponse.qFromBandwidth(2.0, it.frequency)) else it
+        }), result)
+        // The Q card is inside the scope, while the high-frequency BW card is outside it.
+        assertEquals(mixed.bands.drop(2), result.bands.drop(2))
+        val before = mixed.copy(bands = mixed.bands.toList())
+        var committed = mixed
         assertThrows(IllegalArgumentException::class.java) {
-            PeqSelection.update(state, setOf("b", "d")) {
+            committed = PeqSelection.update(mixed, setOf("b", "c", "d")) {
                 PeqBulkParameters.quality(it, PeqQualityDisplay.BW, 2.0)
             }
         }
-        assertEquals(before, state)
+        assertSame(mixed, committed)
+        assertEquals(before, mixed)
     }
 }

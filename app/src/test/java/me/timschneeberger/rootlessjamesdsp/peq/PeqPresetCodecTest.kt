@@ -7,12 +7,12 @@ import java.util.UUID
 
 /** Pure format validation, independent of Android file access and UI. */
 class PeqPresetCodecTest {
-    private val valid = PeqPresetCodec.encode(listOf(PeqPreset(UUID.randomUUID().toString(), "耳机", PeqModel.defaultState(170))))
+    private val valid = PeqPresetCodec.encode(listOf(PeqPreset(UUID.randomUUID().toString(), "耳机", PeqModel.defaultState(130))))
     private fun replaceItems(items: JsonArray): String = JsonObject(Json.parseToJsonElement(valid).jsonObject +
         ("presets" to items)).toString()
 
     @Test fun singleAndTwentyBankBundlesRoundTripAllFieldsWithoutExposingLocalIdentities() {
-        val state = PeqModel.defaultState(170).copy(gainRange = 83.0, gainStep = 1.5,
+        val state = PeqModel.defaultState(130).copy(gainRange = 83.0, gainStep = 1.5,
             qStep = 17.75, qRange = 0.25, frequencyStep = 333.5, pinResponse = false, showQSlider = true, showFrequencySlider = true)
         val presets = (1..20).map { PeqPreset(UUID.randomUUID().toString(), "配置 $it", state) }
         val encoded = PeqPresetCodec.encode(presets)

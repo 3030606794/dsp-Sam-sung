@@ -36,7 +36,7 @@ double Harmonic::Process(double sample) {
             (this->coeffs[9] + sample *
             (this->coeffs[10])))))))))));
 
-    this->prevOut = (this->lastProcessed + this->prevOut * 0.999) - prevLast;
+    this->prevOut = (this->lastProcessed + this->prevOut * dcPole) - prevLast;
 
     if (this->sampleCounter < this->biggestCoeff) {
         this->sampleCounter++;
@@ -56,6 +56,9 @@ void Harmonic::SetHarmonics(const float *coefficients) {
     UpdateCoeffs(coefficients);
     Reset();
 }
+void Harmonic::SetOversampling(unsigned factor) {
+    oversampling=factor;dcPole=factor==1?.999:std::pow(.999,1.0/factor);
+}
 
 void Harmonic::UpdateCoeffs(const float *coefficients) {
     float unkarr1[11];
@@ -72,7 +75,7 @@ void Harmonic::UpdateCoeffs(const float *coefficients) {
             biggestCoeffVal = absCoeffVal;
         }
     }
-    this->biggestCoeff = (uint32_t) (biggestCoeffVal * 10000.0);
+    this->biggestCoeff = (uint32_t) (biggestCoeffVal * 10000.0) * oversampling;
 
     memcpy(unkarr1 + 1, coefficients, 10 * sizeof(float));
 

@@ -9,14 +9,12 @@ import me.timschneeberger.rootlessjamesdsp.utils.isRoot
 
 class SettingsAboutFragment : SettingsBaseFragment() {
 
-    private val version by lazy { findPreference<Preference>(getString(R.string.key_credits_version)) }
     private val buildInfo by lazy { findPreference<Preference>(getString(R.string.key_credits_build_info)) }
     private val googlePlay by lazy { findPreference<Preference>(getString(R.string.key_credits_google_play)) }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.app_about_preferences, rootKey)
 
-        version?.summary = BuildConfig.VERSION_NAME
         buildInfo?.isVisible = BuildConfig.DEBUG || BuildConfig.PREVIEW || isPlugin()
         val type = if(BuildConfig.PREVIEW)
             "Preview"

@@ -2,6 +2,8 @@ package me.timschneeberger.rootlessjamesdsp.peq
 
 import java.util.UUID
 import kotlin.math.abs
+import kotlin.math.asinh
+import kotlin.math.ln
 import kotlin.math.pow
 
 enum class PeqFilterType(val wireId: Int, val usesGain: Boolean) {
@@ -30,22 +32,28 @@ data class PeqBand(
 data class PeqState(
     val bands: List<PeqBand>,
     val gainRange: Double = 18.0,
-    val gainStep: Double = 0.1,
-    val showQSlider: Boolean = false,
-    val showFrequencySlider: Boolean = false,
-    val qStep: Double = 0.01,
+    val gainStep: Double = 0.5,
+    val showQSlider: Boolean = true,
+    val showFrequencySlider: Boolean = true,
+    val qStep: Double = 0.5,
     val frequencyStep: Double = 1.0,
     val pinResponse: Boolean = true,
-    val qRange: Double = 100.0
+    val qRange: Double = PeqModel.MAX_Q,
+    val bwStep: Double = 0.01,
+    val graphMinFrequency: Double = 1.0,
+    val graphMaxFrequency: Double = PeqModel.MAX_FREQUENCY
 )
 
 object PeqModel {
-    const val MAX_BANDS = 170
-    const val MIN_FREQUENCY = 20.0
-    const val MAX_FREQUENCY = 20000.0
+    const val MAX_BANDS = 130
+    const val MIN_FREQUENCY = 1.0
+    const val MAX_FREQUENCY = 768000.0
+    const val DEFAULT_MAX_FREQUENCY = 20000.0
     const val MAX_GAIN = 100.0
-    const val MIN_Q = 0.1
-    const val MAX_Q = 100.0
+    const val MIN_Q = 0.0001
+    const val MAX_Q = 30000.0
+    const val MIN_BW = 0.0001
+    val MAX_BW: Double = 2.0 * asinh(1.0 / (2.0 * MIN_Q)) / ln(2.0)
     const val DEFAULT_Q = 0.7071067811865476
 
     /** A newly added 0 Hz band is an unset placeholder, not a DC filter. */
@@ -68,29 +76,35 @@ object PeqModel {
             "Band id must be a non-empty, printable string of at most 128 characters"
         }
         require(validFrequency(band.frequency)) {
-            "Frequency must be 0 (unset), or between 20 and 20000 Hz"
+            "Frequency must be 0 (unset), or between 1 and 768000 Hz"
         }
         require(band.gain.isFinite() && band.gain in -MAX_GAIN..MAX_GAIN) {
             "Gain must be between -100 and 100 dB"
         }
-        require(band.q.isFinite() && band.q in MIN_Q..MAX_Q) { "Q must be between 0.1 and 100" }
+        require(band.q.isFinite() && band.q in MIN_Q..MAX_Q) { "Q must be between 0.0001 and 30000" }
         return band
     }
 
     fun validate(state: PeqState): PeqState {
-        require(state.bands.size <= MAX_BANDS) { "At most 170 bands are supported" }
+        require(state.bands.size <= MAX_BANDS) { "At most $MAX_BANDS bands are supported" }
         require(state.gainRange.isFinite() && state.gainRange in 1.0..100.0) { "Gain range must be between 1 and 100 dB" }
         require(state.gainStep.isFinite() && state.gainStep in 0.01..2.0) { "Gain step must be between 0.01 and 2 dB" }
-        require(state.qStep.isFinite() && state.qStep in 0.01..100.0) { "Q/BW step must be between 0.01 and 100" }
-        require(state.qRange.isFinite() && state.qRange in MIN_Q..MAX_Q) { "Q range must be between 0.1 and 100" }
+        require(state.qStep.isFinite() && state.qStep in 0.0001..100.0) { "Q step must be between 0.0001 and 100" }
+        require(state.bwStep.isFinite() && state.bwStep in 0.0001..1.0) { "BW step must be between 0.0001 and 1" }
+        require(state.qRange.isFinite() && state.qRange in MIN_Q..MAX_Q) { "Q range must be between 0.0001 and 30000" }
         require(state.frequencyStep.isFinite() && state.frequencyStep in 1.0..1000.0) { "Frequency step must be between 1 and 1000 Hz" }
+        require(state.graphMinFrequency.isFinite() && state.graphMinFrequency in 1.0..1000.0) {
+            "Graph lower frequency must be between 1 and 1000 Hz"
+        }
+        require(state.graphMaxFrequency.isFinite() && state.graphMaxFrequency in 2.0..MAX_FREQUENCY &&
+            state.graphMaxFrequency > state.graphMinFrequency) { "Graph upper frequency must exceed its lower bound and lie within 2..768000 Hz" }
         state.bands.forEach(::validateBand)
         require(state.bands.map { it.id }.toSet().size == state.bands.size) { "Band ids must be unique" }
         return state
     }
 
-    fun defaultState(count: Int = 10): PeqState {
-        require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
+    fun defaultState(count: Int = 4): PeqState {
+        require(count in 0..MAX_BANDS) { "Band count must be between 0 and $MAX_BANDS" }
         return PeqState(List(count) { index ->
             PeqBand(id = "default-${index + 1}", frequency = distributedFrequency(index, count))
         })
@@ -99,7 +113,7 @@ object PeqModel {
     /** Count changes redistribute frequencies; all retained bands keep their other parameters. */
     fun resize(state: PeqState, count: Int): PeqState {
         validate(state)
-        require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
+        require(count in 0..MAX_BANDS) { "Band count must be between 0 and $MAX_BANDS" }
         if (count == state.bands.size) return state
         val retained = state.bands.take(count)
         val bands = retained + List((count - retained.size).coerceAtLeast(0)) { PeqBand() }
@@ -112,7 +126,7 @@ object PeqModel {
     /** Change one end of the bank, retaining every surviving band's identity and parameters. */
     fun resize(state: PeqState, count: Int, edge: PeqResizeEdge, redistribute: Boolean): PeqState {
         validate(state)
-        require(count in 0..MAX_BANDS) { "Band count must be between 0 and 170" }
+        require(count in 0..MAX_BANDS) { "Band count must be between 0 and $MAX_BANDS" }
         val difference = count - state.bands.size
         val resized = if (difference == 0) state else state.copy(bands = when {
             difference > 0 -> {
@@ -151,9 +165,9 @@ object PeqModel {
     }
 
     private fun distributedFrequency(index: Int, count: Int): Double =
-        if (count <= 1) (MIN_FREQUENCY * MAX_FREQUENCY).pow(0.5)
-        else if (index == count - 1) MAX_FREQUENCY
-        else MIN_FREQUENCY * (MAX_FREQUENCY / MIN_FREQUENCY).pow(index.toDouble() / (count - 1))
+        if (count <= 1) (MIN_FREQUENCY * DEFAULT_MAX_FREQUENCY).pow(0.5)
+        else if (index == count - 1) DEFAULT_MAX_FREQUENCY
+        else MIN_FREQUENCY * (DEFAULT_MAX_FREQUENCY / MIN_FREQUENCY).pow(index.toDouble() / (count - 1))
 
     private fun frequencyMatches(actual: Double, expected: Double): Boolean =
         actual.isFinite() && abs(actual - expected) <= maxOf(1e-10, abs(expected) * 1e-12)

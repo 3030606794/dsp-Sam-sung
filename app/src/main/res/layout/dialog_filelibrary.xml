@@ -27,6 +27,51 @@
             android:layout_height="wrap_content"/>
     </HorizontalScrollView>
 
+    <LinearLayout
+        android:id="@+id/filelibrary_search_controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/abc_dialog_padding_material"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:visibility="gone">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/filelibrary_search"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:inputType="text"
+                android:singleLine="true"
+                android:maxLines="1"
+                android:imeOptions="actionDone"
+                android:hint="@string/app_list_search"
+                android:contentDescription="@string/filelibrary_search_hint" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/filelibrary_locate"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:text="@string/filelibrary_locate"
+                android:contentDescription="@string/filelibrary_locate_description"
+                android:tooltipText="@string/filelibrary_locate_description" />
+        </LinearLayout>
+        <TextView
+            android:id="@+id/filelibrary_search_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingVertical="16dp"
+            android:gravity="center"
+            android:text="@string/filelibrary_search_empty"
+            android:visibility="gone" />
+    </LinearLayout>
+
     <FrameLayout
         android:id="@+id/contentPanel"
         android:layout_width="match_parent"

@@ -8,22 +8,40 @@ import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import kotlin.math.pow
 
 object EqPreview {
+    const val MINIMUM_FREQUENCY = 20.0
+    const val MAXIMUM_FREQUENCY = 24000.0
+
     val defaultValue: String get() = (EqualizerSurface.SCALE + DoubleArray(15)).joinToString(";")
     fun parse(value: String): DoubleArray = value.split(';').drop(15).take(15)
         .map { it.toDoubleOrNull()?.takeIf(Double::isFinite) ?: 0.0 }.toDoubleArray().copyOf(15)
     fun encode(levels: DoubleArray): String = (EqualizerSurface.SCALE + levels).joinToString(";")
 
+    /** Query the complete displayed axis; the fifteen saved control frequencies stay unchanged. */
+    internal fun frequencySamples(points: Int = 256, minimum: Double = MINIMUM_FREQUENCY,
+                                  maximum: Double = MAXIMUM_FREQUENCY): DoubleArray {
+        require(points >= 2 && minimum.isFinite() && maximum.isFinite() && minimum > 0 && maximum > minimum)
+        return DoubleArray(points) { index ->
+            when (index) {
+                0 -> minimum
+                points - 1 -> maximum
+                else -> minimum * (maximum / minimum).pow(index.toDouble() / (points - 1))
+            }
+        }
+    }
+
     fun render(context: Context, chart: PeqResponseView, value: String) {
         val prefs = context.getSharedPreferences(Constants.PREF_EQ, Context.MODE_PRIVATE)
         val type = prefs.getString(context.getString(R.string.key_eq_filter_type), "0")?.toIntOrNull() ?: 0
-        val frequencies = DoubleArray(256) { 20.0 * 1000.0.pow(it / 255.0) }
-        val response = FloatArray(256)
+        val frequencies = frequencySamples()
+        val response = FloatArray(frequencies.size) { Float.NaN }
         val gains = parse(value)
         // Android release includes this native library; Robolectric does not.
         try {
             if (type == 0) {
                 val interpolation = prefs.getString(context.getString(R.string.key_eq_interpolation), "0")?.toIntOrNull() ?: 0
-                JdspImpResToolbox.ComputeEqResponse(15, EqualizerSurface.SCALE, gains, interpolation, 256, frequencies, response)
+                synchronized(JdspImpResToolbox) {
+                    JdspImpResToolbox.ComputeEqResponse(15, EqualizerSurface.SCALE, gains, interpolation, 256, frequencies, response)
+                }
             } else {
                 val re = DoubleArray(256)
                 val im = DoubleArray(256)
@@ -32,8 +50,10 @@ object EqPreview {
                 JdspImpResToolbox.ComputeIIREqualizerResponse(256, re, im, response)
             }
         } catch (missingNative: LinkageError) {
+            // Unavailable calculation is a gap, rather than an invented flat response.
+            response.fill(Float.NaN)
             timber.log.Timber.w(missingNative, "EQ preview native library unavailable")
         }
-        chart.setExternalResponse(frequencies, DoubleArray(256) { response[it].toDouble() })
+        chart.setExternalResponse(frequencies, DoubleArray(256) { response[it].toDouble() }, range = 12.0)
     }
 }

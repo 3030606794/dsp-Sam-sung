@@ -1,4 +1,4 @@
 package me.timschneeberger.rootlessjamesdsp.peq
 
-/** The parameter a band label opens directly in the precise editor. */
-enum class PeqEditField { GAIN, QUALITY, FREQUENCY }
+/** Independently protected parameters; names are also stable preference keys. */
+enum class PeqEditField { GAIN, QUALITY, FREQUENCY, FILTER_TYPE }

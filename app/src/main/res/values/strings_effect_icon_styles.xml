@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="key_appearance_effect_icon_style" translatable="false">appearance_effect_icon_style</string>
+    <string name="default_appearance_effect_icon_style" translatable="false">instrument</string>
+    <string name="appearance_effect_icon_style">图标选择</string>
+    <string-array name="appearance_effect_icon_style_entries">
+        <item>工程仪表</item>
+        <item>简洁实心</item>
+        <item>原有线性</item>
+    </string-array>
+    <string-array name="appearance_effect_icon_style_values" translatable="false">
+        <item>instrument</item>
+        <item>solid</item>
+        <item>original</item>
+    </string-array>
+</resources>

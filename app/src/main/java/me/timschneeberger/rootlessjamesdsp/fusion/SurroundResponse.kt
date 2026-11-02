@@ -15,10 +15,14 @@ object SurroundResponse {
     fun calculate(settings: SurroundController.Settings, sampleRate: Double = 48000.0): Curve {
         require(sampleRate.isFinite() && sampleRate > 0)
         val value = settings.sanitized()
+        if(SurroundProfessionalParameters.on(value,"enabled")){
+            val curve=SurroundProfessionalResponse.band(value,sampleRate)
+            return Curve(curve.frequencies,curve.decibels.single())
+        }
         val scale = min(1.0, sampleRate * 0.45 / value.highHz)
         val hp = coefficients(value.lowHz * scale, sampleRate, true)
         val lp = coefficients(value.highHz * scale, sampleRate, false)
-        val frequencies = DoubleArray(256) { 20.0 * 1000.0.pow(it / 255.0) }
+        val frequencies = DoubleArray(256) { 20.0 * (min(20000.0,sampleRate*.45)/20.0).pow(it / 255.0) }
         val gains = DoubleArray(256) {
             val omega = 2.0 * PI * min(frequencies[it], sampleRate * 0.499) / sampleRate
             10.0 * log10((magnitudeSquared(hp, omega) * magnitudeSquared(lp, omega)).coerceAtLeast(1e-12))

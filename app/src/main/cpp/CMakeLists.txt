@@ -28,11 +28,22 @@ add_library( # Sets the name of the library.
 
         # Provides a relative path to your source file(s).
         ${LIBJAMESDSP_SOURCE_FILES}
+        ${CMAKE_CURRENT_LIST_DIR}/../../../../native/timbre/Timbre.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../../../../native/compander/Compander.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../../../../native/compander/CompanderDispatch.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../../../../native/ddc/DdcProcessor.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../../../../native/ddc/VdcParser.cpp
         EELStdOutExtension.c
         EELStdOutExtension.h)
 
 target_compile_options(jamesdsp PRIVATE -O2)
-target_compile_options(jamesdsp PRIVATE -std=gnu11)
+set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/../../../../native/timbre/Timbre.cpp PROPERTIES COMPILE_OPTIONS "-fno-fast-math")
+set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/../../../../native/compander/Compander.cpp ${CMAKE_CURRENT_LIST_DIR}/../../../../native/compander/CompanderDispatch.cpp PROPERTIES COMPILE_OPTIONS "-fno-fast-math")
+set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/../../../../native/ddc/DdcProcessor.cpp ${CMAKE_CURRENT_LIST_DIR}/../../../../native/ddc/VdcParser.cpp PROPERTIES COMPILE_OPTIONS "-fno-fast-math")
+target_compile_options(jamesdsp PRIVATE "$<$<COMPILE_LANGUAGE:C>:-std=gnu11>" "$<$<COMPILE_LANGUAGE:CXX>:-std=c++20>")
+target_include_directories(jamesdsp PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../../../../native/timbre ${CMAKE_CURRENT_LIST_DIR}/../../../../native/room ${CMAKE_CURRENT_LIST_DIR}/../../../../native/convolver)
+target_include_directories(jamesdsp PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../../../../native/compander)
+target_include_directories(jamesdsp PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../../../../native/ddc)
 target_include_directories(jamesdsp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libjamesdsp/Main/libjamesdsp/jni/jamesdsp/jdsp/)
 
 find_library( # Sets the name of the path variable.

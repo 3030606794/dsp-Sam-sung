@@ -15,6 +15,10 @@ object Constants {
     const val PREF_DDC = "dsp_ddc"
     const val PREF_EQ = "dsp_equalizer"
     const val PREF_GEQ = "dsp_graphiceq"
+    const val PREF_DYNAMIC_PEQ = "dsp_dynamic_peq"
+    const val PREF_GRANULAR = "dsp_granular"
+    const val PREF_FREEZE = "dsp_freeze"
+    const val PREF_SHIMMER = "dsp_shimmer"
     const val PREF_LIVEPROG = "dsp_liveprog"
     const val PREF_OUTPUT = "dsp_output_control"
     const val PREF_REVERB = "dsp_reverb"
@@ -36,6 +40,8 @@ object Constants {
     const val ACTION_SERVICE_STARTED = BuildConfig.APPLICATION_ID + ".action.service.STARTED"
     const val ACTION_SERVICE_STOPPED = BuildConfig.APPLICATION_ID + ".action.service.STOPPED"
     const val ACTION_SERVICE_RELOAD_LIVEPROG = BuildConfig.APPLICATION_ID + ".action.service.RELOAD_LIVEPROG"
+    const val ACTION_SERVICE_UPDATE_LIVEPROG_PARAMETERS = BuildConfig.APPLICATION_ID + ".action.service.UPDATE_LIVEPROG_PARAMETERS"
+    const val ACTION_LIVEPROG_PARAMETER_RESULT = BuildConfig.APPLICATION_ID + ".action.liveprog.PARAMETER_RESULT"
     const val ACTION_SERVICE_HARD_REBOOT_CORE = BuildConfig.APPLICATION_ID + ".action.service.HARD_REBOOT_CORE"
     const val ACTION_SERVICE_SOFT_REBOOT_CORE = BuildConfig.APPLICATION_ID + ".action.service.SOFT_REBOOT_CORE"
     const val ACTION_PROCESSOR_MESSAGE = BuildConfig.APPLICATION_ID + ".action.service.PROCESSOR_MESSAGE"
@@ -45,4 +51,6 @@ object Constants {
 
     // Intent extras
     const val EXTRA_SAMPLE_RATE = BuildConfig.APPLICATION_ID + ".extra.service.SAMPLE_RATE"
+    const val EXTRA_LIVEPROG_PATH = "liveprog_path"
+    const val EXTRA_LIVEPROG_ERROR = "liveprog_error"
 }

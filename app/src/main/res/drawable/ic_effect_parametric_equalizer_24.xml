@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Approved menu proposal; geometry only. Existing theme tint supplies the color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!-- Transparent marker interiors replace the draft white fill without adding a background. -->
+    <group>
+        <clip-path
+            android:fillType="evenOdd"
+            android:pathData="M0,0 H24 V24 H0 Z M10.4,4 A1.6,1.6 0,1 0 13.6,4 A1.6,1.6 0,1 0 10.4,4 Z" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="#FF000000"
+            android:strokeWidth="1.65"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M2,18.99956 L2.33333,18.99956 L2.66667,18.99911 L3,18.99822 L3.33333,18.99644 L3.66667,18.99333 L4,18.98756 L4.33333,18.97822 L4.66667,18.96178 L5,18.93511 L5.33333,18.89244 L5.66667,18.82622 L6,18.72533 L6.33333,18.57689 L6.66667,18.364 L7,18.06756 L7.33333,17.66578 L7.66667,17.13822 L8,16.46489 L8.33333,15.63244 L8.66667,14.63556 L9,13.48178 L9.33333,12.19333 L9.66667,10.80844 L10,9.38222 L10.33333,7.98356 L10.66667,6.68889 L11,5.57733 L11.33333,4.72267 L11.66667,4.184 L12,4 L12.33333,4.184 L12.66667,4.72267 L13,5.57733 L13.33333,6.68889 L13.66667,7.98356 L14,9.38222 L14.33333,10.80844 L14.66667,12.19333 L15,13.48178 L15.33333,14.63556 L15.66667,15.63244 L16,16.46489 L16.33333,17.13822 L16.66667,17.66578 L17,18.06756 L17.33333,18.364 L17.66667,18.57689 L18,18.72533 L18.33333,18.82622 L18.66667,18.89244 L19,18.93511 L19.33333,18.96178 L19.66667,18.97822 L20,18.98756 L20.33333,18.99333 L20.66667,18.99644 L21,18.99822 L21.33333,18.99911 L21.66667,18.99956 L22,18.99956" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="#FF000000"
+            android:strokeWidth="1.3"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M7,22 L17,22" />
+    </group>
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M10.4,4 A1.6,1.6 0,1 0 13.6,4 A1.6,1.6 0,1 0 10.4,4 Z" />
+</vector>

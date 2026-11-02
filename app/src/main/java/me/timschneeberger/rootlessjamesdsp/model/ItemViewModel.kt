@@ -11,4 +11,9 @@ class ItemViewModel<T> : ViewModel() {
     fun selectItem(item: T) {
         mutableSelectedItem.value = item!!
     }
+
+    /** A chooser result is an event; do not reapply it when the parent view is recreated. */
+    fun clearSelection() {
+        mutableSelectedItem.value = null
+    }
 }

@@ -2,7 +2,7 @@ package me.timschneeberger.rootlessjamesdsp.utils.extensions
 
 import android.content.Context
 import android.content.res.AssetManager
-import me.timschneeberger.rootlessjamesdsp.liveprog.BuiltinLiveprogMetadata
+import me.timschneeberger.rootlessjamesdsp.convolver.ConvolverLibrary
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
@@ -12,7 +12,8 @@ object AssetManagerExtensions {
         Timber.d("Installing private assets; force=$force")
         context.getExternalFilesDir(null)?.absolutePath?.let {
             try {
-                this.copyAssetDir("Convolver", it, force)
+                // Convolver owns its protected default; force never overwrites imported IRs.
+                ConvolverLibrary.install(context)
                 this.copyAssetDir("DDC", it, force)
                 this.copyAssetDir("Liveprog", it, force)
             }
@@ -42,13 +43,11 @@ object AssetManagerExtensions {
 
     private fun AssetManager.copyAssetFile(assetPath: String, destPath: String, force: Boolean): File? {
         val destFile = File(destPath)
-        if(destFile.exists() && !force) {
-            if (assetPath == "Liveprog/viper_dynamicbass.eel" ||
-                assetPath == "Liveprog/viper_dynamicbass_preset.eel") {
-                open(assetPath).bufferedReader().use { bundled ->
-                    BuiltinLiveprogMetadata.upgradeUntouchedBass(destFile, bundled.readText())
-                }
-            }
+        // Existing scripts belong to the user, including their literal parameter values.
+        // First-run setup and resource repair may fill missing files, never replace scripts.
+        val protectedScript = assetPath.startsWith("Liveprog/") &&
+            assetPath.endsWith(".eel", ignoreCase = true)
+        if(destFile.exists() && (protectedScript || !force)) {
             return null
         }
 

@@ -6,6 +6,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.ViewConfiguration
+import android.view.ViewGroup
 import androidx.fragment.app.FragmentActivity
 import com.google.android.material.button.MaterialButton
 import me.timschneeberger.rootlessjamesdsp.R
@@ -58,11 +59,15 @@ class PeqAddButtonGesturesTest {
     }
     private fun awaitConfirmation() = advance(ViewConfiguration.getDoubleTapTimeout().toLong() + 1)
 
-    @Test fun touchSingleWaitsForDoubleTapWindowThenAddsExactlyOnce() {
+    @Test fun touchSingleUsesTheShortConfirmationWindowAndAddsExactlyOnce() {
         tap()
         assertTrue(actions.isEmpty())
         assertFalse(button.isPressed)
-        awaitConfirmation()
+        val delay = PeqAddButtonGestures.confirmationDelayMillis()
+        assertTrue(delay <= 220L && delay <= ViewConfiguration.getDoubleTapTimeout())
+        advance(delay - 1)
+        assertTrue(actions.isEmpty())
+        advance(1)
         assertEquals(listOf("add"), actions)
         awaitConfirmation()
         assertEquals(listOf("add"), actions)
@@ -76,6 +81,39 @@ class PeqAddButtonGesturesTest {
         awaitConfirmation()
         assertEquals(listOf("jump"), actions)
         assertFalse(button.isPressed)
+    }
+
+    @Test fun secondTapJustInsideTheShortWindowJumpsButNeverSendsASpeculativeAdd() {
+        tap()
+        advance(PeqAddButtonGestures.confirmationDelayMillis() - 1)
+        event(MotionEvent.ACTION_DOWN)
+        assertEquals(listOf("jump"), actions)
+        event(MotionEvent.ACTION_UP)
+        awaitConfirmation()
+        assertEquals(listOf("jump"), actions)
+    }
+
+    @Test fun tapsAfterTheShortWindowAreTwoSinglesAndCannotTurnIntoALateDoubleJump() {
+        tap()
+        advance(PeqAddButtonGestures.confirmationDelayMillis() + 1)
+        assertEquals(listOf("add"), actions)
+        tap()
+        advance(PeqAddButtonGestures.confirmationDelayMillis() + 1)
+        assertEquals(listOf("add", "add"), actions)
+        awaitConfirmation()
+        assertEquals(listOf("add", "add"), actions)
+    }
+
+    @Test fun aLongerFirstTouchStillAllowsASecondTapWithinTheSameReleaseWindow() {
+        event(MotionEvent.ACTION_DOWN)
+        advance(250)
+        event(MotionEvent.ACTION_UP)
+        advance(150)
+        event(MotionEvent.ACTION_DOWN)
+        assertEquals(listOf("jump"), actions)
+        event(MotionEvent.ACTION_UP)
+        awaitConfirmation()
+        assertEquals(listOf("jump"), actions)
     }
 
     @Test fun longPressOpensMenuWithoutASingleTapAfterRelease() {
@@ -129,6 +167,31 @@ class PeqAddButtonGesturesTest {
         event(MotionEvent.ACTION_CANCEL)
         awaitConfirmation()
         assertTrue(actions.isEmpty())
+    }
+
+    @Test fun disabledButtonRejectsAccessibilityClicksLongPressAndPendingTouchCallbacks() {
+        tap()
+        button.isEnabled = false
+        button.performClick()
+        button.performLongClick()
+        awaitConfirmation()
+        assertTrue(actions.isEmpty())
+        button.isEnabled = true
+        button.performClick()
+        assertEquals(listOf("add"), actions)
+    }
+
+    @Test fun detachingTheButtonCancelsPendingConfirmationWithoutNeedingAFragmentCallback() {
+        tap()
+        val parent = button.parent as ViewGroup
+        val params = button.layoutParams
+        parent.removeView(button)
+        awaitConfirmation()
+        assertTrue(actions.isEmpty())
+        parent.addView(button, params)
+        tap()
+        awaitConfirmation()
+        assertEquals(listOf("add"), actions)
     }
 
     class HostActivity : FragmentActivity() {

@@ -5,7 +5,7 @@
         android:disableDependentsState="false"
         android:key="@string/key_geq_enable"
         android:title="@string/fusion_peq_title"
-        android:icon="@drawable/ic_baseline_chart_timeline_variant_24dp"
+        android:icon="@drawable/ic_effect_parametric_equalizer_24"
         app:iconSpaceReserved="false">
         <me.timschneeberger.rootlessjamesdsp.preference.GraphicEqualizerPreference
             android:key="@string/key_geq_nodes"

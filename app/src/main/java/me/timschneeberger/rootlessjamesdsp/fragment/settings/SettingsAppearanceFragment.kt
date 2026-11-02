@@ -6,8 +6,14 @@ import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.model.preference.AppTheme
 import me.timschneeberger.rootlessjamesdsp.model.preference.ThemeMode
 import me.timschneeberger.rootlessjamesdsp.preference.ThemesPreference
+import me.timschneeberger.rootlessjamesdsp.preference.MaterialSeekbarPreference
+import me.timschneeberger.rootlessjamesdsp.utils.AppFontScale
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.isDynamicColorAvailable
+import me.timschneeberger.rootlessjamesdsp.ui.glass.Glass3SettingsDialog
+import me.timschneeberger.rootlessjamesdsp.ui.power.PowerMotionSettings
+import me.timschneeberger.rootlessjamesdsp.ui.power.PowerMotionStyle
+import me.timschneeberger.rootlessjamesdsp.ui.EffectIconStyle
 
 class SettingsAppearanceFragment : SettingsBaseFragment() {
 
@@ -17,7 +23,43 @@ class SettingsAppearanceFragment : SettingsBaseFragment() {
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceManager.sharedPreferencesName = Constants.PREF_APP
+        EffectIconStyle.normalize(requireContext())
+        // Repair only these presentation keys before Preference inflates typed persisted values.
+        val motionPreferences = PowerMotionSettings.preferences(requireContext())
+        val motionValues = motionPreferences.all
+        val motionConfig = PowerMotionSettings.read(requireContext())
+        motionPreferences.edit().apply {
+            if (motionValues.containsKey(PowerMotionSettings.KEY_ENABLED) && motionValues[PowerMotionSettings.KEY_ENABLED] != motionConfig.enabled)
+                putBoolean(PowerMotionSettings.KEY_ENABLED, motionConfig.enabled)
+            if (motionValues.containsKey(PowerMotionSettings.KEY_STYLE) && motionValues[PowerMotionSettings.KEY_STYLE] != motionConfig.style.key)
+                putString(PowerMotionSettings.KEY_STYLE, motionConfig.style.key)
+        }.apply()
         setPreferencesFromResource(R.xml.app_appearance_preferences, rootKey)
+
+        findPreference<ListPreference>(PowerMotionSettings.KEY_STYLE)?.summaryProvider =
+            Preference.SummaryProvider<ListPreference> { preference ->
+                getString(PowerMotionStyle.fromKey(preference.value).summaryResId)
+            }
+
+        appTheme?.let { picker ->
+            picker.parent?.addPreference(Preference(requireContext()).apply {
+                key = "appearance_glass3_settings"
+                setTitle(R.string.glass3_settings_title)
+                setSummary(R.string.glass3_settings_summary)
+                isIconSpaceReserved = false
+                order = picker.order + 1
+                setOnPreferenceClickListener {
+                    Glass3SettingsDialog.show(requireContext())
+                    true
+                }
+            })
+        }
+
+        findPreference<Preference>("appearance_font_size_reset")?.setOnPreferenceClickListener {
+            findPreference<MaterialSeekbarPreference>(AppFontScale.KEY)
+                ?.setValue(AppFontScale.DEFAULT_PERCENT.toFloat())
+            true
+        }
 
         val appThemes = AppTheme.values().filter {
             val monetFilter = if (it == AppTheme.MONET) {
@@ -48,7 +90,8 @@ class SettingsAppearanceFragment : SettingsBaseFragment() {
     }
 
     private fun updateViewStates(){
-        amoledMode?.isVisible = themeMode?.value?.toIntOrNull()?.let { ThemeMode.fromInt(it) } != ThemeMode.Light
+        amoledMode?.isVisible = appTheme?.value !in setOf(AppTheme.LIQUID_GLASS.name, AppTheme.LIQUID_GLASS_2.name, AppTheme.LIQUID_GLASS_3.name) &&
+            themeMode?.value?.toIntOrNull()?.let { ThemeMode.fromInt(it) } != ThemeMode.Light
     }
 
     companion object {

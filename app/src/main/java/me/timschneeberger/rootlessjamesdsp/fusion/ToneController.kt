@@ -22,17 +22,23 @@ object ToneController {
         context.getSharedPreferences(PREFS, Context.MODE_MULTI_PROCESS)
 
     fun range(preferences: SharedPreferences): Int =
-        preferences.getString(RANGE, "100")?.toIntOrNull()?.takeIf { it in RANGES } ?: 100
+        (preferences.all[RANGE] as? String)?.toIntOrNull()?.takeIf { it in RANGES } ?: 100
 
     fun payload(context: Context): IntArray {
         val prefs = preferences(context)
         val limit = range(prefs)
         return IntArray(11).apply {
-            this[0] = if (prefs.getBoolean(ENABLED, false)) 1 else 0
-            KEYS.forEachIndexed { index, key -> this[index + 1] = prefs.getInt(key, 0).coerceIn(-limit, limit) }
+            this[0] = if (prefs.all[ENABLED] as? Boolean == true) 1 else 0
+            KEYS.forEachIndexed { index, key -> this[index + 1] = (prefs.all[key] as? Int ?: 0).coerceIn(-limit, limit) }
         }
     }
 
-    fun sync(context: Context, sender: (Int, IntArray) -> Boolean): Boolean =
-        sender(PARAMETER, payload(context))
+    fun sync(context: Context, sender: (Int, IntArray) -> Boolean): Boolean {
+        val prefs=preferences(context)
+        if(!ToneAdvancedParameters.validSavedFoundation(prefs.all)) {
+            // Validation failures retain the last valid sound; they are not transport failures.
+            return if(prefs.all[ENABLED]==false) sender(PARAMETER,IntArray(11)) else true
+        }
+        return sender(PARAMETER, payload(context))
+    }
 }

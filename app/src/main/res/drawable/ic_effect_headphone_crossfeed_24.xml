@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Approved menu proposal; geometry only. Existing theme tint supplies the color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M4,12 L4.06844,10.82533 L4.27244,9.67067 L4.60889,8.556 L5.072,7.5 L5.65333,6.52133 L6.34311,5.636 L7.12978,4.86 L8,4.20578 L8.93867,3.68489 L9.92933,3.30667 L10.956,3.07689 L12,3 L13.044,3.07689 L14.07067,3.30667 L15.06133,3.68489 L16,4.20578 L16.87022,4.86 L17.65689,5.636 L18.34667,6.52133 L18.928,7.5 L19.39111,8.556 L19.72756,9.67067 L19.93156,10.82533 L20,12" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M4,12 L4,19 L7,19 L7,13 L4,13" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.65"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M20,12 L20,19 L17,19 L17,13 L20,13" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M8,11 L16,17" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M16,11 L8,17" />
+</vector>

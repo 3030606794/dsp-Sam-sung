@@ -36,6 +36,7 @@ ViPER::ViPER() :
     this->colorfulMusic.Reset();
 
     this->reverberation.SetEnable(false);
+    this->reverberation.SetSamplingRate(this->samplingRate);
     this->reverberation.Reset();
 
     this->playbackGain.SetEnable(false);
@@ -65,6 +66,7 @@ ViPER::ViPER() :
     this->cure.Reset();
 
     this->tubeSimulator.SetEnable(false);
+    this->tubeSimulator.SetSamplingRate(this->samplingRate);
     this->tubeSimulator.Reset();
 
     this->analogX.SetEnable(false);
@@ -315,6 +317,21 @@ void ViPER::DispatchCommand(int param, int val1, int val2, int val3, int val4, u
             this->viperBass.SetBassFactor((float) val1 / 100.0f);
             break;
         } // 0x10029
+        case PARAM_FIDELITY_BASS_Q:
+            this->viperBass.SetQ(val1 / 100.f);
+            break;
+        case PARAM_FIDELITY_BASS_DEEP_FREQ:
+        case PARAM_FIDELITY_BASS_UPPER_FREQ:
+            this->viperBass.SetSubwooferTuning(param - PARAM_FIDELITY_BASS_DEEP_FREQ, static_cast<float>(val1));
+            break;
+        case PARAM_FIDELITY_BASS_DEEP_GAIN:
+        case PARAM_FIDELITY_BASS_UPPER_GAIN:
+            this->viperBass.SetSubwooferTuning(param - PARAM_FIDELITY_BASS_DEEP_FREQ, val1 / 10.f);
+            break;
+        case PARAM_FIDELITY_BASS_DEEP_BW:
+        case PARAM_FIDELITY_BASS_UPPER_BW:
+            this->viperBass.SetSubwooferTuning(param - PARAM_FIDELITY_BASS_DEEP_FREQ, val1 / 100.f);
+            break;
         case PARAM_FIDELITY_CLARITY_ENABLE: {
             this->viperClarity.SetEnable(val1 != 0);
             break;
@@ -454,6 +471,7 @@ void ViPER::resetAllEffects() {
     this->colorfulMusic.SetSamplingRate(this->samplingRate);
     this->colorfulMusic.Reset();
 
+    this->reverberation.SetSamplingRate(this->samplingRate);
     this->reverberation.Reset();
 
     this->playbackGain.SetSamplingRate(this->samplingRate);
@@ -477,6 +495,7 @@ void ViPER::resetAllEffects() {
     this->cure.SetSamplingRate(this->samplingRate);
     this->cure.Reset();
 
+    this->tubeSimulator.SetSamplingRate(this->samplingRate);
     this->tubeSimulator.Reset();
 
     this->analogX.SetSamplingRate(this->samplingRate);

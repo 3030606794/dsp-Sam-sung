@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_confirm_delete">删除频段前确认</string>
+    <string name="peq_allow_locked_band_reorder">锁住频段后可移动卡片</string>
+    <string name="peq_double_tap_unlocks_band">双击总锁同时解锁大锁和小锁</string>
+    <string name="peq_show_card_filter_icons">频段卡片滤波器图标</string>
+    <string name="peq_marker_duration">图形标记显示时长（秒）</string>
+    <string name="peq_marker_duration_forever">永久</string>
+    <string name="peq_invalid_marker_duration">请输入 0（永久）或 2–10 秒</string>
+    <string name="peq_marker_text_size">图形标记字号</string>
+    <string name="peq_show_marker_frequency">显示标记频率</string>
+    <string name="peq_show_marker_guides">显示辅助线和标志</string>
+    <string name="peq_show_marker_filter_type">显示滤波器类型</string>
+    <string name="peq_show_marker_band_number">显示频段编号</string>
+    <string name="peq_show_marker_preview_status">显示预览与监听状态</string>
+    <string name="peq_marker_preview">预览</string>
+    <string name="peq_marker_listening">监听</string>
+    <string name="peq_show_inline_filters">显示滤波器</string>
+    <string name="peq_band_ordinal">第%1$d段</string>
+    <string name="peq_show_marker_gain">显示标记增益</string>
+    <string name="peq_show_marker_quality">显示标记 Q / BW</string>
+    <string name="peq_marker_disabled">未开启</string>
+</resources>

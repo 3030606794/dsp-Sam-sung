@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Separate theme: the original liquid glass palette and styles stay intact. -->
+    <style name="Theme.RootlessJamesDSP.LiquidGlass2" parent="Theme.RootlessJamesDSP">
+        <item name="colorPrimary">@color/glass2_primary</item>
+        <item name="android:colorAccent">@color/glass2_primary</item>
+        <item name="colorAccent">@color/glass2_primary</item>
+        <item name="colorOnPrimary">@color/glass2_on_primary</item>
+        <item name="colorPrimaryContainer">@color/glass2_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/glass2_on_primary_container</item>
+        <item name="colorSecondary">@color/glass2_secondary</item>
+        <item name="colorOnSecondary">@color/glass2_on_primary</item>
+        <item name="colorSecondaryContainer">@color/glass2_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/glass2_on_surface</item>
+        <item name="colorTertiary">@color/glass2_tertiary</item>
+        <item name="colorOnTertiary">@color/glass2_on_primary</item>
+        <item name="colorTertiaryContainer">@color/glass2_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/glass2_on_surface</item>
+        <item name="android:colorBackground">@color/glass2_background</item>
+        <item name="colorOnBackground">@color/glass2_on_surface</item>
+        <item name="colorSurface">@color/glass2_surface</item>
+        <item name="colorOnSurface">@color/glass2_on_surface</item>
+        <item name="colorSurfaceVariant">@color/glass2_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/glass2_secondary_text</item>
+        <item name="colorOutline">@color/glass2_outline</item>
+        <item name="colorSurfaceInverse">@color/glass2_inverse_surface</item>
+        <item name="colorOnSurfaceInverse">@color/glass2_inverse_on_surface</item>
+        <item name="colorPrimaryInverse">@color/glass2_inverse_primary</item>
+        <item name="android:textColorPrimary">@color/glass2_on_surface</item>
+        <item name="android:textColorSecondary">@color/glass2_secondary_text</item>
+        <item name="android:divider">@color/glass2_outline</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="elevationOverlayEnabled">false</item>
+        <item name="materialCardViewStyle">@style/Widget.DSP.Glass2Card</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.DSP.Glass2Dialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.DSP.Glass2Dialog</item>
+        <item name="tooltipStyle">@style/Widget.DSP.Glass2Tooltip</item>
+    </style>
+
+    <style name="Widget.DSP.Glass2Card" parent="Theme.RootlessJamesDSP.CardView">
+        <item name="cardBackgroundColor">@color/glass2_card</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="strokeColor">@color/glass2_edge</item>
+    </style>
+
+    <style name="ThemeOverlay.DSP.Glass2Dialog" parent="AppTheme.AlertDialogTheme">
+        <item name="colorSurface">@color/glass2_dialog</item>
+        <item name="colorBackgroundFloating">@color/glass2_dialog</item>
+        <item name="colorOnSurface">@color/glass2_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/glass2_secondary_text</item>
+        <item name="android:textColorPrimary">@color/glass2_on_surface</item>
+        <item name="android:textColorSecondary">@color/glass2_secondary_text</item>
+        <item name="colorPrimary">@color/glass2_primary</item>
+        <item name="elevationOverlayEnabled">false</item>
+        <item name="tooltipStyle">@style/Widget.DSP.Glass2Tooltip</item>
+    </style>
+
+    <!-- The native floating label retains its arrow, positioning and value formatter. -->
+    <style name="Widget.DSP.Glass2Tooltip" parent="Widget.MaterialComponents.Tooltip">
+        <item name="backgroundTint">@color/glass2_tooltip</item>
+        <item name="android:textColor">@color/glass2_on_surface</item>
+        <item name="android:textAppearance">@style/TextAppearance.DSP.Glass2Tooltip</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.DSP.Glass2Tooltip</item>
+    </style>
+
+    <style name="TextAppearance.DSP.Glass2Tooltip" parent="TextAppearance.MaterialComponents.Tooltip">
+        <item name="android:textColor">@color/glass2_on_surface</item>
+    </style>
+
+    <style name="ShapeAppearance.DSP.Glass2Tooltip" parent="ShapeAppearance.MaterialComponents.Tooltip">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">12dp</item>
+    </style>
+</resources>

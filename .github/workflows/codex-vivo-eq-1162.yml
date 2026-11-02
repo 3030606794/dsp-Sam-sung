@@ -1,0 +1,129 @@
+name: Vivo EQ 20 Hz to 24 kHz (1162)
+
+on:
+  push:
+    branches: ['codex/vivo-eq-20-24khz-1162-20261103-77s9s1']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vivo-eq-1162-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      EXPECTED_CERT: f31ecf1f043f442b1e97f9c0f989828bc060923abd76534206e279a12b21c496
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Check original release signing certificate
+        env:
+          SIGNING_KEY: ${{ secrets.FUSION_KEYSTORE_BASE64 }}
+          FUSION_STORE_PASSWORD: ${{ secrets.FUSION_STORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SIGNING_KEY" || -z "$FUSION_STORE_PASSWORD" ]]; then
+            echo "::error::Original release signing secrets are missing"
+            exit 1
+          fi
+          umask 077
+          key_file="$(mktemp "$RUNNER_TEMP/fusion-check.XXXXXX")"
+          trap 'rm -f -- "$key_file"' EXIT
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$key_file"
+          unset SIGNING_KEY
+          actual="$(keytool -exportcert -alias fusion -keystore "$key_file" -storepass:env FUSION_STORE_PASSWORD | sha256sum | cut -d ' ' -f 1)"
+          if [[ "$actual" != "$EXPECTED_CERT" ]]; then
+            echo "::error::Cloud release key does not match the installed vivo application"
+            exit 1
+          fi
+          echo "Original signing certificate verified: $actual"
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+
+      - name: Install Android toolchain
+        run: |
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;26.3.11579264' 'cmake;3.22.1'
+          chmod +x gradlew
+
+      - name: Build, test and verify APK
+        env:
+          SIGNING_KEY: ${{ secrets.FUSION_KEYSTORE_BASE64 }}
+          FUSION_STORE_PASSWORD: ${{ secrets.FUSION_STORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export FUSION_KEYSTORE="$(mktemp "$RUNNER_TEMP/fusion-release.XXXXXX")"
+          trap 'rm -f -- "$FUSION_KEYSTORE"' EXIT
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$FUSION_KEYSTORE"
+          unset SIGNING_KEY
+          ./gradlew --no-daemon --max-workers=2 :app:assembleRootFdroidRelease :app:testRootFdroidReleaseUnitTest --tests '*peq.ResponseGraphDomainTest' '-PfusionTestClassIncludes=**/peq/ResponseGraphDomainTest*'
+          apk="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          directory = Path("app/build/outputs/apk/rootFdroid/release")
+          metadata = json.loads((directory / "output-metadata.json").read_text())
+          assert metadata["applicationId"] == "com.dspfusion.android"
+          assert metadata["variantName"] == "rootFdroidRelease"
+          files = [entry for entry in metadata["elements"] if entry["type"] == "UNIVERSAL"]
+          assert len(files) == 1 and files[0]["versionCode"] == 1162
+          name = files[0]["outputFile"]
+          assert Path(name).name == name
+          apk = directory / name
+          assert apk.is_file()
+          print(apk)
+          PY
+          )"
+          signature="$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk")"
+          actual="$(printf '%s\n' "$signature" | sed -n 's/^Signer #[0-9][0-9]* certificate SHA-256 digest: //p')"
+          if [[ "$actual" != "$EXPECTED_CERT" ]]; then
+            echo "::error::Built APK signing certificate does not match the installed application"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          reports = list(Path("app/build/test-results/testRootFdroidReleaseUnitTest").glob("TEST-*ResponseGraphDomainTest.xml"))
+          assert len(reports) == 1, "Expected executed chart tests, not NO-SOURCE"
+          suite = ET.parse(reports[0]).getroot()
+          assert int(suite.attrib["tests"]) >= 4
+          assert all(int(suite.attrib.get(key, "0")) == 0 for key in ("failures", "errors", "skipped"))
+          PY
+          mkdir -p verified-apk
+          cp -- "$apk" verified-apk/DSP-Vivo-1162-EQ-20Hz-24kHz.apk
+          printf '%s\n' "$signature" > verified-apk/APK-SIGNATURE.txt
+          sha256sum verified-apk/*.apk > verified-apk/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vivo-EQ-1162-verified-apk
+          path: verified-apk/
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Vivo-EQ-1162-test-reports
+          path: |
+            app/build/reports/tests/testRootFdroidReleaseUnitTest/
+            app/build/test-results/testRootFdroidReleaseUnitTest/
+            app/build/reports/response-graph-domain/
+          if-no-files-found: ignore
+          retention-days: 7

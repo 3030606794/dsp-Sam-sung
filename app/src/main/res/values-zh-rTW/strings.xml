@@ -62,7 +62,7 @@
     <string name="error_projection_api_missing">此裝置的製造商禁止了擷取內部音訊的API。此應用程式需要此功能才能運作。</string>
     <!-- Main screen -->
     <string name="power_button_alt">音訊處理開關</string>
-    <string name="compander_enable">動態範圍壓縮器</string>
+    <string name="compander_enable">动态压扩器</string>
     <string name="compander_timeconstant">時間常數</string>
     <string name="compander_granularity">粒度</string>
     <string name="compander_granularity_very_low">極低</string>
@@ -104,11 +104,11 @@
     <string name="eq_preset_rb">節奏藍調</string>
     <string name="eq_preset_rock">搖滾</string>
     <string name="eq_preset_vocal">人聲增強</string>
-    <string name="geq_enable">任意響應等化器</string>
+    <string name="geq_enable">曲线均衡器</string>
     <string name="geq_nodes">頻率響應</string>
-    <string name="bass_enable">動態低音增強</string>
+    <string name="bass_enable">自適應低頻增強</string>
     <string name="bass_max_gain">最大增益</string>
-    <string name="reverb_enable">房间混响</string>
+    <string name="reverb_enable">场景混响</string>
     <string name="reverb_room_type">房間類型</string>
     <string name="reverb_preset_default">預設</string>
     <string name="reverb_preset_small_hall1">小禮堂 1</string>
@@ -123,16 +123,17 @@
     <string name="reverb_preset_plate_low">輕微</string>
     <string name="reverb_preset_long_reverb1">長殘響 1</string>
     <string name="reverb_preset_long_reverb2">長殘響 2</string>
-    <string name="convolver_enable">卷积处理</string>
+    <string name="convolver_enable">脉冲响应卷积</string>
     <string name="convolver_impulse">脈衝響應</string>
     <string name="convolver_advanced_editing">進階波形編輯</string>
     <string name="convolver_convolution_mode">脈衝響應最佳化</string>
     <string name="convolver_convolution_mode_original">原始</string>
     <string name="convolver_convolution_mode_shrink">壓縮</string>
     <string name="convolver_convolution_mode_minimum_phase_shrink">最小相位轉換與壓縮</string>
-    <string name="ddc_enable">DDC 耳机响应校正</string>
+    <string name="ddc_enable">DDC 频响校正</string>
+    <string name="ddc_import_file">匯入檔案</string>
     <string name="ddc_file">配置檔案</string>
-    <string name="liveprog_enable">可编程 DSP</string>
+    <string name="liveprog_enable">DSP 脚本处理</string>
     <string name="liveprog_file">Liveprog 腳本</string>
     <string name="liveprog_additional_params">額外的腳本參數</string>
     <string name="liveprog_additional_params_not_supported">選取的腳本沒有可調整的參數</string>
@@ -140,20 +141,20 @@
     <string name="liveprog_no_script_selected">未選取腳本</string>
     <string name="liveprog_edit_header">編輯選取的文字</string>
     <string name="liveprog_edit">以內建編輯器開啟作用中的腳本</string>
-    <string name="tube_enable">模拟音色仿真</string>
+    <string name="tube_enable">分频染色</string>
     <string name="tube_drive">前級</string>
     <string name="output_control_header">輸出增益</string>
     <string name="output_limiter_threshold">輸出閾值</string>
     <string name="output_limiter_release">釋放時間</string>
     <string name="output_control_postgain">後置增益</string>
-    <string name="stereowide_enable">音場寬度</string>
+    <string name="stereowide_enable">立体声宽度</string>
     <string name="stereowide_level">寬度</string>
     <string name="stereowide_level_none">無</string>
     <string name="stereowide_level_very_wide">極寬</string>
     <string name="stereowide_level_wide">寬</string>
     <string name="stereowide_level_very_narrow">極窄</string>
     <string name="stereowide_level_narrow">窄</string>
-    <string name="crossfeed_enable">交叉馈送</string>
+    <string name="crossfeed_enable">耳机空间模拟</string>
     <string name="crossfeed_preset">預設</string>
     <string name="crossfeed_preset_bs2b_weak">BS2B弱</string>
     <string name="crossfeed_preset_bs2b_strong">BS2B強</string>
@@ -320,4 +321,6 @@
     <!-- Backups -->
     <!-- Multi-device profiles -->
     <!-- Root version check -->
+    <string name="backup_restore_mode_clean">清理恢復（保留既有脈衝檔案）</string>
+    <string name="backup_restore_mode_dirty">合併恢復（保留既有脈衝檔案）</string>
 </resources>

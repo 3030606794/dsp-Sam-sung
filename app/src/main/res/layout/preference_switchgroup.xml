@@ -4,10 +4,12 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:minHeight="?android:attr/listPreferredItemHeightSmall"
+    android:minHeight="0dp"
     android:gravity="center_vertical"
-    android:paddingStart="?android:attr/listPreferredItemPaddingStart"
-    android:paddingEnd="?android:attr/listPreferredItemPaddingEnd"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="0dp"
+    android:paddingBottom="0dp"
     android:background="?android:attr/selectableItemBackground"
     android:foreground="@drawable/ripple_rounded"
     android:clipToPadding="false"
@@ -17,17 +19,15 @@
         android:id="@+id/icon_frame"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:minWidth="28dp"
+        android:minWidth="24dp"
         android:gravity="center"
         android:orientation="horizontal"
-        android:layout_marginEnd="?android:attr/listPreferredItemPaddingStart"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp">
+        android:layout_marginEnd="12dp">
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@android:id/icon"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:layout_gravity="center"
             app:maxWidth="24dp"
             app:maxHeight="24dp"/>
@@ -37,18 +37,35 @@
     <RelativeLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:paddingTop="16dp"
-        android:paddingBottom="16dp">
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:layout_weight="1">
 
         <TextView
             android:id="@android:id/title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:singleLine="true"
+            android:includeFontPadding="false"
+            android:maxLines="2"
             android:textAppearance="?android:attr/textAppearanceListItem"
-            android:ellipsize="marquee"
+            android:ellipsize="end"
             tools:text="Title" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/effect_help"
+            android:layout_width="24dp"
+            android:layout_height="wrap_content"
+            android:layout_toEndOf="@android:id/title"
+            android:layout_alignBaseline="@android:id/title"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:text="?"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true" />
 
         <TextView
             android:id="@android:id/summary"
@@ -66,13 +83,23 @@
 
     </RelativeLayout>
 
+    <androidx.appcompat.widget.AppCompatImageButton
+        android:id="@+id/effect_professional"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:padding="5dp"
+        android:background="@drawable/ripple_effect_settings"
+        android:visibility="gone"
+        app:srcCompat="@drawable/ic_effect_settings_24"
+        app:tint="?android:attr/textColorSecondary" />
+
     <!-- Preference should place its actual preference widget here. -->
     <LinearLayout
         android:id="@android:id/widget_frame"
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:gravity="end|center_vertical"
-        android:paddingStart="16dp"
+        android:paddingStart="0dp"
         android:paddingEnd="0dp"
         android:orientation="vertical"/>
 

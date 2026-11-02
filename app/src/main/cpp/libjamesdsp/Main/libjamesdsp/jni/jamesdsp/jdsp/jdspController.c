@@ -8,6 +8,15 @@
 #include "Effects/eel2/dr_flac.h"
 #include "Effects/eel2/ns-eel.h"
 #include "jdsp_header.h"
+#include "DdcProcessor.h"
+#include "Timbre.h"
+#include "Compander.h"
+#ifdef DSP_FUSION_STREAMING
+#include "ConvolverControl.h"
+#include "Effects/presetCrossfeed.h"
+#include "RoomReverb.h"
+#include "EqCapture.h"
+#endif
 #define TAG "EffectDSPMain"
 
 #ifdef __ANDROID_API__
@@ -249,33 +258,31 @@ unsigned int next_pow_2(unsigned int x)
 	while (x >>= 1) power <<= 1;
 	return power;
 }
+static void JamesDSPAllocateTempBuffers(JamesDSPLib *jdsp)
+{
+	float *previous = jdsp->tmpBuffer[0];
+	double ratio = (double)jdsp->fs / (double)jdsp->trueSampleRate;
+	unsigned int maxDecimatedLength = jdsp->enableASRC ? (unsigned int)ceil(jdsp->blockSizeMax * ratio) : 0;
+	unsigned int maxInterpolatedLength = (unsigned int)ceil(maxDecimatedLength / ratio);
+	jdsp->pw2BlockMemSize = jdsp->enableASRC ? next_pow_2(maxInterpolatedLength) : 0;
+	// Forward SRC may expand a low-rate block (8 kHz -> 48 kHz: sixfold).
+	// Both work channels and both SRC scratch channels must fit that expanded block;
+	// the old layout only reserved the eventual host-rate output and overran the heap.
+	size_t stageCapacity = max(jdsp->blockSizeMax, max(maxDecimatedLength, maxInterpolatedLength));
+	size_t scratchCapacity = jdsp->enableASRC ? stageCapacity : 0;
+	size_t ctMemBlk = stageCapacity * 2 + scratchCapacity * 2 + jdsp->pw2BlockMemSize * 2;
+	jdsp->tmpBuffer[0] = (float *)malloc(ctMemBlk * sizeof(float));
+	jdsp->tmpBuffer[1] = jdsp->tmpBuffer[0] + stageCapacity;
+	jdsp->tmpBuffer[2] = jdsp->tmpBuffer[1] + stageCapacity;
+	jdsp->tmpBuffer[3] = jdsp->tmpBuffer[2] + scratchCapacity;
+	jdsp->tmpBuffer[4] = jdsp->tmpBuffer[3] + scratchCapacity;
+	jdsp->tmpBuffer[5] = jdsp->tmpBuffer[4] + jdsp->pw2BlockMemSize;
+	free(previous);
+}
 void JamesDSPReallocateBlock(JamesDSPLib *jdsp, size_t n)
 {
-	// Init buffer
-	float *tmp1 = jdsp->tmpBuffer[0];
-	float *tmp2 = jdsp->tmpBuffer[1];
-	float *tmp3 = jdsp->tmpBuffer[2];
-	float *tmp4 = jdsp->tmpBuffer[3];
-	float *tmp5 = jdsp->tmpBuffer[4];
-	float *tmp6 = jdsp->tmpBuffer[5];
-	double ratio = (double)jdsp->fs / (double)jdsp->trueSampleRate;
 	jdsp->blockSizeMax = n;
-	unsigned int maxDecimatedLength = (unsigned int)ceil(jdsp->blockSizeMax * ratio);
-	if (!jdsp->enableASRC)
-		maxDecimatedLength = 0;
-	unsigned int maxInterpolatedLength = (unsigned int)ceil(maxDecimatedLength / ratio);
-	jdsp->pw2BlockMemSize = next_pow_2(maxInterpolatedLength);
-	if (!jdsp->enableASRC)
-		jdsp->pw2BlockMemSize = 0;
-	size_t ctMemBlk = jdsp->blockSizeMax * 2 + maxInterpolatedLength * 2 + jdsp->pw2BlockMemSize * 2;
-	jdsp->tmpBuffer[0] = (float *)malloc(ctMemBlk * sizeof(float));
-	jdsp->tmpBuffer[1] = jdsp->tmpBuffer[0] + jdsp->blockSizeMax;
-	jdsp->tmpBuffer[2] = jdsp->tmpBuffer[1] + jdsp->blockSizeMax;
-	jdsp->tmpBuffer[3] = jdsp->tmpBuffer[2] + maxInterpolatedLength;
-	jdsp->tmpBuffer[4] = jdsp->tmpBuffer[3] + maxInterpolatedLength;
-	jdsp->tmpBuffer[5] = jdsp->tmpBuffer[4] + jdsp->pw2BlockMemSize;
-	if (tmp1)
-		free(tmp1);
+	JamesDSPAllocateTempBuffers(jdsp);
 }
 void JamesDSPRefreshConvolutions(JamesDSPLib *jdsp, char refreshAll)
 {
@@ -332,8 +339,16 @@ void JamesDSPProcess(JamesDSPLib *jdsp, size_t n)
 	if (jdsp->bassBoostEnabled)
 		BassBoostProcess(jdsp, n);
 	// Equalizer
+#ifdef DSP_FUSION_STREAMING
+    EqCaptureBegin(jdsp->equalizerCapture,(uint32_t)jdsp->fs,jdsp->equalizerEnabled,
+        jdsp->mEQ.operatingMode,jdsp->mEQ.currentInterpolationMode,jdsp->mEQ.freq+1,jdsp->mEQ.gain+1,
+        jdsp->tmpBuffer[0],jdsp->tmpBuffer[1],n);
+#endif
 	if (jdsp->equalizerEnabled)
 		MultimodalEqualizerProcess(jdsp, n);
+#ifdef DSP_FUSION_STREAMING
+    EqCaptureEnd(jdsp->equalizerCapture,jdsp->tmpBuffer[0],jdsp->tmpBuffer[1],n);
+#endif
 	// Arbitrary magnitude eq
 	if (jdsp->arbitraryMagEnabled)
 		ArbitraryResponseEqualizerProcess(jdsp, n);
@@ -341,9 +356,20 @@ void JamesDSPProcess(JamesDSPLib *jdsp, size_t n)
 	// Convolver
 	if (jdsp->convolverEnabled)
 		if (jdsp->conv.process)
+		{
+#ifdef DSP_FUSION_STREAMING
+			FusionConvConfigure(jdsp->convolverControl, (uint32_t)jdsp->fs);
+			FusionConvBegin(jdsp->convolverControl, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n);
+            FusionConvPrepareInput(jdsp->convolverControl, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n);
+#endif
 			jdsp->conv.process(jdsp, n);
+#ifdef DSP_FUSION_STREAMING
+			FusionConvMixTransition(jdsp->convolverControl, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n);
+            FusionConvEnd(jdsp->convolverControl, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n);
+#endif
+		}
 	// Viper DDC
-	if (jdsp->ddcEnabled)
+	if (jdsp->ddcEnabled || DdcNeedsProcessing(jdsp->vdcFl.professional))
 		DDCProcess(jdsp, n);
 	// Live programmable
 	if (jdsp->liveprogEnabled)
@@ -391,8 +417,16 @@ void JamesDSPProcessCheckBenchmarkReady(JamesDSPLib *jdsp, size_t n)
 	if (jdsp->bassBoostEnabled)
 		BassBoostProcess(jdsp, n);
 	// Equalizer
+#ifdef DSP_FUSION_STREAMING
+    EqCaptureBegin(jdsp->equalizerCapture,(uint32_t)jdsp->fs,jdsp->equalizerEnabled,
+        jdsp->mEQ.operatingMode,jdsp->mEQ.currentInterpolationMode,jdsp->mEQ.freq+1,jdsp->mEQ.gain+1,
+        jdsp->tmpBuffer[0],jdsp->tmpBuffer[1],n);
+#endif
 	if (jdsp->equalizerEnabled)
 		MultimodalEqualizerProcess(jdsp, n);
+#ifdef DSP_FUSION_STREAMING
+    EqCaptureEnd(jdsp->equalizerCapture,jdsp->tmpBuffer[0],jdsp->tmpBuffer[1],n);
+#endif
 	// Arbitrary magnitude eq
 	if (jdsp->arbitraryMagEnabled)
 		ArbitraryResponseEqualizerProcess(jdsp, n);
@@ -400,9 +434,20 @@ void JamesDSPProcessCheckBenchmarkReady(JamesDSPLib *jdsp, size_t n)
 	// Convolver
 	if (jdsp->convolverEnabled)
 		if (jdsp->conv.process)
+		{
+#ifdef DSP_FUSION_STREAMING
+			FusionConvConfigure(jdsp->convolverControl, (uint32_t)jdsp->fs);
+			FusionConvBegin(jdsp->convolverControl, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n);
+            FusionConvPrepareInput(jdsp->convolverControl, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n);
+#endif
 			jdsp->conv.process(jdsp, n);
+#ifdef DSP_FUSION_STREAMING
+			FusionConvMixTransition(jdsp->convolverControl, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n);
+            FusionConvEnd(jdsp->convolverControl, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n);
+#endif
+		}
 	// Viper DDC
-	if (jdsp->ddcEnabled)
+	if (jdsp->ddcEnabled || DdcNeedsProcessing(jdsp->vdcFl.professional))
 		DDCProcess(jdsp, n);
 	// Live programmable
 	if (jdsp->liveprogEnabled)
@@ -956,8 +1001,67 @@ extern const double ccconv2Gain;
 extern const double ccconv3Gain;
 extern const double ccconv4Gain;
 extern const unsigned char CCConv[202119];
+// Offline FIR conversion only. Ordinary audio SRC must not use 1/ratio.
+// At high rates retain the original 44.1/48 kHz kernels' magnitude and phase,
+// apart from one coherent pad delay shared by all four matrix paths.
+static int JamesDSPResampleWorkingBlobs(JamesDSPLib *jdsp,double ratio)
+{
+    const int padding=64,channels=4;
+    const int shortLen=jdsp->blobsResampledLen,longLen=jdsp->frameLenSVirResampled;
+    float *prepared[4][4]={{0}};
+    int preparedLength[4]={0};
+    for(int group=0;group<4;++group){
+        const int oldLen=group==3?longLen:shortLen;
+        const int inputLen=oldLen+2*padding,outputLen=(int)ceil(inputLen*ratio);
+        float *old[4];
+        if(group==3)for(int c=0;c<4;++c)old[c]=jdsp->hrtfblobsResampled[c];
+        else{old[0]=jdsp->blobsCh1[group];old[1]=jdsp->blobsCh2[group];old[2]=jdsp->blobsCh3[group];old[3]=jdsp->blobsCh4[group];}
+        float *input=(float*)calloc((size_t)inputLen*channels,sizeof(float));
+        float *output=(float*)calloc((size_t)outputLen*channels,sizeof(float));
+        for(int c=0;c<4;++c)prepared[group][c]=(float*)malloc((size_t)outputLen*sizeof(float));
+        if(!input || !output || !prepared[group][0] || !prepared[group][1] || !prepared[group][2] || !prepared[group][3]){
+            free(input);free(output);goto prepare_failed;
+        }
+        for(int i=0;i<oldLen;++i)for(int c=0;c<4;++c)input[(size_t)(i+padding)*channels+c]=old[c][i];
+        JamesDSPOfflineResampling(input,output,inputLen,outputLen,channels,ratio);
+        const float scale=(float)(1.0/ratio);
+        for(int i=0;i<outputLen;++i)for(int c=0;c<4;++c)prepared[group][c][i]=output[(size_t)i*channels+c]*scale;
+        preparedLength[group]=outputLen;free(input);free(output);
+    }
+    // Do not publish a shared frame count until every matrix has been prepared.
+    // In particular, a late OOM must never make another group's shorter arrays
+    // look as though they contain the new high-rate number of frames.
+    for(int group=0;group<4;++group){
+        if(group==3){for(int c=0;c<4;++c){free(jdsp->hrtfblobsResampled[c]);jdsp->hrtfblobsResampled[c]=prepared[group][c];}}
+        else{
+            free(jdsp->blobsCh1[group]);free(jdsp->blobsCh2[group]);free(jdsp->blobsCh3[group]);free(jdsp->blobsCh4[group]);
+            jdsp->blobsCh1[group]=prepared[group][0];jdsp->blobsCh2[group]=prepared[group][1];jdsp->blobsCh3[group]=prepared[group][2];jdsp->blobsCh4[group]=prepared[group][3];
+        }
+    }
+    jdsp->blobsResampledLen=preparedLength[0];jdsp->frameLenSVirResampled=preparedLength[3];return 1;
+prepare_failed:
+    for(int group=0;group<4;++group)for(int c=0;c<4;++c)free(prepared[group][c]);
+    return 0;
+}
 void JamesDSPRefreshBlob(JamesDSPLib *jdsp, double targetFs)
 {
+    if(targetFs>48000.0){
+        // FIR interpolation requires its full, two-sided reconstruction pulse.
+        // The short HRTFs have a direct tap at frame zero: audio SRC at that
+        // boundary truncates the pulse and changes the acoustic gain. Generate
+        // the unchanged legacy working kernel first, then pad both ends. Every
+        // path gets the same 64-reference-frame delay (1.333/1.451 ms); HRTF
+        // matrices are fully wet, so this does not comb against a dry branch.
+        const double legacyFs=fmod(targetFs,44100.0)==0.0?44100.0:48000.0;
+        JamesDSPRefreshBlob(jdsp,legacyFs);
+        if(!JamesDSPResampleWorkingBlobs(jdsp,targetFs/legacyFs)){
+            // Retain valid allocations for normal destruction, but prohibit a
+            // lower-rate kernel from being interpreted at the new host rate.
+            jdsp->blobsResampledLen=0;jdsp->frameLenSVirResampled=0;
+            jdsp->crossfeedEnabled=0;
+        }
+        return;
+    }
 	const int channelsBlobsShort = 4;
 	double ratio = targetFs / (double)hrtfFs;
 	int outLen = (int)ceil(hrtfLenPerChannel * ratio);
@@ -1081,7 +1185,9 @@ void JamesDSPInit(JamesDSPLib *jdsp, int n, float sample_rate)
 	//
 	const unsigned int asrc_taps = 64;
 	char isminphase = 1;
-	if (sample_rate < 44100.0f || sample_rate > 48000.0f)
+	// Keep high-resolution host audio at its real rate. Only the legacy low-rate
+	// path requires ASRC; effect-local oversampling remains independent.
+	if (sample_rate < 44100.0f)
 	{
 		jdsp->enableASRC = 1;
 		int roundedRate = (int)(sample_rate);
@@ -1094,27 +1200,14 @@ void JamesDSPInit(JamesDSPLib *jdsp, int n, float sample_rate)
 			jdsp->fs = 48000;
 		InitIntegerASRCHandler(&jdsp->asrc[0], (unsigned long long)jdsp->fs, (unsigned long long)jdsp->trueSampleRate, asrc_taps, isminphase, 0, 0);
 		InitIntegerASRCHandler(&jdsp->asrc[1], (unsigned long long)jdsp->fs, (unsigned long long)jdsp->trueSampleRate, asrc_taps, isminphase, &jdsp->asrc[0].polyphaseDecimator, &jdsp->asrc[0].polyphaseInterpolator);
-		double ratio = (double)jdsp->fs / (double)jdsp->trueSampleRate;
-		unsigned int maxDecimatedLength = (unsigned int)ceil(n * ratio);
-		unsigned int maxInterpolatedLength = (unsigned int)ceil(maxDecimatedLength / ratio);
-		jdsp->pw2BlockMemSize = next_pow_2(maxInterpolatedLength);
-		size_t ctMemBlk = jdsp->blockSizeMax * 2 + maxInterpolatedLength * 2 + jdsp->pw2BlockMemSize * 2;
-		jdsp->tmpBuffer[0] = (float *)malloc(ctMemBlk * sizeof(float));
-		jdsp->tmpBuffer[1] = jdsp->tmpBuffer[0] + jdsp->blockSizeMax;
-		jdsp->tmpBuffer[2] = jdsp->tmpBuffer[1] + jdsp->blockSizeMax;
-		jdsp->tmpBuffer[3] = jdsp->tmpBuffer[2] + maxInterpolatedLength;
-		jdsp->tmpBuffer[4] = jdsp->tmpBuffer[3] + maxInterpolatedLength;
-		jdsp->tmpBuffer[5] = jdsp->tmpBuffer[4] + jdsp->pw2BlockMemSize;
 	}
 	else
 	{
-		size_t ctMemBlk = jdsp->blockSizeMax * 2;
-		jdsp->tmpBuffer[0] = (float *)malloc(ctMemBlk * sizeof(float));
-		jdsp->tmpBuffer[1] = jdsp->tmpBuffer[0] + jdsp->blockSizeMax;
 		jdsp->trueSampleRate = sample_rate;
 		jdsp->fs = sample_rate;
 		jdsp->enableASRC = 0;
 	}
+	JamesDSPAllocateTempBuffers(jdsp);
 	// Init IO control
 	JLimiterInit(jdsp);
 	JLimiterSetCoefficients(jdsp, -(double)(FLT_EPSILON * 10.0f), 100.0);
@@ -1125,6 +1218,13 @@ void JamesDSPInit(JamesDSPLib *jdsp, int n, float sample_rate)
 	CompressorDisable(jdsp);
 	BassBoostConstructor(jdsp);
 	BassBoostDisable(jdsp);
+#ifdef DSP_FUSION_STREAMING
+    jdsp->roomReverb=RoomReverbCreate();
+#endif
+	jdsp->timbre=TimbreCreate();
+	TimbreRefresh(jdsp->timbre,jdsp);
+    jdsp->roomReverbBase=15;
+    Reverb_SetParam(jdsp,15);
 	ReverbDisable(jdsp);
 	StereoEnhancementConstructor(jdsp);
 	StereoEnhancementDisable(jdsp);
@@ -1135,10 +1235,17 @@ void JamesDSPInit(JamesDSPLib *jdsp, int n, float sample_rate)
 	CrossfeedConstructor(jdsp);
 	CrossfeedDisable(jdsp);
 	Convolver1DConstructor(jdsp);
+#ifdef DSP_FUSION_STREAMING
+	jdsp->convolverControl = FusionConvCreate();
+	FusionConvConfigure(jdsp->convolverControl, (uint32_t)jdsp->fs);
+#endif
 	ArbitraryResponseEqualizerConstructor(jdsp);
 	ArbitraryResponseEqualizerDisable(jdsp);
 	MultimodalEqualizerConstructor(jdsp);
 	MultimodalEqualizerDisable(jdsp);
+#ifdef DSP_FUSION_STREAMING
+    jdsp->equalizerCapture=EqCaptureCreate();
+#endif
 	// Init binary blobs, random number generator
 	jdsp->rndstate[0] = time(0);
 	for (int i = 0; i < 3; i++)
@@ -1151,6 +1258,9 @@ void JamesDSPInit(JamesDSPLib *jdsp, int n, float sample_rate)
 			randXorshift(jdsp->rndstate);
 	}
 	JamesDSPRefreshBlob(jdsp, (double)jdsp->fs);
+#ifdef DSP_FUSION_STREAMING
+    PresetCrossfeedRefresh(jdsp->advXF.professional,jdsp);
+#endif
 	jdsp->rndstate[1] = (uint64_t)(randXorshift(jdsp->rndstate) * 2.0);
 #ifdef DEBUG
 	__android_log_print(ANDROID_LOG_INFO, TAG, "Printing benchmark data start");
@@ -1174,7 +1284,15 @@ int JamesDSPGetMutexStatus(JamesDSPLib *jdsp)
 void JamesDSPSetSampleRate(JamesDSPLib *jdsp, float new_sample_rate, int forceRefresh)
 {
 	if (jdsp->trueSampleRate == new_sample_rate)
+	{
+		if (jdsp->eel.sourceInit && jdsp->eel.compiledSampleRate != jdsp->fs) {
+			jdsp_lock(jdsp);
+			LiveProgRefreshLocked(jdsp);
+			jdsp_unlock(jdsp);
+		}
 		return;
+	}
+	const float previousProcessingRate=jdsp->fs;
 	jdsp->trueSampleRate = new_sample_rate;
 	jdsp_lock(jdsp);
 	if (jdsp->enableASRC)
@@ -1184,7 +1302,7 @@ void JamesDSPSetSampleRate(JamesDSPLib *jdsp, float new_sample_rate, int forceRe
 	}
 	const unsigned int asrc_taps = 32;
 	char isminphase = 1;
-	if (new_sample_rate < 44100.0f || new_sample_rate > 48000.0f)
+	if (new_sample_rate < 44100.0f)
 	{
 		jdsp->enableASRC = 1;
 		int roundedRate = (int)(new_sample_rate);
@@ -1196,54 +1314,79 @@ void JamesDSPSetSampleRate(JamesDSPLib *jdsp, float new_sample_rate, int forceRe
 			jdsp->fs = 48000;
 		InitIntegerASRCHandler(&jdsp->asrc[0], (unsigned long long)jdsp->fs, (unsigned long long)jdsp->trueSampleRate, asrc_taps, isminphase, 0, 0);
 		InitIntegerASRCHandler(&jdsp->asrc[1], (unsigned long long)jdsp->fs, (unsigned long long)jdsp->trueSampleRate, asrc_taps, isminphase, &jdsp->asrc[0].polyphaseDecimator, &jdsp->asrc[0].polyphaseInterpolator);
-		double ratio = (double)jdsp->fs / (double)jdsp->trueSampleRate;
-		unsigned int maxDecimatedLength = (unsigned int)ceil(jdsp->blockSizeMax * ratio);
-		unsigned int maxInterpolatedLength = (unsigned int)ceil(maxDecimatedLength / ratio);
-		jdsp->pw2BlockMemSize = next_pow_2(maxInterpolatedLength);
-		if (jdsp->tmpBuffer[0])
-			free(jdsp->tmpBuffer[0]);
-		size_t ctMemBlk = jdsp->blockSizeMax * 2 + maxInterpolatedLength * 2 + jdsp->pw2BlockMemSize * 2;
-		jdsp->tmpBuffer[0] = (float *)malloc(ctMemBlk * sizeof(float));
-		jdsp->tmpBuffer[1] = jdsp->tmpBuffer[0] + jdsp->blockSizeMax;
-		jdsp->tmpBuffer[2] = jdsp->tmpBuffer[1] + jdsp->blockSizeMax;
-		jdsp->tmpBuffer[3] = jdsp->tmpBuffer[2] + maxInterpolatedLength;
-		jdsp->tmpBuffer[4] = jdsp->tmpBuffer[3] + maxInterpolatedLength;
-		jdsp->tmpBuffer[5] = jdsp->tmpBuffer[4] + jdsp->pw2BlockMemSize;
 	}
 	else
 	{
 		jdsp->enableASRC = 0;
 		jdsp->fs = jdsp->trueSampleRate;
 	}
+	JamesDSPAllocateTempBuffers(jdsp);
 	JamesDSPRefreshBlob(jdsp, jdsp->fs);
-	if (forceRefresh)
+	if (jdsp->limiter.releaseMs > 0)
+		jdsp->limiter.relCoef = (float)exp(-1000.0 / (jdsp->limiter.releaseMs * round((double)jdsp->fs)));
+    ReverbRefresh(jdsp);
+    TimbreRefresh(jdsp->timbre,jdsp);
+    CompanderRefresh(jdsp->companderNative,jdsp);
+    // Fusion's lightweight SET_CONFIG must also update already-enabled legacy crossfeed.
+    // Disabled modules defer allocation until their next enable request.
+    if(forceRefresh || previousProcessingRate!=jdsp->fs){
+        jdsp->crossfeedForceRefresh=1;
+        if(jdsp->crossfeedEnabled || forceRefresh)CrossfeedEnableLocked(jdsp,jdsp->crossfeedEnabled);
+    }
+#ifdef DSP_FUSION_STREAMING
+    PresetCrossfeedRefresh(jdsp->advXF.professional,jdsp);
+#endif
+	// New width filters follow actual internal Fs even on Fusion's lightweight
+	// configuration path. Preserve the old widening filter-bank refresh policy.
+	if (!forceRefresh)
+		StereoWidthConfigure(&jdsp->sterEnh.professionalWidth, jdsp->fs);
+	// DDC follows actual internal Fs even on Fusion lightweight SET_CONFIG.
+	if (forceRefresh || previousProcessingRate != jdsp->fs) {
+		// Script coefficients and delay sizes are computed by @init/@slider.
+		// Updating only srate leaves those values at the old processing rate.
+		LiveProgRefreshLocked(jdsp);
+		DDCRefresh(jdsp, jdsp->vdcFl.oldFile);
+		jdsp->ddcForceRefresh = 0;
+		DDCEnable(jdsp, jdsp->ddcEnabled);
+	}
+	if (forceRefresh || previousProcessingRate != jdsp->fs)
 	{
 		BassBoostSetParam(jdsp, jdsp->dbb.maxGain);
-		jdsp->ddcForceRefresh = 1;
-		DDCEnable(jdsp, jdsp->ddcEnabled);
-		jdsp->crossfeedForceRefresh = 1;
-		CrossfeedEnable(jdsp, jdsp->crossfeedEnabled);
 		jdsp->arbMagForceRefresh = 1;
-		ArbitraryResponseEqualizerEnable(jdsp, jdsp->arbitraryMagEnabled);
+		ArbitraryResponseEqualizerEnableLocked(jdsp, jdsp->arbitraryMagEnabled);
 		jdsp->equalizerForceRefresh = 1;
 		MultimodalEqualizerEnable(jdsp, jdsp->equalizerEnabled);
 		jdsp->compForceRefresh = 1;
 		CompressorEnable(jdsp, jdsp->compEnabled);
-		StereoEnhancementRefresh(jdsp);
+		StereoEnhancementRefreshLocked(jdsp);
 	}
 	jdsp_unlock(jdsp);
 }
 void JamesDSPFree(JamesDSPLib *jdsp)
 {
 	jdsp_lock(jdsp);
+#ifdef DSP_FUSION_STREAMING
+    RoomReverbDestroy(jdsp->roomReverb);jdsp->roomReverb=NULL;
+#endif
+    TimbreDestroy(jdsp->timbre);jdsp->timbre=NULL;
 	StereoEnhancementDestructor(jdsp);
 	CompressorDestructor(jdsp);
 	LiveProgDestructor(jdsp);
 	DDCDestructor(jdsp);
 	CrossfeedDestructor(jdsp);
+#ifdef DSP_FUSION_STREAMING
+    PresetCrossfeedDestroy(jdsp->advXF.professional);jdsp->advXF.professional=NULL;
+#endif
 	Convolver1DDestructor(jdsp);
+#ifdef DSP_FUSION_STREAMING
+	FusionConvDestroy(jdsp->convolverControl);
+	jdsp->convolverControl = NULL;
+#endif
 	ArbitraryResponseEqualizerDestructor(jdsp);
 	MultimodalEqualizerDestructor(jdsp);
+#ifdef DSP_FUSION_STREAMING
+    EqCaptureDestroy(jdsp->equalizerCapture);jdsp->equalizerCapture=NULL;
+#endif
 	if (jdsp->tmpBuffer[0])
 		free(jdsp->tmpBuffer[0]);
 	int i;

@@ -35,7 +35,6 @@
             android:title="@string/audio_format_processing_legacy"
             android:summaryOff="@string/audio_format_processing_legacy_off"
             android:summaryOn="@string/audio_format_processing_legacy_on"
-            android:disableDependentsState="true"
             app:iconSpaceReserved="false" />
 
         <me.timschneeberger.rootlessjamesdsp.preference.MaterialSwitchPreference
@@ -44,7 +43,6 @@
             android:title="@string/audio_format_enhanced_processing"
             android:summaryOff="@string/audio_format_enhanced_processing_off"
             android:summaryOn="@string/audio_format_enhanced_processing_on"
-            android:dependency="@string/key_audioformat_processing"
             app:iconSpaceReserved="false" />
 
         <Preference
@@ -52,6 +50,13 @@
             android:title="@string/audio_format_enhanced_processing_info_title"
             android:summary="@string/audio_format_enhanced_processing_info"
             app:iconSpaceReserved="false"/>
+
+        <me.timschneeberger.rootlessjamesdsp.preference.MaterialSwitchPreference
+            android:key="@string/key_audioformat_usb_rate_follow"
+            android:defaultValue="@bool/default_audioformat_usb_rate_follow"
+            android:title="@string/usb_audio_follow_title"
+            android:summary="@string/usb_audio_follow_off"
+            app:iconSpaceReserved="false" />
 
     </PreferenceCategory>
 

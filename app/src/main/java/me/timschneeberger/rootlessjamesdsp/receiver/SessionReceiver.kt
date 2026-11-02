@@ -7,6 +7,7 @@ import android.content.Intent
 import android.media.audiofx.AudioEffect
 import me.timschneeberger.rootlessjamesdsp.BuildConfig
 import me.timschneeberger.rootlessjamesdsp.service.RootAudioProcessorService
+import me.timschneeberger.rootlessjamesdsp.session.root.RootProcessingPolicy
 import me.timschneeberger.rootlessjamesdsp.session.rootless.RootlessSessionDatabase
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
@@ -40,6 +41,10 @@ class SessionReceiver : BroadcastReceiver() {
         )
 
         if(isRoot()) {
+            val sid=intent.getIntExtra(AudioEffect.EXTRA_AUDIO_SESSION,AudioEffect.ERROR)
+            if(intent.action !in listOf(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION,
+                    AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION) || sid<0 ||
+                (sid==0 && RootProcessingPolicy.playerSessions(context)))return
             Intent(context, RootAudioProcessorService::class.java)
                 .apply { this.action = intent.action }
                 .apply { putExtras(intent) }

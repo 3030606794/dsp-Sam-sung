@@ -136,6 +136,7 @@ class RootlessAudioProcessorService : BaseAudioProcessorService() {
         filter.addAction(ACTION_PREFERENCES_UPDATED)
         filter.addAction(ACTION_SAMPLE_RATE_UPDATED)
         filter.addAction(ACTION_SERVICE_RELOAD_LIVEPROG)
+        filter.addAction(Constants.ACTION_SERVICE_UPDATE_LIVEPROG_PARAMETERS)
         filter.addAction(ACTION_SERVICE_HARD_REBOOT_CORE)
         filter.addAction(ACTION_SERVICE_SOFT_REBOOT_CORE)
         registerLocalReceiver(broadcastReceiver, filter)
@@ -286,6 +287,7 @@ class RootlessAudioProcessorService : BaseAudioProcessorService() {
                 ACTION_SAMPLE_RATE_UPDATED -> engine.syncWithPreferences(arrayOf(Constants.PREF_CONVOLVER))
                 ACTION_PREFERENCES_UPDATED -> engine.syncWithPreferences()
                 ACTION_SERVICE_RELOAD_LIVEPROG -> engine.syncWithPreferences(arrayOf(Constants.PREF_LIVEPROG))
+                Constants.ACTION_SERVICE_UPDATE_LIVEPROG_PARAMETERS -> intent.getStringExtra(Constants.EXTRA_LIVEPROG_PATH)?.let(engine::updateLiveprogParameters)
                 ACTION_SERVICE_HARD_REBOOT_CORE -> restartRecording()
                 ACTION_SERVICE_SOFT_REBOOT_CORE -> requestAudioRecordRecreation()
             }

@@ -1,4 +1,5 @@
 project(jamesdsp-wrapper LANGUAGES CXX)
+set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/JamesDspWrapper.cpp PROPERTIES COMPILE_OPTIONS "-fno-fast-math")
 
 file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/*.cpp ${CMAKE_CURRENT_LIST_DIR}/*.h)
 

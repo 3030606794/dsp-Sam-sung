@@ -23,6 +23,7 @@ import fr.bipi.tressence.file.FileLoggerTree
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import me.timschneeberger.rootlessjamesdsp.flavor.CrashlyticsImpl
+import me.timschneeberger.rootlessjamesdsp.flavor.RootShellImpl
 import me.timschneeberger.rootlessjamesdsp.model.preference.ThemeMode
 import me.timschneeberger.rootlessjamesdsp.model.room.AppBlocklistDatabase
 import me.timschneeberger.rootlessjamesdsp.model.room.AppBlocklistRepository
@@ -64,11 +65,12 @@ open class MainApplication : Application(), SharedPreferences.OnSharedPreference
     lateinit var profileManager: ProfileManager
 
     val rootSessionDatabase by lazy { RootSessionDatabase(this) }
+    val isPlayerSessionMode
+        get() = me.timschneeberger.rootlessjamesdsp.session.root.RootProcessingPolicy.playerSessions(this)
     val isLegacyMode
-        get() = prefs.get<Boolean>(R.string.key_audioformat_processing)
+        get() = !isPlayerSessionMode
     val isEnhancedProcessing
-        get() = !isLegacyMode &&
-                prefs.get<Boolean>(R.string.key_audioformat_enhanced_processing)
+        get() = isPlayerSessionMode
 
     private val applicationScope = CoroutineScope(SupervisorJob())
     private val blockedAppDatabase by lazy { AppBlocklistDatabase.getDatabase(this, applicationScope) }
@@ -130,6 +132,11 @@ open class MainApplication : Application(), SharedPreferences.OnSharedPreference
 
         Timber.i("====> Application starting up")
 
+        if (isRoot()) {
+            RootShellImpl.initialize()
+            me.timschneeberger.rootlessjamesdsp.utils.AudioProcessingModeSettings.applyVivoGlobalDefault(this)
+        }
+
         val dumpFile = File(filesDir, "dump.txt")
         if(dumpFile.exists()) {
             dumpFile.delete()
@@ -151,6 +158,7 @@ open class MainApplication : Application(), SharedPreferences.OnSharedPreference
         }
 
         me.timschneeberger.rootlessjamesdsp.fusion.FusionPreferenceMigration.migrate(this)
+        me.timschneeberger.rootlessjamesdsp.convolver.ConvolverLibrary.install(this)
 
         // Depends on Koin
         profileManager = ProfileManager()
@@ -203,8 +211,8 @@ open class MainApplication : Application(), SharedPreferences.OnSharedPreference
         })
 
         try {
-            if (isRoot() && isLegacyMode)
-                RootAudioProcessorService.updateLegacyMode(applicationContext, true)
+            if (isRoot())
+                RootAudioProcessorService.refreshProcessingMode(applicationContext)
         }
         catch(ex: Exception) {
             /* Throws ForegroundServiceStartNotAllowedException on Android 13 if

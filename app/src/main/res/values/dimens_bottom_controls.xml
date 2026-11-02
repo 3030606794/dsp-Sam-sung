@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="bottom_control_touch_size">48dp</dimen>
+    <dimen name="bottom_control_icon_size">32dp</dimen>
+    <dimen name="bottom_control_icon_padding">8dp</dimen>
+</resources>

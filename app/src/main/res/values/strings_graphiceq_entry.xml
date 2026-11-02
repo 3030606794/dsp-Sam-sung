@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_graphiceq_import_action">Import curve TXT</string>
+</resources>

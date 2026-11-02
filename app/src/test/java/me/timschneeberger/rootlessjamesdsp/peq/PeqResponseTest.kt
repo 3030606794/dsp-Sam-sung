@@ -11,7 +11,7 @@ class PeqResponseTest {
         PeqBand("test", type, true, frequency, gain, q)))
 
     @Test fun neutralAndDisabledBandsHaveAnExactlyFlatResponse() {
-        assertTrue(PeqResponse.curve(PeqModel.defaultState(170)).all { it.db == 0.0 })
+        assertTrue(PeqResponse.curve(PeqModel.defaultState(130)).all { it.db == 0.0 })
         val disabled = state(PeqFilterType.LOW_PASS).let {
             it.copy(bands = it.bands.map { band -> band.copy(enabled = false) })
         }
@@ -90,14 +90,18 @@ class PeqResponseTest {
 
     @Test fun sampledCurveMatchesIndividualEvaluationAndBypassesUnavailableFrequencies() {
         val requested = state(PeqFilterType.PEAK, frequency = 20000.0)
-        assertTrue(PeqResponse.curve(requested, sampleRate = 32000.0).all { it.db == 0.0 })
-        assertTrue(PeqResponse.curve(state(PeqFilterType.LOW_PASS, frequency = 16000.0),
-            sampleRate = 32000.0).all { it.db == 0.0 })
+        assertTrue(PeqResponse.curve(requested, sampleRate = 32000.0).all {
+            if (it.frequency > 16000.0) it.db.isNaN() else it.db == 0.0
+        })
+        val edge = state(PeqFilterType.LOW_PASS, frequency = 16000.0)
+        assertTrue(PeqResponse.curve(edge, sampleRate = 32000.0).all {
+            it.frequency <= 16000.0 && it.db == PeqResponse.responseDb(edge, it.frequency, 32000.0)
+        })
         val state = PeqState(listOf(PeqBand("peak", gain = 7.125, q = 0.71314),
             PeqBand("shelf", PeqFilterType.HIGH_SHELF, true, 3456.7894, -3.45123, 1.56789)))
         val curve = PeqResponse.curve(state, points = 101)
-        assertEquals(20.0, curve.first().frequency, 0.0)
-        assertEquals(20000.0, curve.last().frequency, 0.0)
+        assertEquals(1.0, curve.first().frequency, 0.0)
+        assertEquals(24000.0, curve.last().frequency, 0.0)
         assertTrue(curve.zipWithNext().all { (a, b) -> a.frequency < b.frequency })
         curve.forEach { assertEquals(PeqResponse.responseDb(state, it.frequency), it.db, 0.0) }
     }
@@ -134,16 +138,16 @@ class PeqResponseTest {
                 val bandwidth = PeqResponse.bandwidthOctaves(q, 0.0, rate)
                 assertEquals(expected, bandwidth, 1e-12)
                 assertEquals(q, PeqResponse.qFromBandwidth(bandwidth, 0.0, rate), 1e-10)
-                assertTrue(bandwidth > PeqResponse.bandwidthOctaves(q, 20.0, rate))
+                assertEquals(bandwidth, PeqResponse.bandwidthOctaves(q, 20.0, rate), 0.0)
             }
         }
         assertThrows(IllegalArgumentException::class.java) { PeqResponse.bandwidthOctaves(0.5, -1.0) }
     }
 
-    @Test fun extreme170BandResponsesRemainFiniteWithoutProductOverflow() {
+    @Test fun extreme130BandResponsesRemainFiniteWithoutProductOverflow() {
         for (type in PeqFilterType.entries) {
             for (rate in listOf(44100.0, 48000.0, 96000.0)) {
-                val state = PeqState(List(170) { index -> PeqBand("band-$index", type, true,
+                val state = PeqState(List(130) { index -> PeqBand("band-$index", type, true,
                     if (index % 2 == 0) 20.0 else 20000.0,
                     if (index % 2 == 0) 100.0 else -100.0,
                     if (index % 2 == 0) 0.1 else 100.0) })
@@ -152,7 +156,7 @@ class PeqResponseTest {
         }
     }
 
-    @Test fun bandwidthConversionIncludesDigitalWarpingAndRoundTrips() {
+    @Test fun referenceBandwidthIsFrequencyIndependentAndRoundTrips() {
         for (rate in listOf(44100.0, 48000.0, 96000.0)) {
             for (frequency in listOf(20.0, 1000.0, 20000.0)) {
                 for (q in listOf(0.1, 0.707, 3.0, 30.0, 100.0)) {
@@ -161,9 +165,9 @@ class PeqResponseTest {
                 }
             }
         }
-        assertTrue(PeqResponse.bandwidthOctaves(1.0, 20000.0) <
-            PeqResponse.bandwidthOctaves(1.0, 1000.0) / 2.0)
-        assertThrows(IllegalArgumentException::class.java) { PeqResponse.qFromBandwidth(1.0, 24000.0) }
+        assertEquals(PeqResponse.bandwidthOctaves(1.0, 20000.0),
+            PeqResponse.bandwidthOctaves(1.0, 1000.0), 0.0)
+        assertEquals(PeqResponse.qFromBandwidth(1.0, 1000.0), PeqResponse.qFromBandwidth(1.0, 24000.0), 0.0)
         assertThrows(IllegalArgumentException::class.java) { PeqResponse.bandwidthOctaves(Double.NaN, 1000.0) }
     }
 
@@ -205,8 +209,8 @@ class PeqResponseTest {
         }
     }
 
-    @Test fun adaptive170BandCurveIsBoundedAndDoesNotDropAnyActiveCenter() {
-        val state = PeqModel.defaultState(170).let { original -> original.copy(
+    @Test fun adaptive130BandCurveIsBoundedAndDoesNotDropAnyActiveCenter() {
+        val state = PeqModel.defaultState(130).let { original -> original.copy(
             bands = original.bands.mapIndexed { index, band -> band.copy(q = 100.0,
                 gain = if (index % 2 == 0) 100.0 else -100.0,
                 type = PeqFilterType.entries[index % 7]) }) }

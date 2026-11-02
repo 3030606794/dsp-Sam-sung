@@ -25,6 +25,16 @@
                 android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
                 android:text="@string/peq_presets_export_all" />
         </LinearLayout>
+        <com.google.android.material.button.MaterialButton android:id="@+id/peq_presets_import_graphiceq"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:visibility="gone" android:text="@string/peq_graphiceq_import_action" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/peq_presets_system"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent" android:layout_height="44dp"
+            android:minHeight="0dp" android:minWidth="0dp"
+            android:insetTop="0dp" android:insetBottom="0dp" android:textSize="13sp"
+            android:text="@string/peq_system_presets" />
         <TextView android:id="@+id/peq_presets_status"
             android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginVertical="8dp" android:visibility="gone"

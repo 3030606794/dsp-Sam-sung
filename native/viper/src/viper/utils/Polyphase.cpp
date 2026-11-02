@@ -146,7 +146,9 @@ Polyphase::Polyphase(int param_1) : waveBuffer1(2, 0x1000), waveBuffer2(2, 0x100
 }
 
 uint32_t Polyphase::GetLatency() {
-    return 63;
+    // Keep the historical full-512 steady-state alignment, including the
+    // low-pass path mixed by ViPERBass. Scheduling must not depend on callbacks.
+    return 1024 + 63;
 }
 
 uint32_t Polyphase::Process(float *samples, uint32_t size) {
@@ -174,6 +176,10 @@ void Polyphase::Reset() {
     this->fir2.Reset();
     this->waveBuffer1.Reset();
     this->waveBuffer2.Reset();
+    // A 1008-frame FIR batch may leave up to 1007 input frames pending. Fixed
+    // padding prevents a short host tail (for example512+448) from underflowing
+    // and temporarily passing dry audio, which used to change permanent delay.
+    this->waveBuffer2.PushZeros(1024);
 }
 
 void Polyphase::SetSamplingRate(uint32_t samplingRate) {

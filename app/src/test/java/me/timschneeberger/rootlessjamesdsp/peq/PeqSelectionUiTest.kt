@@ -15,6 +15,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.color.MaterialColors
 import me.timschneeberger.rootlessjamesdsp.R
@@ -49,6 +50,8 @@ class PeqSelectionUiTest {
 
     @Before fun clear() {
         prefs.edit().clear().commit()
+        application.getSharedPreferences(PeqBandLockStore.PREFERENCES, Context.MODE_PRIVATE).edit().clear().commit()
+        assertTrue(PeqEditorPreferences(application).save(PeqEditorSettings(confirmDelete = true)))
         presets.load().forEach { presets.delete(it.id) }
     }
     @After fun close() { controller?.pause()?.stop()?.destroy(); idle() }
@@ -72,6 +75,8 @@ class PeqSelectionUiTest {
         showQSlider = false, showFrequencySlider = false, frequencyStep = 37.0)
     private fun launch(state: PeqState = initial()) {
         assertTrue(repository.save(state))
+        val locks = PeqBandLockStore(application)
+        state.bands.forEach { locks.setBandLocked(it.id, false) }
         controller = Robolectric.buildActivity(HostActivity::class.java).setup().visible()
         layout()
     }
@@ -89,17 +94,19 @@ class PeqSelectionUiTest {
     }
     private fun dialog(): AlertDialog { idle(); return ShadowDialog.getLatestDialog() as AlertDialog }
     private fun choose(dialog: AlertDialog, index: Int) {
-        dialog.listView.performItemClick(null, index, index.toLong())
+        if (dialog.findViewById<View>(R.id.peq_filter_types) != null ||
+            dialog.findViewById<View>(R.id.peq_batch_filter) != null)
+            dialog.findViewById<View>(PeqFilterTypeDialog.buttonId(PeqFilterType.entries[index]))!!.performClick()
+        else dialog.listView.performItemClick(null, index, index.toLong())
         idle()
     }
-    private fun parameters(index: Int): AlertDialog {
+    private fun parameters(): AlertDialog {
         click(R.id.peq_parameters)
-        choose(dialog(), index)
         return dialog()
     }
     private fun quality(index: Int, value: String) {
-        val editor = parameters(index)
-        editor.findViewById<EditText>(R.id.peq_bulk_quality_input)!!.setText(value)
+        val editor = parameters()
+        editor.findViewById<EditText>(if (index == 0) R.id.peq_batch_q_input else R.id.peq_batch_bw_input)!!.setText(value)
         editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         layout()
         assertFalse(editor.isShowing)
@@ -136,13 +143,12 @@ class PeqSelectionUiTest {
         assertSaved(original)
         quality(0, "1.25")
         val afterQ = original.copy(bands = original.bands.mapIndexed { index, band ->
-            if (index != 1) band.copy(q = 1.25, qualityDisplay = PeqQualityDisplay.Q) else band
+            if (index == 0) band.copy(q = 1.25) else band
         })
         assertSaved(afterQ)
         quality(1, "0.5")
         assertSaved(afterQ.copy(bands = afterQ.bands.mapIndexed { index, band ->
-            if (index != 1) band.copy(q = PeqResponse.qFromBandwidth(0.5, band.frequency),
-                qualityDisplay = PeqQualityDisplay.BW) else band
+            if (index == 2) band.copy(q = PeqResponse.qFromBandwidth(0.5, band.frequency)) else band
         }))
         assertTrue(row(0).isSelected)
         assertTrue(row(2).isSelected)
@@ -160,7 +166,7 @@ class PeqSelectionUiTest {
             if (index != 1) band.copy(gain = 0.0) else band
         })
         assertSaved(reset)
-        val picker = parameters(2)
+        val picker = parameters()
         choose(picker, PeqFilterType.PEAK.ordinal)
         picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         layout()
@@ -177,7 +183,7 @@ class PeqSelectionUiTest {
         assertSaved(original.copy(bands = listOf(original.bands[1])))
         assertTrue(row(0).isSelected)
         assertEquals(1, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
-        assertTrue(view<TextView>(R.id.peq_summary).text.startsWith("1 "))
+        assertTrue(controller!!.get().findViewById<TextView>(R.id.peq_toolbar_summary).text.toString().startsWith("1 "))
         assertEquals(1, settingCount())
         assertTrue(view<View>(R.id.peq_add_front).isEnabled)
         assertTrue(view<View>(R.id.peq_add_back).isEnabled)
@@ -222,8 +228,11 @@ class PeqSelectionUiTest {
         repeat(4) { assertFalse(row(it).isSelected) }
         click(R.id.peq_selection_done)
         assertEquals(View.GONE, view<View>(R.id.peq_selection_controls).visibility)
+        val beforeQuality = repository.load()
         quality(0, "1.75")
-        assertTrue(repository.load().bands.all { it.q == 1.75 })
+        assertEquals(beforeQuality.copy(bands = beforeQuality.bands.map {
+            if (it.qualityDisplay == PeqQualityDisplay.Q) it.copy(q = 1.75) else it
+        }), repository.load())
         assertEquals(repository.load(), fragment().editorState)
     }
 
@@ -260,7 +269,7 @@ class PeqSelectionUiTest {
         layout()
         assertSaved(original.copy(bands = listOf(original.bands[1])))
         assertEquals(1, view<RecyclerView>(R.id.peq_band_list).adapter!!.itemCount)
-        assertTrue(view<TextView>(R.id.peq_summary).text.startsWith("1 "))
+        assertTrue(controller!!.get().findViewById<TextView>(R.id.peq_toolbar_summary).text.toString().startsWith("1 "))
         assertEquals(1, settingCount())
         click(R.id.peq_add_back)
         assertEquals(2, repository.load().bands.size)
@@ -350,7 +359,8 @@ class PeqSelectionUiTest {
         controller!!.recreate()
         layout()
         assertSaved(reordered)
-        assertEquals("3 • ${PeqBandAdapter.typeLabel(application, original.bands[0].type)}",
+        assertEquals("3", row(2).findViewById<TextView>(R.id.peq_band_number).text.toString())
+        assertEquals(PeqBandAdapter.typeLabel(application, original.bands[0].type),
             row(2).findViewById<TextView>(R.id.peq_band_title).text.toString())
         edit(2)
         assertTrue(row(2).isSelected)
@@ -438,11 +448,10 @@ class PeqSelectionUiTest {
                 assertEquals(before, repository.load())
                 assertSame(moving, list.findViewHolderForAdapterPosition(to))
                 expected.bands.forEachIndexed { index, band ->
-                    val title = application.getString(R.string.peq_band_type_title,
-                        index + 1, PeqBandAdapter.typeLabel(application, band.type))
-                    val expectedTitle = if (band.enabled) title else application.getString(R.string.peq_band_disabled, title)
                     val card = requireNotNull(list.findViewHolderForAdapterPosition(index)).itemView
-                    assertEquals(expectedTitle, card.findViewById<TextView>(R.id.peq_band_title).text.toString())
+                    assertEquals((index + 1).toString(), card.findViewById<TextView>(R.id.peq_band_number).text.toString())
+                    assertEquals(PeqBandAdapter.typeLabel(application, band.type),
+                        card.findViewById<TextView>(R.id.peq_band_title).text.toString())
                 }
                 dispatch(MotionEvent.ACTION_UP, targetY)
                 fingerDown = false

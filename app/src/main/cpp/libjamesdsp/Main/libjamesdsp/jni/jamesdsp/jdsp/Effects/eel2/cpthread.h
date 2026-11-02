@@ -1,6 +1,7 @@
 #ifndef __CPTHREAD_H__
 #define __CPTHREAD_H__
-#ifdef _WIN32
+// MinGW provides pthreads; the Windows wrapper is for toolchains without it.
+#if defined(_WIN32) && !defined(__MINGW32__)
 #include <stdbool.h>
 #include <windows.h>
 typedef void pthread_attr_t;

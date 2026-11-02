@@ -4,6 +4,7 @@
 #include <Log.h>
 
 #include <string>
+#include <cmath>
 #include <jni.h>
 
 #include "JamesDspWrapper.h"
@@ -381,8 +382,12 @@ Java_me_timschneeberger_rootlessjamesdsp_interop_JamesDspWrapper_setVdc(JNIEnv *
     if(enable)
     {
         const char *nativeString = env->GetStringUTFChars(vdcContents, nullptr);
-        DDCStringParser(dsp, (char*)nativeString);
+        const int parsed = DDCStringParser(dsp, (char*)nativeString);
         env->ReleaseStringUTFChars(vdcContents, nativeString);
+        if (parsed < 0) {
+            env->CallVoidMethod(wrapper->callbackInterface, wrapper->callbackOnVdcParseError);
+            return false; // Rejected new input must retain the last valid chain.
+        }
 
         int ret = DDCEnable(dsp, 1);
         if (ret <= 0)
@@ -408,24 +413,32 @@ Java_me_timschneeberger_rootlessjamesdsp_interop_JamesDspWrapper_setCompander(JN
 {
     DECLARE_DSP_B
 
-    if(env->GetArrayLength(bands) != 14)
+    if(bands == nullptr || env->GetArrayLength(bands) != 14)
     {
         LOGE("JamesDspWrapper::setCompander: Invalid compander data. 14 semicolon-separated fields expected, "
-             "found %d fields instead.", env->GetArrayLength(bands));
+             "found %d fields instead.", bands ? env->GetArrayLength(bands) : 0);
         return false;
     }
 
-    if(bands == nullptr)
-    {
-        LOGW("JamesDspWrapper::setCompander: Compander band pointer is NULL. Disabling compander");
-        MultimodalEqualizerDisable(dsp);
-        return true;
-    }
+    if(!std::isfinite(timeConstant)||timeConstant<.06f||timeConstant>.3f||granularity<0||granularity>4||tfresolution<0||tfresolution>3)return false;
 
     if(enable)
     {
-        CompressorSetParam(dsp, timeConstant, granularity, tfresolution, 0);
         auto* nativeBands = (env->GetDoubleArrayElements(bands, nullptr));
+        if(!nativeBands)return false;
+        double previous=0;
+        float previousWire=0;
+        for(unsigned i=0;i<7;++i) {
+            const float wireFrequency=static_cast<float>(nativeBands[i]);
+            if(!std::isfinite(nativeBands[i]) || nativeBands[i]<=previous || nativeBands[i]>=24000 ||
+                !std::isfinite(wireFrequency) || wireFrequency<=previousWire || wireFrequency>=24000 ||
+                !std::isfinite(nativeBands[7+i]) || nativeBands[7+i]<-1.2 || nativeBands[7+i]>1.2) {
+                env->ReleaseDoubleArrayElements(bands,nativeBands,JNI_ABORT);return false;
+            }
+            previous=nativeBands[i];
+            previousWire=wireFrequency;
+        }
+        CompressorSetParam(dsp, timeConstant, granularity, tfresolution, 0);
         CompressorSetGain(dsp, nativeBands, nativeBands + 7, 1);
         env->ReleaseDoubleArrayElements(bands, nativeBands, JNI_ABORT);
         CompressorEnable(dsp, 1);
@@ -585,8 +598,8 @@ Java_me_timschneeberger_rootlessjamesdsp_interop_JamesDspWrapper_setVacuumTube(J
     DECLARE_DSP_B
     if(enable)
     {
-        VacuumTubeSetGain(dsp, level / 100.0f);
         VacuumTubeEnable(dsp);
+        VacuumTubeSetGain(dsp, level);
     }
     else
     {
@@ -604,12 +617,12 @@ Java_me_timschneeberger_rootlessjamesdsp_interop_JamesDspWrapper_setLiveprog(JNI
     // Attach log listener
     setStdOutHandler(receiveLiveprogStdOut, wrapper);
 
-    LiveProgDisable(dsp);
-
     const char *nativeString = env->GetStringUTFChars(liveprogContent, nullptr);
+    if(nativeString == nullptr) return false;
     if(strlen(nativeString) < 1) {
         LOGD("JamesDspWrapper::setLiveprog: empty file")
         env->ReleaseStringUTFChars(liveprogContent, nativeString);
+        LiveProgDisable(dsp);
         return true;
     }
 
@@ -618,11 +631,8 @@ Java_me_timschneeberger_rootlessjamesdsp_interop_JamesDspWrapper_setLiveprog(JNI
     int ret = LiveProgStringParser(dsp, (char*)nativeString); // Ignore constness, libjamesdsp does not modify it
     env->ReleaseStringUTFChars(liveprogContent, nativeString);
 
-    // Workaround due to library bug
-    jdsp_unlock(dsp);
-
-    const char* errorString = NSEEL_code_getcodeerror(dsp->eel.vm);
-    if(errorString != nullptr)
+    const char* errorString = LiveProgGetLastError(dsp);
+    if(errorString != nullptr && *errorString)
     {
         LOGW("JamesDspWrapper::setLiveprog: NSEEL_code_getcodeerror: Syntax error in script file, cannot load. Reason: %s", errorString);
     }
@@ -635,11 +645,11 @@ Java_me_timschneeberger_rootlessjamesdsp_interop_JamesDspWrapper_setLiveprog(JNI
     env->CallVoidMethod(wrapper->callbackInterface, wrapper->callbackOnLiveprogResult, ret, id, errorStringJni);
     env->DeleteLocalRef(errorStringJni);
 
-    if(enable)
+    if(ret > 0 && enable)
         LiveProgEnable(dsp);
-    else
+    else if(ret > 0)
         LiveProgDisable(dsp);
-    return true;
+    return ret > 0;
 }
 
 
@@ -684,37 +694,11 @@ Java_me_timschneeberger_rootlessjamesdsp_interop_JamesDspWrapper_manipulateEelVa
                                                                                       jstring name, jfloat value)
 {
     DECLARE_DSP_B
-    auto* ctx = (compileContext*)dsp->eel.vm;
-    for (int i = 0; i < ctx->varTable_numBlocks; i++)
-    {
-        for (int j = 0; j < NSEEL_VARS_PER_BLOCK; j++)
-        {
-            const char *nativeName = env->GetStringUTFChars(name, nullptr);
-            if(!ctx->varTable_Names[i][j] || std::strcmp(ctx->varTable_Names[i][j], nativeName) != 0)
-            {
-                env->ReleaseStringUTFChars(name, nativeName);
-                continue;
-            }
-
-            const char *valid = nullptr;//(char*)GetStringForIndex(ctx->region_context, ctx->varTable_Values[i][j], 1);
-            if(valid)
-            {
-                LOGE("JamesDspWrapper::manipulateEelVariable: variable '%s' is a string; currently only numerical variables can be manipulated", nativeName);
-                env->ReleaseStringUTFChars(name, nativeName);
-                return false;
-            }
-
-            ctx->varTable_Values[i][j] = value;
-
-            env->ReleaseStringUTFChars(name, nativeName);
-            return true;
-        }
-    }
-
     const char *nativeName = env->GetStringUTFChars(name, nullptr);
-    LOGE("JamesDspWrapper::manipulateEelVariable: variable '%s' not found", nativeName);
+    if(nativeName == nullptr) return false;
+    const int result = LiveProgSetParameter(dsp, nativeName, value);
     env->ReleaseStringUTFChars(name, nativeName);
-    return false;
+    return result == 1;
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -10,6 +10,7 @@ public:
     void Reset();
     void SetHarmonics(const float *coeffs);
     void UpdateCoeffs(const float *coeffs);
+    void SetOversampling(unsigned factor);
 
 private:
     float coeffs[11];
@@ -17,6 +18,8 @@ private:
     double prevOut;
     uint32_t biggestCoeff;
     uint32_t sampleCounter;
+    unsigned oversampling=1;
+    double dcPole=.999;
 };
 
 

@@ -25,341 +25,141 @@ void SOS_DF2_StereoProcess(DirectForm2 *df2, double x1, double x2, double *Out_y
 	df2->v1R = w2;
 	*Out_y2 = y2;
 }
-int countChars(char* s, char c)
+
+#include "DdcProcessor.h"
+#ifdef DSP_FUSION_TEST_ALLOCATIONS
+static int ddcAllocationFailure = 0;
+void DdcFailFileAllocationForTest(int step) { ddcAllocationFailure = step; }
+#endif
+static void *ddcAllocate(size_t count, size_t size, int zero)
 {
-	return *s == '\0' ? 0 : countChars(s + 1, c) + (*s == c);
+#ifdef DSP_FUSION_TEST_ALLOCATIONS
+    if (ddcAllocationFailure > 0 && --ddcAllocationFailure == 0) return NULL;
+#endif
+    return zero ? calloc(count,size) : malloc(count*size);
 }
-int get_doubleVDC(char *val, double *F)
+// File preparation runs on the control thread. Nothing is released until both
+// coefficient banks and the original text have been prepared successfully.
+int DDCParser(char *text, DirectForm2 **bank441, DirectForm2 **bank480)
 {
-	char *eptr;
-	errno = 0;
-	double f = strtod(val, &eptr);
-	if (eptr != val && errno != ERANGE)
-	{
-		*F = f;
-		return 1;
-	}
-	return 0;
-}
-int DDCParser(char *DDCString, DirectForm2 **ptrdf441, DirectForm2 **ptrdf48)
-{
-	char *fs44_1 = strstr(DDCString, "SR_44100");
-	char *fs48 = strstr(DDCString, "SR_48000");
-	if (!fs44_1 || !fs48)
-		return 0;
-	int numberCount = (countChars(fs48, ',') + 1);
-	int sosCount = numberCount / 5;
-	if (!sosCount)
-		return 0;
-	DirectForm2 *df441 = (DirectForm2*)malloc(sosCount * sizeof(DirectForm2));
-	DirectForm2 *df48 = (DirectForm2*)malloc(sosCount * sizeof(DirectForm2));
-	memset(df441, 0, sosCount * sizeof(DirectForm2));
-	memset(df48, 0, sosCount * sizeof(DirectForm2));
-	double number;
-	int i = 0;
-	int counter = 0;
-	int b0b1b2a1a2 = 0;
-	char *startingPoint = fs44_1 + 9;
-	while (counter < numberCount)
-	{
-		if (get_doubleVDC(startingPoint, &number))
-		{
-			double val = strtod(startingPoint, &startingPoint);
-			counter++;
-			if (!b0b1b2a1a2)
-				df441[i].b0 = val;
-			else if (b0b1b2a1a2 == 1)
-				df441[i].b1 = val;
-			else if (b0b1b2a1a2 == 2)
-				df441[i].b2 = val;
-			else if (b0b1b2a1a2 == 3)
-				df441[i].a1 = -val;
-			else if (b0b1b2a1a2 == 4)
-			{
-				df441[i].a2 = -val;
-				i++;
-			}
-			b0b1b2a1a2++;
-			if (b0b1b2a1a2 == 5)
-				b0b1b2a1a2 = 0;
-		}
-		else
-			startingPoint++;
-	}
-	i = 0;
-	counter = 0;
-	b0b1b2a1a2 = 0;
-	startingPoint = fs48 + 9;
-	while (counter < numberCount)
-	{
-		if (get_doubleVDC(startingPoint, &number))
-		{
-			double val = strtod(startingPoint, &startingPoint);
-			counter++;
-			if (!b0b1b2a1a2)
-				df48[i].b0 = val;
-			else if (b0b1b2a1a2 == 1)
-				df48[i].b1 = val;
-			else if (b0b1b2a1a2 == 2)
-				df48[i].b2 = val;
-			else if (b0b1b2a1a2 == 3)
-				df48[i].a1 = -val;
-			else if (b0b1b2a1a2 == 4)
-			{
-				df48[i].a2 = -val;
-				i++;
-			}
-			b0b1b2a1a2++;
-			if (b0b1b2a1a2 == 5)
-				b0b1b2a1a2 = 0;
-		}
-		else
-			startingPoint++;
-	}
-	*ptrdf441 = df441;
-	*ptrdf48 = df48;
-	return sosCount;
-}
-void complexMultiplicationRI(double *zReal, double *zImag, double xReal, double xImag, double yReal, double yImag)
-{
-	*zReal = xReal * yReal - xImag * yImag;
-	*zImag = xReal * yImag + xImag * yReal;
-}
-void complexDivisionRI(double *zReal, double *zImag, double xReal, double xImag, double yReal, double yImag)
-{
-	*zReal = (xReal * yReal + xImag * yImag) / (yReal * yReal + yImag * yImag);
-	*zImag = (xImag * yReal - xReal * yImag) / (yReal * yReal + yImag * yImag);
-}
-// Analytical magnitude response of digital filters
-void DigitalFilterMagnitudeResponsedB(DirectForm2 *IIR, int section, double *magnitude, int NumPts)
-{
-	double Arg;
-	double z1Real, z1Imag, z2Real, z2Imag, HofZReal, HofZImag, DenomReal, DenomImag, tmpReal, tmpImag;
-	for (int j = 0; j < NumPts; j++)
-	{
-		Arg = M_PI * (double)j / (double)NumPts;
-		z1Real = cos(Arg), z1Imag = -sin(Arg);
-		complexMultiplicationRI(&z2Real, &z2Imag, z1Real, z1Imag, z1Real, z1Imag);
-		HofZReal = 1.0, HofZImag = 0.0;
-		tmpReal = IIR[section].b0 + IIR[section].b1 * z1Real + IIR[section].b2 * z2Real;
-		tmpImag = IIR[section].b1 * z1Imag + IIR[section].b2 * z2Imag;
-		complexMultiplicationRI(&HofZReal, &HofZImag, HofZReal, HofZImag, tmpReal, tmpImag);
-		DenomReal = 1.0 + IIR[section].a1 * z1Real + IIR[section].a2 * z2Real;
-		DenomImag = IIR[section].a1 * z1Imag + IIR[section].a2 * z2Imag;
-		if (sqrt(DenomReal * DenomReal + DenomImag * DenomImag) < DBL_EPSILON)
-			magnitude[j] = 0.0;
-		else
-		{
-			complexDivisionRI(&HofZReal, &HofZImag, HofZReal, HofZImag, DenomReal, DenomImag);
-			magnitude[j] = 20.0 * log10(sqrt(HofZReal * HofZReal + HofZImag * HofZImag));
-		}
-	}
-}
-// DDC resampler
-void designPeakingFilter(double dbGain, double centreFreq, double fs, double dBandwidthOrQOrS, double *b0, double *b1, double *b2, double *a1, double *a2)
-{
-	if (centreFreq <= DBL_EPSILON || fs <= DBL_EPSILON)
-		return;
-	const double at1d3 = atanh(1.0 / 3.0);
-	double lingain = pow(10.0, dbGain / 40.0);
-	double omega = (6.2831853071795862 * centreFreq) / fs;
-	double num3 = sin(omega);
-	double cs = cos(omega);
-	double alpha = num3 * sinh((at1d3 * dBandwidthOrQOrS * omega) / num3);
-	double B0 = 1.0 + (alpha * lingain);
-	double B1 = -2.0 * cs;
-	double B2 = 1.0 - (alpha * lingain);
-	double A0 = 1.0 + (alpha / lingain);
-	double A1 = -2.0 * cs;
-	double A2 = 1.0 - (alpha / lingain);
-	*b0 = B0 / A0;
-	*b1 = B1 / A0;
-	*b2 = B2 / A0;
-	*a1 = A1 / A0;
-	*a2 = A2 / A0;
-}
-int PeakingFilterResampler(DirectForm2 *inputIIR, double inFs, DirectForm2 **resampledIIR, double outFs, int sosCount)
-{
-	const int filterTestLength = 32768;
-	double *magnitude = (double*)malloc(filterTestLength * sizeof(double));
-	int i;
-	int outSOSCount = 0;
-	double *cell[3];
-	for (i = 0; i < 3; i++)
-		cell[i] = (double*)malloc(sosCount * sizeof(double));
-	for (i = 0; i < sosCount; i++)
-	{
-		DigitalFilterMagnitudeResponsedB(inputIIR, i, magnitude, filterTestLength);
-		double absoluteMax = fabs(magnitude[0]);
-		double centreFreq = 0.0;
-		int index = 0;
-		for (int c = 1; c < filterTestLength; c++)
-		{
-			if (fabs(magnitude[c]) > absoluteMax)
-			{
-				absoluteMax = fabs(magnitude[c]);
-				index = c;
-				centreFreq = round(c * (inFs / filterTestLength / 2.0));
-			}
-		}
-		if (centreFreq < DBL_EPSILON)
-			centreFreq = DBL_EPSILON;
-		if (fabs(inputIIR[i].b1) < DBL_EPSILON)
-		{
-			if (inputIIR[i].b1 < 0.0)
-				inputIIR[i].b1 = -DBL_EPSILON;
-			else
-				inputIIR[i].b1 = DBL_EPSILON;
-		}
-		double omega = (6.2831853071795862 * centreFreq) / inFs;
-		double A0 = (-2.0 * cos(omega)) / inputIIR[i].b1;
-		double lingain = pow(10.0, magnitude[index] / 40.0);
-		double num3 = sin(omega);
-		double bandwidth = ((asinh(((A0 - 1.0) * lingain) / num3) * num3) / omega) / 0.34657359027997264;
-		if (bandwidth > 98.8 - DBL_EPSILON)
-			bandwidth = 98.8;
-		if (centreFreq < outFs - DBL_EPSILON)
-			outSOSCount++;
-		cell[0][i] = magnitude[index];
-		cell[1][i] = centreFreq;
-		cell[2][i] = bandwidth;
-	}
-	free(magnitude);
-	DirectForm2 *temp = (DirectForm2*)malloc(outSOSCount * sizeof(DirectForm2));
-	temp = (DirectForm2 *)malloc(outSOSCount * sizeof(DirectForm2));
-	memset(temp, 0, outSOSCount * sizeof(DirectForm2));
-	for (i = 0; i < outSOSCount; i++)
-		designPeakingFilter(cell[0][i], cell[1][i], outFs, cell[2][i], &temp[i].b0, &temp[i].b1, &temp[i].b2, &temp[i].a1, &temp[i].a2);
-	for (i = 0; i < 3; i++)
-		free(cell[i]);
-	*resampledIIR = temp;
-	return outSOSCount;
+    if (!text || !bank441 || !bank480) return 0;
+    size_t length = strnlen(text, DDC_MAX_FILE_BYTES + 1);
+    double c441[DDC_MAX_SOS * 5], c480[DDC_MAX_SOS * 5];
+    size_t count = 0;
+    if (!DdcParse(text, length, c441, c480, &count)) return 0;
+    DirectForm2 *a = (DirectForm2*)ddcAllocate(count, sizeof(DirectForm2),1);
+    DirectForm2 *b = (DirectForm2*)ddcAllocate(count, sizeof(DirectForm2),1);
+    if (!a || !b) { free(a); free(b); return 0; }
+    for (size_t i = 0; i < count; ++i) {
+        a[i].b0 = c441[i*5]; a[i].b1 = c441[i*5+1]; a[i].b2 = c441[i*5+2]; a[i].a1 = c441[i*5+3]; a[i].a2 = c441[i*5+4];
+        b[i].b0 = c480[i*5]; b[i].b1 = c480[i*5+1]; b[i].b2 = c480[i*5+2]; b[i].a1 = c480[i*5+3]; b[i].a2 = c480[i*5+4];
+    }
+    *bank441 = a; *bank480 = b; return (int)count;
 }
 void DDCConstructor(JamesDSPLib *jdsp)
 {
-	jdsp->vdcFl.oldFile = 0;
-	jdsp->vdcFl.sosPointer = 0;
-	jdsp->vdcFl.usedSOSCount = 0;
+    memset(&jdsp->vdcFl, 0, sizeof(jdsp->vdcFl));
+    jdsp->vdcFl.professional = DdcCreate();
+    DdcConfigure(jdsp->vdcFl.professional, (uint32_t)jdsp->fs);
+    DdcHostRate(jdsp->vdcFl.professional, (uint32_t)jdsp->trueSampleRate);
 }
 void DDCDestructor(JamesDSPLib *jdsp)
 {
-	if (jdsp->vdcFl.sosPointer)
-	{
-		free(jdsp->vdcFl.sosPointer);
-		jdsp->vdcFl.sosPointer = 0;
-	}
-	if (jdsp->vdcFl.oldFile)
-	{
-		free(jdsp->vdcFl.oldFile);
-		jdsp->vdcFl.oldFile = 0;
-	}
+    free(jdsp->vdcFl.sos441); free(jdsp->vdcFl.sos480);
+    free(jdsp->vdcFl.oldFile); DdcDestroy(jdsp->vdcFl.professional);
+    memset(&jdsp->vdcFl, 0, sizeof(jdsp->vdcFl));
 }
-int DDCRefresh(JamesDSPLib *jdsp, char *inStr)
+int DDCRefresh(JamesDSPLib *jdsp, char *unused)
 {
-	if (!inStr)
-		return 0;
-	DirectForm2 *df441 = 0, *df48 = 0;
-	int sosCount = DDCParser(inStr, &df441, &df48);
-	if (!sosCount)
-		return 0;
-	DirectForm2 *bk = jdsp->vdcFl.sosPointer;
-	if (jdsp->fs == 44100.0f && df441)
-	{
-		jdsp->vdcFl.sosPointer = df441;
-		jdsp->vdcFl.usedSOSCount = sosCount;
-		free(df48);
-	}
-	else if (jdsp->fs == 48000.0f && df48)
-	{
-		jdsp->vdcFl.sosPointer = df48;
-		jdsp->vdcFl.usedSOSCount = sosCount;
-		free(df441);
-	}
-	else
-	{
-		DirectForm2 *dfResampled;
-		int resampledSOSCount = PeakingFilterResampler(df48, 48000.0, &dfResampled, jdsp->fs, sosCount);
-		jdsp->vdcFl.usedSOSCount = resampledSOSCount;
-		jdsp->vdcFl.sosPointer = dfResampled;
-		free(df441);
-		free(df48);
-	}
-	if (bk)
-		free(bk);
-	return 1;
+    (void)unused;
+    // Keep legacy banks exact at their source rates. At other rates the
+    // professional processor owns an inverse-BLT mapped bank; a NULL legacy
+    // pointer therefore does not mean the working DDC kernel is unavailable.
+    if (jdsp->fs == 44100.0f) jdsp->vdcFl.sosPointer = jdsp->vdcFl.sos441;
+    else if (jdsp->fs == 48000.0f) jdsp->vdcFl.sosPointer = jdsp->vdcFl.sos480;
+    else jdsp->vdcFl.sosPointer = NULL;
+    jdsp->vdcFl.usedSOSCount = jdsp->vdcFl.sosPointer ? jdsp->vdcFl.fileSOSCount : 0;
+    if (jdsp->vdcFl.sosPointer)
+        for (int i = 0; i < jdsp->vdcFl.usedSOSCount; ++i) {
+            jdsp->vdcFl.sosPointer[i].v1L = jdsp->vdcFl.sosPointer[i].v2L = 0;
+            jdsp->vdcFl.sosPointer[i].v1R = jdsp->vdcFl.sosPointer[i].v2R = 0;
+        }
+    DdcConfigure(jdsp->vdcFl.professional, (uint32_t)jdsp->fs);
+    DdcHostRate(jdsp->vdcFl.professional, (uint32_t)jdsp->trueSampleRate);
+    if (jdsp->vdcFl.professional) {
+        int32_t status[DDC_RUNTIME_WORDS];
+        DdcStatus(jdsp->vdcFl.professional, status);
+        return !status[50] && status[61] > 0 && (status[5] || status[60]);
+    }
+    return jdsp->vdcFl.usedSOSCount > 0;
 }
 int DDCEnable(JamesDSPLib *jdsp, char enable)
 {
-	int success = 1;
-	if (jdsp->ddcForceRefresh)
-	{
-		success = DDCRefresh(jdsp, jdsp->vdcFl.oldFile);
-		jdsp->ddcForceRefresh = 0;
-	}
-	if (!success || !jdsp->vdcFl.usedSOSCount || !jdsp->vdcFl.sosPointer)
-	{
-		jdsp->ddcEnabled = 0;
-		return -1;
-	}
-	else
-	{
-		if (enable)
-			jdsp->ddcEnabled = 1;
-		return 1;
-	}
+    if (!enable) { DDCDisable(jdsp); return 1; }
+    if (jdsp->ddcForceRefresh) {
+        DDCRefresh(jdsp, jdsp->vdcFl.oldFile); jdsp->ddcForceRefresh = 0;
+    }
+    if (jdsp->vdcFl.professional) {
+        // Binding the accepted file prepares its mapped kernel on this control
+        // thread. A valid warming handoff is also an enabled DDC, not a failure.
+        int32_t status[DDC_RUNTIME_WORDS];
+        DdcEnabled(jdsp->vdcFl.professional, 1);
+        DdcStatus(jdsp->vdcFl.professional, status);
+        if (status[50] || status[61] <= 0 || (!status[5] && !status[60])) {
+            jdsp->ddcEnabled = 0; DdcEnabled(jdsp->vdcFl.professional, 0); return -1;
+        }
+        jdsp->ddcEnabled = 1; return 1;
+    }
+    if (!jdsp->vdcFl.usedSOSCount || !jdsp->vdcFl.sosPointer) {
+        jdsp->ddcEnabled = 0; DdcEnabled(jdsp->vdcFl.professional, 0); return -1;
+    }
+    jdsp->ddcEnabled = 1; DdcEnabled(jdsp->vdcFl.professional, 1); return 1;
 }
 void DDCDisable(JamesDSPLib *jdsp)
 {
-	jdsp->ddcEnabled = 0;
+    jdsp->ddcEnabled = 0; DdcEnabled(jdsp->vdcFl.professional, 0);
 }
-int DDCStringParser(JamesDSPLib *jdsp, char *newStr)
+int DDCStringParser(JamesDSPLib *jdsp, char *text)
 {
-	jdsp_lock(jdsp);
-	if (jdsp->vdcFl.oldFile)
-	{
-		if (!strcmp(jdsp->vdcFl.oldFile, newStr))
-		{
-			jdsp_unlock(jdsp);
-			return 0;
-		}
-	}
-	if (jdsp->vdcFl.sosPointer)
-	{
-		free(jdsp->vdcFl.sosPointer);
-		jdsp->vdcFl.usedSOSCount = 0;
-		jdsp->vdcFl.sosPointer = 0;
-	}
-	int success = DDCRefresh(jdsp, newStr);
-	if (!success)
-	{
-		if (jdsp->vdcFl.oldFile)
-		{
-			free(jdsp->vdcFl.oldFile);
-			jdsp->vdcFl.oldFile = 0;
-		}
-		jdsp_unlock(jdsp);
-		return -1;
-	}
-	if (jdsp->vdcFl.oldFile)
-		free(jdsp->vdcFl.oldFile);
-	size_t stLe = strlen(newStr);
-	jdsp->vdcFl.oldFile = (char*)malloc(stLe + 1);
-	strncpy(jdsp->vdcFl.oldFile, newStr, stLe);
-	jdsp->vdcFl.oldFile[stLe] = '\0';
-	jdsp_unlock(jdsp);
-	return 1;
+    if (!text) return -1;
+    const size_t length = strnlen(text, DDC_MAX_FILE_BYTES + 1);
+    if (!length || length > DDC_MAX_FILE_BYTES) { DdcFileError(jdsp->vdcFl.professional,1); return -1; }
+    jdsp_lock(jdsp);
+    if (jdsp->vdcFl.oldFile && !strcmp(jdsp->vdcFl.oldFile, text)) { DdcFileError(jdsp->vdcFl.professional,0); jdsp_unlock(jdsp); return 0; }
+    DirectForm2 *a = NULL, *b = NULL;
+    const int count = DDCParser(text, &a, &b);
+    char *copy = count ? (char*)ddcAllocate(length+1,1,0) : NULL;
+    if (!count || !copy) { free(a); free(b); DdcFileError(jdsp->vdcFl.professional,1); jdsp_unlock(jdsp); return -1; }
+    memcpy(copy, text, length+1);
+    double c441[DDC_MAX_SOS*5], c480[DDC_MAX_SOS*5];
+    for (int i=0;i<count;++i) {
+        c441[i*5]=a[i].b0; c441[i*5+1]=a[i].b1; c441[i*5+2]=a[i].b2; c441[i*5+3]=a[i].a1; c441[i*5+4]=a[i].a2;
+        c480[i*5]=b[i].b0; c480[i*5+1]=b[i].b1; c480[i*5+2]=b[i].b2; c480[i*5+3]=b[i].a1; c480[i*5+4]=b[i].a2;
+    }
+    if (jdsp->vdcFl.professional && !DdcFile(jdsp->vdcFl.professional,c441,c480,(size_t)count,text,length)) {
+        free(a); free(b); free(copy); DdcFileError(jdsp->vdcFl.professional,2); jdsp_unlock(jdsp); return -1;
+    }
+    DirectForm2 *old441=jdsp->vdcFl.sos441, *old480=jdsp->vdcFl.sos480;
+    char *oldText=jdsp->vdcFl.oldFile;
+    jdsp->vdcFl.sos441=a; jdsp->vdcFl.sos480=b; jdsp->vdcFl.oldFile=copy; jdsp->vdcFl.fileSOSCount=count;
+    if (jdsp->fs==44100.0f) jdsp->vdcFl.sosPointer=a;
+    else if (jdsp->fs==48000.0f) jdsp->vdcFl.sosPointer=b;
+    else jdsp->vdcFl.sosPointer=NULL;
+    jdsp->vdcFl.usedSOSCount=jdsp->vdcFl.sosPointer?count:0;
+    jdsp->ddcForceRefresh=0;
+    free(old441); free(old480); free(oldText);
+    jdsp_unlock(jdsp); return 1;
 }
 void DDCProcess(JamesDSPLib *jdsp, size_t n)
 {
-	if (jdsp->vdcFl.usedSOSCount)
-	{
-		for (size_t i = 0; i < n; i++)
-		{
-			double sampleOutL = (double)jdsp->tmpBuffer[0][i], sampleOutR = (double)jdsp->tmpBuffer[1][i];
-			for (int j = 0; j < jdsp->vdcFl.usedSOSCount; j++)
-				SOS_DF2_StereoProcess(&jdsp->vdcFl.sosPointer[j], sampleOutL, sampleOutR, &sampleOutL, &sampleOutR);
-			jdsp->tmpBuffer[0][i] = (float)sampleOutL;
-			jdsp->tmpBuffer[1][i] = (float)sampleOutR;
-		}
-	}
+    if (jdsp->vdcFl.professional) {
+        DdcProcess(jdsp->vdcFl.professional, jdsp->tmpBuffer[0], jdsp->tmpBuffer[1], n); return;
+    }
+    if (jdsp->vdcFl.usedSOSCount)
+        for (size_t i = 0; i < n; i++) {
+            double sampleOutL = (double)jdsp->tmpBuffer[0][i], sampleOutR = (double)jdsp->tmpBuffer[1][i];
+            for (int j = 0; j < jdsp->vdcFl.usedSOSCount; j++)
+                SOS_DF2_StereoProcess(&jdsp->vdcFl.sosPointer[j], sampleOutL, sampleOutR, &sampleOutL, &sampleOutR);
+            jdsp->tmpBuffer[0][i] = (float)sampleOutL; jdsp->tmpBuffer[1][i] = (float)sampleOutR;
+        }
 }

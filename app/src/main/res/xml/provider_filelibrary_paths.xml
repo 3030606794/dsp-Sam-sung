@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
+    <cache-path name="liveprog_share" path="liveprog-share/" />
+    <cache-path name="eq_presets_share" path="eq-presets-share/" />
     <external-files-path
         name="external_files_root"
         path="/" />

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="geq_import_title">Import GraphicEQ</string>
+    <string name="geq_import_entry">Import GraphicEQ text</string>
+    <string name="geq_import_intro">Fit a GraphicEQ curve to a new PEQ preset. Preview the response before saving, then apply it yourself from the preset library.</string>
+    <string name="geq_import_pick">Choose TXT file</string>
+    <string name="geq_import_text_hint">GraphicEQ text · paste or edit</string>
+    <string name="geq_import_text_help">Example: GraphicEQ: 20 0; 100 3; 1000 0; 20000 -2</string>
+    <string name="geq_import_name">New preset name</string>
+    <string name="geq_import_advanced_expand">Professional settings · expand</string>
+    <string name="geq_import_advanced_collapse">Professional settings · collapse</string>
+    <string name="geq_import_max_bands">Maximum PEQ bands</string>
+    <string name="geq_import_target_error">Target maximum error</string>
+    <string name="geq_import_advanced_help">More bands and a smaller error target require more computation. The overall level is retained and may use extra bands. Error statistics cover the displayed fitting range.</string>
+    <string name="geq_import_options">Up to %1$d bands · target ≤ %2$s dB</string>
+    <string name="geq_import_fit">Fit and preview</string>
+    <string name="geq_import_refit">Fit again</string>
+    <string name="geq_import_cancel_fit">Cancel fitting</string>
+    <string name="geq_import_fitting">Fitting · %1$d%%</string>
+    <string name="geq_import_cancelled">Fitting cancelled. The text and options are retained.</string>
+    <string name="geq_import_changed">The input or fitting options changed. Fit again before saving.</string>
+    <string name="geq_import_invalid_text">Enter GraphicEQ text or choose a TXT file.</string>
+    <string name="geq_import_failed">Could not fit the curve: %1$s</string>
+    <string name="geq_import_unknown_error">Please check the input and try again.</string>
+    <string name="geq_import_invalid_rate">No valid sample rate is available. Wait for the audio driver, then try again.</string>
+    <string name="geq_import_rate_changed">The audio sample rate changed. Fit again at the current sample rate before saving.</string>
+    <string name="geq_import_chart_title">Original and fitted response</string>
+    <string name="geq_import_legend_target">┄ Original GraphicEQ curve</string>
+    <string name="geq_import_legend_fitted">— Fitted PEQ curve</string>
+    <string name="geq_import_chart_description">Original GraphicEQ and fitted PEQ frequency responses. Logarithmic frequency in Hz; gain in dB. %1$s</string>
+    <string name="geq_import_summary">Mean absolute error: %1$.3f dB\nRMS error: %2$.3f dB\nMaximum error: %3$.3f dB at %4$s Hz\nBands: %5$d / %6$d\nSample rate: %7$s Hz\nFitting range: %8$s–%9$s Hz\nElapsed: %10$.1f s</string>
+    <string name="geq_import_target_met">Target met: maximum error ≤ %1$s dB.</string>
+    <string name="geq_import_limit_unmet">The %1$d-band limit was reached; the %2$s dB target was not met. Increase the limit or relax the error target, then fit again. You may also save this approximation.</string>
+    <string name="geq_import_target_unmet">The %1$s dB target was not met. You can adjust the professional settings and fit again, or save this approximation.</string>
+    <string name="geq_import_excluded">%1$d source points lie outside the fitting range; the displayed errors do not assess that region.</string>
+    <string name="geq_import_offsets">%1$d bands retain the overall level (included in the total).</string>
+    <string name="geq_import_save">Save as new preset</string>
+    <string name="geq_import_confirm_title">Save this fitted preset?</string>
+    <string name="geq_import_confirm">Save “%1$s” with %2$d bands. Current PEQ settings and effect switches stay unchanged. Apply it later from the preset library.</string>
+    <string name="geq_import_confirm_unmet">The fit has not met the requested error target.</string>
+    <string name="geq_import_name_invalid">Use a printable name of 1–40 characters.</string>
+    <string name="geq_import_duplicate">That preset name already exists. Choose a different name.</string>
+    <string name="geq_import_full">The preset library already contains 20 presets. Delete one from the library, then return to save this result.</string>
+    <string name="geq_import_save_error">Could not save the preset: %1$s</string>
+    <string name="geq_import_saved">Preset saved. Apply it from the PEQ preset library when ready.</string>
+    <string name="geq_import_document_error">Could not read the TXT file: %1$s</string>
+</resources>

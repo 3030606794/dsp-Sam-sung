@@ -159,7 +159,9 @@ class JamesDspLocalEngine(context: Context, callbacks: JamesDspWrapper.JamesDspC
     }
 
     override fun setLiveprogInternal(enable: Boolean, name: String, script: String): Boolean {
-        return JamesDspWrapper.setLiveprog(handle, enable, name, script)
+        val result = JamesDspWrapper.setLiveprog(handle, enable, name, script)
+        if (result) invalidateLiveprogParameters()
+        return result
     }
 
     // Feature support

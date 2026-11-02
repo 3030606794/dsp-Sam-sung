@@ -11,7 +11,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:paddingHorizontal="6dp">
+        android:paddingStart="2dp"
+        android:paddingEnd="6dp">
 
         <TextView
             android:id="@+id/output_driver_status"
@@ -20,6 +21,7 @@
             android:layout_weight="1"
             android:gravity="center_vertical"
             android:text="@string/output_driver_disconnected"
+            android:textColor="@color/output_status_disconnected"
             android:textAppearance="?attr/textAppearanceLabelMedium" />
 
         <TextView
@@ -29,7 +31,7 @@
             android:layout_marginStart="8dp"
             android:text="@string/output_rate_idle"
             android:textAppearance="?attr/textAppearanceLabelSmall"
-            android:textColor="?attr/colorOnSurfaceVariant" />
+            android:textColor="@color/output_status_disconnected" />
     </LinearLayout>
 
     <TextView
@@ -45,7 +47,7 @@
         android:id="@+id/output_grid"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:columnCount="@integer/fusion_output_columns"
+        android:columnCount="1"
         android:orientation="horizontal">
 
         <include
@@ -54,7 +56,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_columnWeight="1"
-            android:layout_marginHorizontal="6dp" />
+            android:layout_marginHorizontal="2dp"
+            android:layout_marginTop="4dp" />
 
         <include
             android:id="@+id/output_release"
@@ -62,7 +65,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_columnWeight="1"
-            android:layout_marginHorizontal="6dp" />
+            android:layout_marginHorizontal="2dp"
+            android:layout_marginTop="4dp" />
 
         <include
             android:id="@+id/output_postgain"
@@ -70,7 +74,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_columnWeight="1"
-            android:layout_marginHorizontal="6dp" />
+            android:layout_marginHorizontal="2dp"
+            android:layout_marginTop="4dp" />
 
         <include
             android:id="@+id/output_balance"
@@ -78,6 +83,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_columnWeight="1"
-            android:layout_marginHorizontal="6dp" />
+            android:layout_marginHorizontal="2dp"
+            android:layout_marginTop="4dp" />
     </GridLayout>
 </LinearLayout>

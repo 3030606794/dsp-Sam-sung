@@ -5,8 +5,13 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.Resources
 import android.media.AudioDeviceInfo
+import android.media.AudioDeviceCallback
 import android.media.AudioManager
+import android.media.AudioAttributes
+import android.media.AudioPlaybackConfiguration
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.StringRes
 import androidx.core.content.getSystemService
 import androidx.mediarouter.media.MediaControlIntent
@@ -27,16 +32,32 @@ class RoutingObserver(val context: Context) : MediaRouter.Callback(), KoinCompon
     private val callbacks = mutableListOf<RoutingChangedCallback>()
     private val router by lazy { MediaRouter.getInstance(context) }
     private val prefs: Preferences.App by inject()
+    private val audioManager by lazy {context.getSystemService<AudioManager>()!!}
+    private val routeHandler=Handler(Looper.getMainLooper())
+    private val refreshRoute=Runnable {refreshSelectedRoute()}
+    private val deviceCallback=object: AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?)=scheduleRouteRefresh()
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?)=scheduleRouteRefresh()
+    }
+    private val playbackCallback=object: AudioManager.AudioPlaybackCallback() {
+        override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?)=scheduleRouteRefresh()
+    }
 
     var currentDevice by Delegates.observable<Device?>(null) { _, old, new ->
         if (old != new)
-            callbacks.forEach { it.onRoutingDeviceChanged(new) }
+            callbacks.toList().forEach { it.onRoutingDeviceChanged(new) }
     }
+    @Volatile var mediaOutputEvidence = MediaOutputEvidence.UNKNOWN
+        private set
 
     private val AudioDeviceInfo.deviceGroup: DeviceGroup
         get() = DeviceGroup.from(type)
 
     private fun MediaRouter.RouteInfo.findOutputDevice(): Device? {
+        mediaOutputEvidence = MediaOutputEvidence.UNKNOWN
+        // System media routing is authoritative. Merely being a connected USB device does not
+        // mean an exclusive player or the current AudioFlinger stream is using that device.
+        actualMediaOutput()?.let {return Device(it.productName.toString(),it.address,it.deviceGroup,it.id)}
         return context.getSystemService<AudioManager>()!!
             .getDevices(AudioManager.GET_DEVICES_OUTPUTS)
             .filter(AudioDeviceInfo::isSink)
@@ -55,9 +76,47 @@ class RoutingObserver(val context: Context) : MediaRouter.Callback(), KoinCompon
                 Device(
                     device.productName.toString(),
                     device.address,
-                    device.deviceGroup
+                    device.deviceGroup,
+                    device.id
                 )
             }
+    }
+
+    private fun actualMediaOutput(): AudioDeviceInfo? {
+        if(Build.VERSION.SDK_INT>=33) {
+            runCatching {
+                val outputs = audioManager.getAudioDevicesForAttributes(AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+                    .filter(AudioDeviceInfo::isSink).distinctBy {it.id}
+                mediaOutputEvidence = MediaOutputEvidence.fromOutputTypes(outputs.map { it.type }, AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
+                outputs.singleOrNull()
+            }.getOrNull()?.let {return it}
+        }
+        // audioDeviceInfo was not populated on older Android. Fall back to the selected
+        // system MediaRouter route, never to a merely connected USB device.
+        return null
+    }
+
+    private fun scheduleRouteRefresh() {
+        routeHandler.removeCallbacks(refreshRoute)
+        // Device discovery can precede the policy-manager route switch; observe both moments.
+        routeHandler.post(refreshRoute)
+        routeHandler.postDelayed(refreshRoute,150)
+        routeHandler.postDelayed(refreshRoute,650)
+    }
+
+    private fun refreshSelectedRoute() {
+        val beforeEvidence = mediaOutputEvidence
+        val next=runCatching {router.selectedRoute.findOutputDevice()}
+            .onFailure {
+                mediaOutputEvidence = MediaOutputEvidence.UNKNOWN
+                Timber.w(it,"Unable to identify the selected output route")
+            }.getOrNull()
+        val before=currentDevice
+        if(before?.id==next?.id && before?.endpointId==next?.endpointId && before?.name==next?.name && beforeEvidence==mediaOutputEvidence)return
+        currentDevice=next
+        if(before == null && next == null && beforeEvidence != mediaOutputEvidence)
+            callbacks.toList().forEach { it.onRoutingDeviceChanged(null) }
     }
 
     private val MediaRouter.RouteInfo.isHdmi: Boolean
@@ -92,7 +151,7 @@ class RoutingObserver(val context: Context) : MediaRouter.Callback(), KoinCompon
 
     private val MediaRouter.RouteInfo.isUsb: Boolean
         @SuppressLint("DiscouragedApi")
-        get() = sdkAbove(Build.VERSION_CODES.Q) {
+        get() = runCatching {sdkAbove(Build.VERSION_CODES.Q) {
             Resources.getSystem().getText(
                 Resources.getSystem().getIdentifier(
                     "default_audio_route_name_usb", "string", "android"
@@ -102,17 +161,17 @@ class RoutingObserver(val context: Context) : MediaRouter.Callback(), KoinCompon
             ""
         }.let { usbName ->
             router.defaultRoute == this && usbName == name
-        }
+        }}.getOrDefault(false)
 
     private val MediaRouter.RouteInfo.isHeadphone: Boolean
         @SuppressLint("DiscouragedApi")
-        get() = Resources.getSystem().getText(
+        get() = runCatching {Resources.getSystem().getText(
             Resources.getSystem().getIdentifier(
                 "default_audio_route_name_headphones", "string", "android"
             )
         ).let { hpName ->
             router.defaultRoute == this && hpName == name
-        }
+        }}.getOrDefault(false)
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when(key) {
@@ -124,19 +183,20 @@ class RoutingObserver(val context: Context) : MediaRouter.Callback(), KoinCompon
     }
 
     override fun onRouteSelected(router: MediaRouter, route: MediaRouter.RouteInfo, reason: Int) {
-        currentDevice = route.findOutputDevice()
+        refreshSelectedRoute()
     }
 
     override fun onRouteChanged(router: MediaRouter, route: MediaRouter.RouteInfo) {
-        currentDevice = router.selectedRoute.findOutputDevice()
+        refreshSelectedRoute()
     }
 
     override fun onRouteRemoved(router: MediaRouter, route: MediaRouter.RouteInfo) {
-        router.unselect(MediaRouter.UNSELECT_REASON_DISCONNECTED)
+        if(router.selectedRoute===route)router.unselect(MediaRouter.UNSELECT_REASON_DISCONNECTED)
+        scheduleRouteRefresh()
     }
 
     fun retrigger() {
-        callbacks.forEach { callback -> currentDevice?.let(callback::onRoutingDeviceChanged) }
+        callbacks.toList().forEach { callback -> currentDevice?.let(callback::onRoutingDeviceChanged) }
     }
 
     fun registerOnRoutingChangeListener(callback: RoutingChangedCallback) {
@@ -149,13 +209,11 @@ class RoutingObserver(val context: Context) : MediaRouter.Callback(), KoinCompon
                 this,
                 0
             )
+            audioManager.registerAudioDeviceCallback(deviceCallback,routeHandler)
+            audioManager.registerAudioPlaybackCallback(playbackCallback,routeHandler)
         }
         // A device may already be connected before the first observer is registered.
-        if (currentDevice == null) {
-            currentDevice = runCatching { router.selectedRoute.findOutputDevice() }
-                .onFailure { Timber.w(it, "Unable to identify the selected output route") }
-                .getOrNull()
-        }
+        refreshSelectedRoute()
         callbacks.add(callback)
         callback.onRoutingDeviceChanged(currentDevice)
     }
@@ -166,6 +224,9 @@ class RoutingObserver(val context: Context) : MediaRouter.Callback(), KoinCompon
         if (callbacks.isEmpty()) {
             prefs.unregisterOnSharedPreferenceChangeListener(this)
             router.removeCallback(this)
+            audioManager.unregisterAudioDeviceCallback(deviceCallback)
+            audioManager.unregisterAudioPlaybackCallback(playbackCallback)
+            routeHandler.removeCallbacks(refreshRoute)
         }
     }
 
@@ -177,6 +238,7 @@ class RoutingObserver(val context: Context) : MediaRouter.Callback(), KoinCompon
         private val productName: String,
         private val address: String,
         val group: DeviceGroup,
+        val endpointId: Int=0,
     ) {
         init {
             // Log unexpected events

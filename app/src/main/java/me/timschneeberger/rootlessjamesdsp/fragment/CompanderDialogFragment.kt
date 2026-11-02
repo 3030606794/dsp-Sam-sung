@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.View
 import androidx.core.content.edit
@@ -15,17 +16,25 @@ import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.registerLocalReceiver
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.unregisterLocalReceiver
 import me.timschneeberger.rootlessjamesdsp.view.CompanderSurface
+import me.timschneeberger.rootlessjamesdsp.fusion.CompanderParameters
 
 class CompanderDialogFragment : PreferenceDialogFragmentCompat() {
 
     private var compander: CompanderSurface? = null
     private lateinit var mLevels: DoubleArray
     private lateinit var mOldSetting: String
+    private lateinit var mFrequencies: DoubleArray
+    private lateinit var mLastApplied: String
+    private var stale=false
+    private val settingsListener=SharedPreferences.OnSharedPreferenceChangeListener { prefs,_ ->
+        val raw=prefs.all[preference.key]
+        if(CompanderParameters.curveTakenOver(prefs.all) || (raw!=null && raw!=mLastApplied))stale=true
+    }
 
     private val broadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when(intent?.action) {
-                Constants.ACTION_PRESET_LOADED -> dismiss()
+                Constants.ACTION_PRESET_LOADED -> {stale=true;dismiss()}
             }
         }
     }
@@ -34,16 +43,15 @@ class CompanderDialogFragment : PreferenceDialogFragmentCompat() {
         super.onCreate(savedInstanceState)
 
         mOldSetting = savedInstanceState?.getString("oldSetting")
-            ?: preference.sharedPreferences
-            ?.getString(preference.key, (preference as CompanderPreference).initialValue) ?: ""
+            ?: (preference.sharedPreferences?.all?.get(preference.key) as? String)
+            ?: (preference as CompanderPreference).initialValue
 
-        mLevels = savedInstanceState?.getDoubleArray("levels") ?: mOldSetting
-            .split(";")
-            .drop(7)
-            .dropLastWhile(String::isEmpty)
-            .map { it.toDoubleOrNull() ?: 0.0 }
-            .toDoubleArray()
-            .copyOf(7)
+        val curve=CompanderParameters.parseCurve(mOldSetting) ?: CompanderParameters.parseCurve(CompanderParameters.DEFAULT_CURVE)!!
+        mLevels=savedInstanceState?.getDoubleArray("levels")?.takeIf {it.size==7 && it.all {n->n.isFinite() && n in -1.2..1.2}} ?: curve.coefficients.toDoubleArray()
+        mFrequencies=curve.frequencies.toDoubleArray()
+        mLastApplied=savedInstanceState?.getString("lastApplied") ?: mOldSetting
+        stale=savedInstanceState?.getBoolean("stale") ?: false
+        preference.sharedPreferences?.registerOnSharedPreferenceChangeListener(settingsListener)
 
         requireContext().registerLocalReceiver(broadcastReceiver, IntentFilter(Constants.ACTION_PRESET_LOADED))
     }
@@ -55,8 +63,10 @@ class CompanderDialogFragment : PreferenceDialogFragmentCompat() {
         super.onBindDialogView(view)
         val binding = PreferenceCompanderDialogBinding.bind(view)
         compander = binding.companderSurface
+        compander!!.setFrequencies(mFrequencies)
         compander!!.areKnobsVisible = true
         compander!!.setOnTouchListener { v, event ->
+            if(!canModify())return@setOnTouchListener true
             val minDb = compander!!.minDb
             val maxDb = compander!!.maxDb
             val band = compander!!.findClosest(event.x)
@@ -81,12 +91,15 @@ class CompanderDialogFragment : PreferenceDialogFragmentCompat() {
         super.onSaveInstanceState(outState.apply {
             putDoubleArray("levels", mLevels)
             putString("oldSetting", mOldSetting)
+            putString("lastApplied",mLastApplied)
+            putBoolean("stale",stale)
         })
     }
 
     override fun onDialogClosed(positiveResult: Boolean) {
+        if(!canModify())return
         if (positiveResult) {
-            val array = CompanderSurface.SCALE + mLevels
+            val array = mFrequencies + mLevels
             val value = array.joinToString(";")
             if (preference.callChangeListener(value)) {
                 applySetting(value)
@@ -97,10 +110,17 @@ class CompanderDialogFragment : PreferenceDialogFragmentCompat() {
     }
 
     private fun applyCurrentSetting() {
-        applySetting((CompanderSurface.SCALE + mLevels).joinToString(";"))
+        applySetting((mFrequencies + mLevels).joinToString(";"))
     }
 
+    private fun canModify(): Boolean {
+        val prefs=preference.sharedPreferences ?: return false
+        val raw=prefs.all[preference.key]
+        return !stale && !CompanderParameters.curveTakenOver(prefs.all) && (raw==null || raw==mLastApplied)
+    }
     private fun applySetting(value: String) {
+        if(!canModify() || CompanderParameters.parseCurve(value)==null)return
+        mLastApplied=value
         preference.preferenceManager.sharedPreferences?.edit(commit = true) {
             putString(preference.key, value)
         }
@@ -113,6 +133,7 @@ class CompanderDialogFragment : PreferenceDialogFragmentCompat() {
     }
 
     override fun onDestroy() {
+        preference.sharedPreferences?.unregisterOnSharedPreferenceChangeListener(settingsListener)
         requireContext().unregisterLocalReceiver(broadcastReceiver)
         super.onDestroy()
         compander = null

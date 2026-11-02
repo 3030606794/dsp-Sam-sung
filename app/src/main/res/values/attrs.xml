@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <declare-styleable name="FloatingToggleButton">
+        <attr name="powerAnimationsEnabled" format="boolean" />
+    </declare-styleable>
+
     <declare-styleable name="MaterialSeekbarPreference">
         <attr name="seekBarIncrement" />
         <attr name="showSeekBarValue" />

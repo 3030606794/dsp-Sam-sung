@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="filelibrary_search_hint">Search files</string>
+    <string name="filelibrary_locate">Locate</string>
+    <string name="filelibrary_locate_description">Locate the selected file</string>
+    <string name="filelibrary_search_empty">No matching files</string>
+    <string name="filelibrary_current_file_missing">The selected file is no longer in this library</string>
+</resources>

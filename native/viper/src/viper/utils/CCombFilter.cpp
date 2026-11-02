@@ -22,6 +22,7 @@ float CCombFilter::GetFeedback() {
 void CCombFilter::Mute() {
     memset(this->buffer, 0, this->bufferSize * sizeof(float));
 }
+void CCombFilter::ResetState(){Mute();this->bufferIndex=0;this->filterStore=0;}
 
 float CCombFilter::Process(float sample) {
     float output = this->buffer[this->bufferIndex];

@@ -3,6 +3,8 @@ package me.timschneeberger.rootlessjamesdsp.liveprog
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.os.Looper
 import android.view.View
 import java.io.File
@@ -14,6 +16,8 @@ import me.timschneeberger.rootlessjamesdsp.preference.DropDownPreference
 import me.timschneeberger.rootlessjamesdsp.preference.FileLibraryPreference
 import me.timschneeberger.rootlessjamesdsp.preference.MaterialSeekbarPreference
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
+import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.registerLocalReceiver
+import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.unregisterLocalReceiver
 import me.timschneeberger.rootlessjamesdsp.utils.preferences.Preferences
 import org.junit.After
 import org.junit.Assert.*
@@ -53,6 +57,7 @@ class LiveprogParamsUiTest {
         script.parentFile!!.mkdirs()
         script.writeText(app.assets.open("Liveprog/viper_dynamicbass_preset.eel").bufferedReader().use { it.readText() })
         app.getSharedPreferences(Constants.PREF_LIVEPROG, Context.MODE_PRIVATE).edit()
+            .clear()
             .putString(app.getString(R.string.key_liveprog_file), "Liveprog/${script.name}").commit()
     }
 
@@ -98,11 +103,14 @@ class LiveprogParamsUiTest {
     }
 
     @Test fun savedManualValueSurvivesBindingRecreationAndOpeningAgain() {
+        val original = script.readText()
         launch()
         gain().setValue(27f) // The same path used by the control's manual-input confirmation.
         layout()
         val saved = script.readText()
-        assertEquals(27f, EelNumberRangeProperty.findVariable("dBassGain", saved)!!, 0f)
+        assertEquals(original, saved)
+        val parser = EelParser().apply { load(script.absolutePath); LiveprogParameterStore(app).applyTo(this) }
+        assertEquals(27f, (parser.properties.first { it.key == "dBassGain" } as EelNumberRangeProperty<*>).value.toFloat(), 0f)
         fragment().listView.adapter!!.notifyDataSetChanged()
         layout()
         assertEquals(saved, script.readText())
@@ -118,7 +126,54 @@ class LiveprogParamsUiTest {
         fragment().restoreDefaults()
         layout()
         assertEquals(5f, gain().getValue(), 0f)
-        assertEquals(5f, EelNumberRangeProperty.findVariable("dBassGain", script.readText())!!, 0f)
+        assertEquals(original, script.readText())
+        val reset = EelParser().apply { load(script.absolutePath); LiveprogParameterStore(app).applyTo(this) }
+        assertEquals(5f, (reset.properties.first { it.key == "dBassGain" } as EelNumberRangeProperty<*>).value.toFloat(), 0f)
+    }
+
+    @Test fun fineControlsSaveThousandthsWithoutScriptReloadOrSourceRewrite() {
+        script.writeText("desc:Fine controls\ngain:0<-1,1,0.001>Gain\n@init\ngain=0;\n@slider\nscale=gain;\n@sample\nspl0*=scale; spl1*=scale;\n")
+        val original = script.readText()
+        var reloads = 0
+        var parameters = 0
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == Constants.ACTION_SERVICE_RELOAD_LIVEPROG) reloads++ else parameters++
+            }
+        }
+        app.registerLocalReceiver(receiver, IntentFilter(Constants.ACTION_SERVICE_RELOAD_LIVEPROG).apply {
+            addAction(Constants.ACTION_SERVICE_UPDATE_LIVEPROG_PARAMETERS)
+        })
+        try {
+            launch()
+            val fine = fragment().findPreference<MaterialSeekbarPreference>("gain")!!
+            assertEquals(3, fine.mPrecision)
+            fine.setValue(0.001f)
+            layout()
+            assertEquals(0.001f, fine.getValue(), 0f)
+            assertEquals(original, script.readText())
+            controller!!.recreate()
+            layout()
+            assertEquals(0.001f, fragment().findPreference<MaterialSeekbarPreference>("gain")!!.getValue(), 0f)
+            assertTrue(parameters > 0)
+            assertEquals(0, reloads)
+        } finally { app.unregisterLocalReceiver(receiver) }
+    }
+
+    @Test fun nonDivisibleDeclaredRangeOpensAndResetRetainsExactDefault() {
+        script.writeText("desc:Offset\namount:0.2<0.01,1,0.1>Amount\n@init\namount=0.2;\n@sample\nspl0*=amount; spl1*=amount;\n")
+        val original = script.readText()
+        launch()
+        val preference = fragment().findPreference<MaterialSeekbarPreference>("amount")!!
+        assertEquals(0.2f, preference.getValue(), 0f)
+        preference.setValue(0.71f)
+        fragment().restoreDefaults()
+        layout()
+        assertEquals(0.2f, fragment().findPreference<MaterialSeekbarPreference>("amount")!!.getValue(), 0f)
+        controller!!.recreate()
+        layout()
+        assertEquals(0.2f, fragment().findPreference<MaterialSeekbarPreference>("amount")!!.getValue(), 0f)
+        assertEquals(original, script.readText())
     }
 
     @Test fun scriptLibraryUsesChineseTitleAndKeepsTheOriginalFilePath() {

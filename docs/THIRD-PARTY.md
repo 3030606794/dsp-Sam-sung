@@ -13,3 +13,5 @@ DSP Fusion retains upstream author notices and licenses. It is an independent in
 The ViPER source tree does not contain separate license headers for every native file; `LICENSE.module` records the supplied distribution notice rather than asserting additional licensing terms. All upstream source is included for inspection and modification, with the integration changes visible in repository history.
 
 The redesigned WSTxda ViperFX application is not copied into this project. Its user-facing parameter behavior was studied to implement a new control panel.
+
+The native AIDL transport uses the frozen Android 15 (android-15.0.0_r1) Effects V2 API, versioned imported parcelables, AOSP FMQ/EventFlag and native_handle source. Exact immutable revisions and paths are in `native/aidl/sdk/sources.json`; sources retain their Apache-2.0 notices. `scripts/prepare-aidl-sdk.py` fetches and generates the bindings reproducibly. The NDK compatibility layer and Fusion transport are project code; no external ViPER AIDL binary or proprietary vendor library is packaged.

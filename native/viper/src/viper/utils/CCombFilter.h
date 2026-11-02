@@ -9,6 +9,7 @@ public:
     float GetDamp();
     float GetFeedback();
     void Mute();
+    void ResetState();
     float Process(float sample);
     void SetBuffer(float *buffer, uint32_t size);
     void SetDamp(float damp);

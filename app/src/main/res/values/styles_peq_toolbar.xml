@@ -1,0 +1,11 @@
+<resources>
+    <style name="EqualizerToolbarTitle" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textSize">24sp</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:gravity">center_vertical</item>
+    </style>
+    <dimen name="peq_toolbar_line_pitch">3mm</dimen>
+    <style name="PeqToolbarSubtitle" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">13sp</item>
+    </style>
+</resources>

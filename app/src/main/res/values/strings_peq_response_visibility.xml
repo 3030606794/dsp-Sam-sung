@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_show_response">显示顶部频响图</string>
+    <string name="peq_only_total_response">仅显示累计频响曲线</string>
+    <string name="peq_show_bandwidth_overlay">显示带宽辅助图层</string>
+    <string name="peq_show_linked_static">显示联动静图</string>
+    <string name="peq_show_realtime">显示实时图</string>
+    <string name="peq_settings_action">设置</string>
+</resources>

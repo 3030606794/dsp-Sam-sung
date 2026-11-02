@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item android:id="@+id/peq_static_style" android:title="@string/peq_static_style_shortcut"
+        app:actionLayout="@layout/peq_chart_style_action" app:showAsAction="always" />
+    <item android:id="@+id/peq_realtime_style" android:title="@string/peq_realtime_style_shortcut"
+        app:actionLayout="@layout/peq_chart_style_action" app:showAsAction="always" />
     <item android:id="@+id/peq_pin_response" android:title="@string/peq_pin_response"
         android:icon="@drawable/ic_peq_pin" android:checkable="true" app:showAsAction="always" />
 </menu>

@@ -10,9 +10,14 @@ import android.content.Intent
 import android.media.AudioManager
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.ArrayAdapter
+import android.widget.AdapterView
+import android.widget.AbsListView
 import android.widget.Filter
 import android.widget.Filterable
 import android.widget.ListAdapter
@@ -24,6 +29,7 @@ import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.FileProvider
 import androidx.core.content.getSystemService
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.preference.DialogPreference.TargetFragment
 import androidx.preference.ListPreferenceDialogFragmentCompat
 import androidx.preference.Preference
@@ -32,16 +38,19 @@ import kotlinx.coroutines.*
 import me.timschneeberger.rootlessjamesdsp.BuildConfig
 import me.timschneeberger.rootlessjamesdsp.MainApplication
 import me.timschneeberger.rootlessjamesdsp.R
+import me.timschneeberger.rootlessjamesdsp.convolver.ConvolverLibrary
 import me.timschneeberger.rootlessjamesdsp.activity.LiveprogEditorActivity
 import me.timschneeberger.rootlessjamesdsp.databinding.DialogFilelibraryBinding
-import me.timschneeberger.rootlessjamesdsp.interop.JdspImpResToolbox
 import me.timschneeberger.rootlessjamesdsp.liveprog.EelParser
+import me.timschneeberger.rootlessjamesdsp.liveprog.LiveprogParameterStore
 import me.timschneeberger.rootlessjamesdsp.model.preset.Preset
 import me.timschneeberger.rootlessjamesdsp.preference.FileLibraryPreference
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.showAlert
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.showInputAlert
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.toast
 import me.timschneeberger.rootlessjamesdsp.utils.storage.StorageUtils
+import me.timschneeberger.rootlessjamesdsp.utils.Constants
+import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
 import timber.log.Timber
 import java.io.File
 import java.util.Locale
@@ -63,11 +72,63 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
     private val scriptScannerScope = CoroutineScope(Dispatchers.IO)
     private var currentTag: String? = null
     private var currentTagScripts: List<String>? = null
+    private var libraryQuery = ""
+    private var keepSelectionVisible = false
+    private val hasLibrarySearch: Boolean
+        get() = fileLibPreference.isVdc() || fileLibPreference.isIrs()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        libraryQuery = savedInstanceState?.getString(STATE_SEARCH_QUERY).orEmpty()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_SEARCH_QUERY, libraryQuery)
+    }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         dialog = super.onCreateDialog(savedInstanceState) as AlertDialog
         // Workaround to prevent the button from closing the dialog
         dialog.setOnShowListener {
+            if (hasLibrarySearch) {
+                dialog.listView.emptyView = binding.filelibrarySearchEmpty
+                // The dialog and the empty-result transition can resize the list
+                // after its first layout. Keep an explicit locate request visible
+                // through those changes, until the user searches or scrolls.
+                dialog.listView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                    if (keepSelectionVisible) {
+                        val target = (dialog.listView.adapter as? ListItemAdapter)
+                            ?.indexOf(fileLibPreference.value) ?: -1
+                        if (target >= 0 && target !in dialog.listView.firstVisiblePosition..dialog.listView.lastVisiblePosition)
+                            dialog.listView.setSelectionFromTop(target, 0)
+                    }
+                }
+                dialog.listView.setOnScrollListener(object : AbsListView.OnScrollListener {
+                    override fun onScrollStateChanged(view: AbsListView?, state: Int) {
+                        if (state != AbsListView.OnScrollListener.SCROLL_STATE_IDLE) keepSelectionVisible = false
+                    }
+                    override fun onScroll(view: AbsListView?, first: Int, visible: Int, total: Int) = Unit
+                })
+                dialog.listView.setOnKeyListener { _, _, event ->
+                    if (event.action == KeyEvent.ACTION_DOWN) keepSelectionVisible = false
+                    false
+                }
+                dialog.listView.setOnGenericMotionListener { _, event ->
+                    if (event.action == MotionEvent.ACTION_SCROLL) keepSelectionVisible = false
+                    false
+                }
+                binding.filelibrarySearch.doAfterTextChanged {
+                    libraryQuery = it?.toString().orEmpty()
+                    applyLibrarySearch()
+                }
+                binding.filelibraryLocate.setOnClickListener { locateCurrentFile() }
+                binding.filelibrarySearch.setText(libraryQuery)
+                // Keep the selected file visible without opening the keyboard on entry.
+                binding.filelibrarySearch.clearFocus()
+                dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+                dialog.listView.post { refreshSelection(scrollToSelection = true) }
+            }
             if(fileLibPreference.isPreset() && dialog.listView.adapter.isEmpty) {
                 requireContext().toast(getString(R.string.filelibrary_no_presets))
             }
@@ -108,6 +169,10 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
                     import()
             }
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).isVisible = false
+            if (fileLibPreference.isLiveprog() && arguments?.getBoolean(BUNDLE_IMPORT_IMMEDIATELY) == true) {
+                arguments?.remove(BUNDLE_IMPORT_IMMEDIATELY)
+                dialog.window?.decorView?.post { if (isAdded) import() }
+            }
         }
 
         dialog.listView.setOnItemLongClickListener {
@@ -123,6 +188,9 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
             popupMenu.menu.findItem(R.id.edit_selection).isVisible = fileLibPreference.isLiveprog()
             popupMenu.menu.findItem(R.id.overwrite_selection).isVisible = fileLibPreference.isPreset()
             popupMenu.menu.findItem(R.id.resample_selection).isVisible = fileLibPreference.isIrs()
+            val protectedIr = ConvolverLibrary.isProtected(requireContext(), File(path))
+            popupMenu.menu.findItem(R.id.delete_selection).isVisible = !protectedIr
+            popupMenu.menu.findItem(R.id.rename_selection).isVisible = !protectedIr
 
             popupMenu.setOnMenuItemClickListener { menuItem ->
                 val selectedFile = File(path.toString())
@@ -138,17 +206,13 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
                             }
 
                             Timber.d("resample: Resampling ${selectedFile.name} to ${targetRate}Hz")
-
+                            val appContext = requireContext().applicationContext
                             CoroutineScope(Dispatchers.IO).launch {
-                                val newName = JdspImpResToolbox.OfflineAudioResample(
-                                    (selectedFile.absoluteFile.parentFile?.absolutePath + "/"),
-                                    selectedFile.name,
-                                    targetRate
-                                )
+                                val newFile = ConvolverLibrary.resampleCopy(appContext, selectedFile, targetRate)
 
                                 withContext(Dispatchers.Main) {
                                     try {
-                                        if (newName == "Invalid")
+                                        if (newFile == null)
                                             requireContext().toast(getString(R.string.filelibrary_resample_failed))
                                         else
                                             requireContext().toast(getString(R.string.filelibrary_resample_complete,
@@ -187,20 +251,33 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
                             autofill = true,
                             allowOverwrite = false
                         ) {
-                            selectedFile.renameTo(it)
-                            requireContext().toast(getString(R.string.filelibrary_renamed, it.nameWithoutExtension))
+                            val originalScript = if (fileLibPreference.isLiveprog()) selectedFile.readText() else null
+                            if (ConvolverLibrary.rename(requireContext(), selectedFile, it)) {
+                                originalScript?.let { source -> LiveprogParameterStore(requireContext()).relocate(selectedFile.absolutePath, it.absolutePath, source) }
+                                if (fileLibPreference.value == item.value.toString()) {
+                                    fileLibPreference.value = it.toRelativeString(requireContext().getExternalFilesDir(null)!!).replace(File.separatorChar, '/')
+                                }
+                                requireContext().toast(getString(R.string.filelibrary_renamed, it.nameWithoutExtension))
+                            }
                             refresh()
                         }
                     }
                     R.id.delete_selection -> {
-                        selectedFile.delete()
+                        if (!ConvolverLibrary.delete(requireContext(), selectedFile)) return@setOnMenuItemClickListener true
                         requireContext().toast(getString(R.string.filelibrary_deleted, name))
-                        refresh()
 
                         // If this file was active, we need to reset the selection to null
-                        if (fileLibPreference.callChangeListener("")) {
-                            fileLibPreference.value = ""
+                        val replacement = if (fileLibPreference.isIrs()) ConvolverLibrary.DEFAULT_PATH else ""
+                        if (fileLibPreference.value == item.value.toString() && fileLibPreference.callChangeListener(replacement)) {
+                            if (fileLibPreference.isVdc()) {
+                                // A deliberate deletion must not leave a checked DDC module
+                                // playing its previously accepted, now-unselected file.
+                                fileLibPreference.sharedPreferences?.edit()
+                                    ?.putBoolean(getString(R.string.key_ddc_enable), false)?.apply()
+                            }
+                            fileLibPreference.value = replacement
                         }
+                        refresh()
                     }
                     R.id.duplicate_selection -> {
                         showFileNamePrompt(
@@ -209,15 +286,24 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
                             autofill = true,
                             allowOverwrite = false
                         ) {
-                            selectedFile.copyTo(it)
+                            ConvolverLibrary.copy(requireContext(), selectedFile, it)
+                            if (fileLibPreference.isLiveprog() && it.exists()) {
+                                it.writeText(LiveprogParameterStore(requireContext()).exportSource(selectedFile.absolutePath))
+                            }
                             refresh()
                         }
                     }
                     R.id.share_selection -> {
+                        val sharedFile = if (fileLibPreference.isLiveprog()) {
+                            File(requireContext().cacheDir, "liveprog-share/${selectedFile.name}").apply {
+                                parentFile!!.mkdirs()
+                                writeText(LiveprogParameterStore(requireContext()).exportSource(selectedFile.absolutePath))
+                            }
+                        } else selectedFile
                         val uri = FileProvider.getUriForFile(
                             requireContext(),
                             BuildConfig.APPLICATION_ID + ".file_library_provider",
-                            selectedFile
+                            sharedFile
                         )
                         val shareIntent = Intent(Intent.ACTION_SEND)
                         shareIntent.putExtra(Intent.EXTRA_STREAM, uri)
@@ -277,6 +363,14 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
                     return@let
                 }
 
+                if (fileLibPreference.isLiveprog()) {
+                    val selected = FileLibraryPreference.createFullPathNullCompat(requireContext(), fileLibPreference.value)
+                    if (selected != null && runCatching { File(selected).canonicalFile == file.canonicalFile }.getOrDefault(false)) {
+                        // Replacing the active file keeps its path, so a value-change listener cannot detect it.
+                        requireContext().sendLocalBroadcast(Intent(Constants.ACTION_SERVICE_RELOAD_LIVEPROG))
+                    }
+                }
+
                 CoroutineScope(Dispatchers.Main).launch {
                     delay(150L)
                     refresh()
@@ -317,6 +411,10 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
             if (it != null) {
                 val newFile =
                     File(selectedFile.absoluteFile.parentFile!!.absolutePath + File.separator + it + "." + selectedFile.extension)
+                if (it.contains('/') || it.contains('\\') || ConvolverLibrary.isProtected(requireContext(), newFile)) {
+                    requireContext().toast(getString(R.string.filelibrary_file_exists))
+                    return@showInputAlert
+                }
                 if (newFile.exists() && !allowOverwrite) {
                     requireContext().toast(getString(R.string.filelibrary_file_exists))
                     return@showInputAlert
@@ -330,21 +428,55 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
         fileLibPreference.refresh()
         dialog.listView.adapter = createAdapter()
 
-        onTagClicked(currentTag, currentTagScripts)
-        refreshSelection()
+        if (hasLibrarySearch) {
+            applyLibrarySearch()
+            refreshSelection(scrollToSelection = true)
+        } else {
+            onTagClicked(currentTag, currentTagScripts)
+            refreshSelection()
+        }
     }
 
-    private fun refreshSelection() {
+    private fun applyLibrarySearch() {
+        keepSelectionVisible = false
+        // AbsListView reconciles checked stable IDs during notifyDataSetChanged.
+        // Clear the old positions before shrinking the adapter's visible data.
+        dialog.listView.clearChoices()
+        (dialog.listView.adapter as? ListItemAdapter)?.filterByName(libraryQuery)
+        refreshSelection(scrollToSelection = false)
+    }
+
+    private fun locateCurrentFile() {
+        val selected = fileLibPreference.value.orEmpty()
+        if (selected.isEmpty()) {
+            requireContext().toast(R.string.filelibrary_no_file_selected)
+            return
+        }
+        val adapter = dialog.listView.adapter as? ListItemAdapter ?: return
+        if (!adapter.containsValue(selected)) {
+            requireContext().toast(R.string.filelibrary_current_file_missing)
+            return
+        }
+        if (adapter.indexOf(selected) < 0) binding.filelibrarySearch.setText("")
+        binding.filelibrarySearch.clearFocus()
+        refreshSelection(scrollToSelection = true)
+    }
+
+    private fun refreshSelection(scrollToSelection: Boolean = true) {
         if (fileLibPreference.isPreset())
             return
 
         val selectedIndex = (dialog.listView.adapter as? ListItemAdapter)?.indexOf(fileLibPreference.value) ?: -1
+        dialog.listView.clearChoices()
+        // invalidateViews remembers the previous scroll anchor; set the target
+        // afterwards so that the next layout cannot restore the old position.
+        dialog.listView.invalidateViews()
         if (selectedIndex >= 0) {
             dialog.listView.setItemChecked(selectedIndex, true)
-            dialog.listView.setSelection(selectedIndex)
-        }
-        else {
-            dialog.listView.setItemChecked(-1, true)
+            if (scrollToSelection) {
+                keepSelectionVisible = hasLibrarySearch
+                dialog.listView.setSelectionFromTop(selectedIndex, 0)
+            }
         }
     }
 
@@ -436,6 +568,7 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
     override fun onPrepareDialogBuilder(builder: AlertDialog.Builder) {
         super.onPrepareDialogBuilder(builder)
         binding = DialogFilelibraryBinding.inflate(layoutInflater)
+        binding.filelibrarySearchControls.isVisible = hasLibrarySearch
         binding.tags.isSingleSelection = true
         binding.tags.layoutTransition = LayoutTransition().apply {
             enableTransitionType(LayoutTransition.CHANGING)
@@ -446,6 +579,10 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
 
         builder.setView(binding.root)
         builder.setNeutralButton(getString(R.string.action_import)) { _, _ -> }
+        if (fileLibPreference.isVdc()) {
+            builder.setTitle(R.string.ddc_file)
+            builder.setNeutralButton(R.string.ddc_import_file) { _, _ -> }
+        }
 
         if(fileLibPreference.isPreset()) {
             builder.setNeutralButton(getString(R.string.add)) { _, _ -> }
@@ -502,14 +639,30 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
         val allowFilter: Boolean = false, val onFiltered: () -> Unit
     ) : ArrayAdapter<Entry>(context, resource, textViewResourceId, allItems), Filterable {
         private var items: Array<Entry> = allItems
+        private val stableIds = allItems.mapIndexed { index, entry -> entry.value.toString() to index.toLong() }.toMap()
+        private val searchableNames = allItems.map { it.name.toString() to File(it.value.toString()).name }
+
+        fun containsValue(value: String): Boolean = stableIds.containsKey(value)
+
+        // Name search stays on the UI thread so clearing a query and locating a file
+        // cannot race with a pending Filter result. Script tag filtering is unchanged.
+        fun filterByName(text: String) {
+            val query = text.trim()
+            items = if (query.isEmpty()) allItems else allItems.filterIndexed { index, _ ->
+                val (label, fileName) = searchableNames[index]
+                label.contains(query, ignoreCase = true) || fileName.contains(query, ignoreCase = true)
+            }.toTypedArray()
+            notifyDataSetChanged()
+        }
 
         fun indexOf(value: String): Int {
-            return items.map { it.value }.indexOf(value)
+            return items.indexOfFirst { it.value.toString() == value }
         }
         override fun hasStableIds(): Boolean = true
         override fun getCount(): Int = items.size
         override fun getItem(position: Int): Entry = items[position]
-        override fun getItemId(position: Int): Long = position.toLong()
+        override fun getItemId(position: Int): Long = items.getOrNull(position)
+            ?.let { stableIds.getValue(it.value.toString()) } ?: AdapterView.INVALID_ROW_ID
         override fun getFilter(): Filter {
             return object : Filter() {
                 @Suppress("UNCHECKED_CAST")
@@ -545,12 +698,15 @@ class FileLibraryDialogFragment : ListPreferenceDialogFragmentCompat(), TargetFr
 
     companion object {
         private const val BUNDLE_KEY = "key"
+        private const val BUNDLE_IMPORT_IMMEDIATELY = "import_immediately"
+        private const val STATE_SEARCH_QUERY = "library_search_query"
 
-        fun newInstance(key: String): FileLibraryDialogFragment {
+        fun newInstance(key: String, importImmediately: Boolean = false): FileLibraryDialogFragment {
             val fragment = FileLibraryDialogFragment()
 
             val args = Bundle()
             args.putString(BUNDLE_KEY, key)
+            args.putBoolean(BUNDLE_IMPORT_IMMEDIATELY, importImmediately)
             fragment.arguments = args
             return fragment
         }

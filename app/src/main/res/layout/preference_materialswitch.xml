@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.materialswitch.MaterialSwitch
+<me.timschneeberger.rootlessjamesdsp.ui.SpringMaterialSwitch
     android:id="@+id/switchWidget"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
+    android:layout_height="30dp"
+    android:minHeight="0dp"
     android:background="@null"
     xmlns:android="http://schemas.android.com/apk/res/android" />
 

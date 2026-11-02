@@ -43,6 +43,11 @@ public class AudioEffectHidden {
         throw new RuntimeException("Stub!");
     }
 
+    /** Framework engine ID, distinct from the Audio Session ID. */
+    public int getId() throws IllegalStateException {
+        throw new RuntimeException("Stub!");
+    }
+
     /**
      * Null effect UUID. See {@link AudioEffectHidden(UUID, UUID, int, int)} for use.
      */
@@ -164,6 +169,14 @@ public class AudioEffectHidden {
      * @throws IllegalStateException
      */
     public boolean getEnabled() throws IllegalStateException {
+        throw new RuntimeException("Stub!");
+    }
+
+    public boolean hasControl() throws IllegalStateException {
+        throw new RuntimeException("Stub!");
+    }
+
+    public void setControlStatusListener(AudioEffect.OnControlStatusChangeListener listener) {
         throw new RuntimeException("Stub!");
     }
 

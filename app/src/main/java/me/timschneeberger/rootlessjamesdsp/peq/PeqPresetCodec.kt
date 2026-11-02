@@ -31,13 +31,13 @@ object PeqPresetCodec {
         return normalized
     }
 
-    internal fun decodeDocument(json: String, local: Boolean): List<PeqPreset> {
+    internal fun decodeDocument(json: String, local: Boolean, onLegacyCount: ((Int) -> Unit)? = null): List<PeqPreset> {
         require(json.length <= PeqPresetStore.MAX_IMPORT_BYTES &&
             json.toByteArray(Charsets.UTF_8).size <= PeqPresetStore.MAX_IMPORT_BYTES) { "预设文件不能超过 4 MiB" }
         requireShallowDocument(json)
         val root = Json.parseToJsonElement(json) as? JsonObject
             ?: throw IllegalArgumentException("预设文件必须是 JSON 对象")
-        require(root.string("format") == FORMAT) { "不是 dsp音效的 PEQ 预设文件" }
+        require(root.string("format") == FORMAT) { "不是 DSP音效的 PEQ 预设文件" }
         val version = root["version"] as? JsonPrimitive
         require(version != null && !version.isString && version.intOrNull == VERSION) { "不支持此预设文件版本" }
         val items = root["presets"] as? JsonArray ?: throw IllegalArgumentException("预设文件缺少 presets 列表")
@@ -53,7 +53,11 @@ object PeqPresetCodec {
                 require(canonical.equals(stored, ignoreCase = true)) { "本地预设标识无效" }
                 canonical
             } else UUID.randomUUID().toString()
-            PeqPreset(id, name, PeqRepository.decode(state.toString()))
+            val decoded = if (local) PeqRepository.decodeLocal(state.toString()).let {
+                if (it.originalBandCount > PeqModel.MAX_BANDS) onLegacyCount?.invoke(it.originalBandCount)
+                it.state
+            } else PeqRepository.decode(state.toString())
+            PeqPreset(id, name, decoded)
         }
         if (local) {
             require(result.map { it.id }.toSet().size == result.size) { "本地预设标识重复" }

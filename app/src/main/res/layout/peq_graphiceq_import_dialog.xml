@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:clipToPadding="false" android:fillViewport="false">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:paddingHorizontal="20dp" android:paddingVertical="8dp">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/geq_import_intro" android:textAppearance="?attr/textAppearanceBodyMedium" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/geq_import_pick"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="@string/geq_import_pick" />
+        <com.google.android.material.textfield.TextInputLayout android:id="@+id/geq_import_text_box"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:hint="@string/geq_import_text_hint"
+            app:helperText="@string/geq_import_text_help">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/geq_import_text"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="top|start" android:inputType="textMultiLine|textNoSuggestions"
+                android:minLines="3" android:maxLines="6" android:scrollbars="vertical"
+                android:textSize="14sp" android:imeOptions="flagNoExtractUi" />
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.textfield.TextInputLayout android:id="@+id/geq_import_name_box"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:hint="@string/geq_import_name"
+            app:counterEnabled="true" app:counterMaxLength="40">
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/geq_import_name"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:inputType="textCapSentences" android:singleLine="true"
+                android:imeOptions="actionDone" />
+        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.button.MaterialButton android:id="@+id/geq_import_advanced"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" android:text="@string/geq_import_advanced_expand" />
+        <LinearLayout android:id="@+id/geq_import_advanced_content"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:visibility="gone">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/geq_import_max_bands" android:textAppearance="?attr/textAppearanceTitleSmall" />
+            <com.google.android.material.chip.ChipGroup android:id="@+id/geq_import_bands"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                app:singleSelection="true" app:selectionRequired="true" app:checkedChip="@id/geq_import_band_30">
+                <com.google.android.material.chip.Chip android:id="@+id/geq_import_band_10"
+                    style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="10" />
+                <com.google.android.material.chip.Chip android:id="@+id/geq_import_band_20"
+                    style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="20" />
+                <com.google.android.material.chip.Chip android:id="@+id/geq_import_band_30"
+                    style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="30" />
+                <com.google.android.material.chip.Chip android:id="@+id/geq_import_band_60"
+                    style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="60" />
+                <com.google.android.material.chip.Chip android:id="@+id/geq_import_band_130"
+                    style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="130" />
+            </com.google.android.material.chip.ChipGroup>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" android:text="@string/geq_import_target_error"
+                android:textAppearance="?attr/textAppearanceTitleSmall" />
+            <com.google.android.material.chip.ChipGroup android:id="@+id/geq_import_errors"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                app:singleSelection="true" app:selectionRequired="true" app:checkedChip="@id/geq_import_error_050">
+                <com.google.android.material.chip.Chip android:id="@+id/geq_import_error_050"
+                    style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="0.5 dB" />
+                <com.google.android.material.chip.Chip android:id="@+id/geq_import_error_025"
+                    style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="0.25 dB" />
+                <com.google.android.material.chip.Chip android:id="@+id/geq_import_error_010"
+                    style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="0.1 dB" />
+            </com.google.android.material.chip.ChipGroup>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" android:text="@string/geq_import_advanced_help"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+        </LinearLayout>
+        <TextView android:id="@+id/geq_import_options_summary"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" android:textAppearance="?attr/textAppearanceBodySmall" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/geq_import_fit"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="@string/geq_import_fit" />
+        <LinearLayout android:id="@+id/geq_import_progress_group"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:visibility="gone">
+            <com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/geq_import_progress"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginVertical="8dp" android:indeterminate="false" android:max="1000" />
+            <TextView android:id="@+id/geq_import_progress_text"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceBodyMedium" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/geq_import_cancel_fit"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/geq_import_cancel_fit" />
+        </LinearLayout>
+        <TextView android:id="@+id/geq_import_status"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginVertical="8dp" android:accessibilityLiveRegion="polite"
+            android:textAppearance="?attr/textAppearanceBodyMedium" android:visibility="gone" />
+        <LinearLayout android:id="@+id/geq_import_result"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:visibility="gone">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/geq_import_chart_title" android:textAppearance="?attr/textAppearanceTitleSmall" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" android:text="@string/geq_import_legend_target"
+                android:textColor="?attr/colorOnSurfaceVariant" android:textAppearance="?attr/textAppearanceBodySmall" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/geq_import_legend_fitted" android:textColor="?attr/colorPrimary"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+            <me.timschneeberger.rootlessjamesdsp.peq.importer.GraphicEqFitChart android:id="@+id/geq_import_chart"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginVertical="8dp" android:importantForAccessibility="yes" />
+            <TextView android:id="@+id/geq_import_summary"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textIsSelectable="true" android:textAppearance="?attr/textAppearanceBodyMedium" />
+            <TextView android:id="@+id/geq_import_result_note"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" android:layout_marginBottom="8dp"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

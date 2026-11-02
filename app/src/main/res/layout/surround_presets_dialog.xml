@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:clipToPadding="false" android:fillViewport="false">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:paddingHorizontal="20dp" android:paddingVertical="8dp">
+        <TextView android:id="@+id/surround_presets_count"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceTitleSmall" />
+        <TextView android:id="@+id/surround_presets_scope"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:textAppearance="?attr/textAppearanceTitleSmall" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="@string/surround_presets_hint"
+            android:textAppearance="?attr/textAppearanceBodySmall" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/surround_presets_save"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="@string/peq_presets_save" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <com.google.android.material.button.MaterialButton android:id="@+id/surround_presets_import"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                android:text="@string/peq_presets_import" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/surround_presets_export_all"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                android:text="@string/peq_presets_export_all" />
+        </LinearLayout>
+        <TextView android:id="@+id/surround_presets_status"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginVertical="8dp" android:visibility="gone"
+            android:textAppearance="?attr/textAppearanceBodyMedium" />
+        <LinearLayout android:id="@+id/surround_presets_list"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </LinearLayout>
+</ScrollView>

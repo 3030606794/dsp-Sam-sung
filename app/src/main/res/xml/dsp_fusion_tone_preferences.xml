@@ -5,7 +5,7 @@
         android:key="fusion_tone_enabled"
         android:title="@string/fusion_tone_title"
         android:defaultValue="false"
-        android:icon="@drawable/ic_tune_vertical_variant_24dp"
+        android:icon="@drawable/ic_effect_perceptual_tone_24"
         app:iconSpaceReserved="false">
         <me.timschneeberger.rootlessjamesdsp.fusion.ToneRangePreference
             android:key="fusion_tone_range"

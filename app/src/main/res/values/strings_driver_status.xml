@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="driver_status_title">驱动详细状态</string>
+    <string name="driver_status_reading">正在读取驱动状态…</string>
+    <string name="driver_status_refresh">刷新</string>
+    <string name="driver_status_close">关闭</string>
+</resources>

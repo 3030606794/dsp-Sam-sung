@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="36dp" android:layout_height="48dp"
+    android:clickable="true" android:focusable="true"
+    android:background="@null" android:foreground="@null">
+    <TextView android:id="@+id/peq_style_action_label"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:layout_gravity="center" android:gravity="center"
+        android:includeFontPadding="false" android:maxLines="1"
+        android:textSize="13sp" android:textStyle="bold"
+        android:textColor="?attr/colorPrimary"
+        android:background="@null" android:foreground="@null"
+        android:importantForAccessibility="no" />
+</FrameLayout>

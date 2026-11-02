@@ -4,9 +4,24 @@ import android.content.Context
 import android.content.Intent
 import android.system.ErrnoException
 import me.timschneeberger.rootlessjamesdsp.BuildConfig
+import me.timschneeberger.rootlessjamesdsp.fusion.BassParameters
+import me.timschneeberger.rootlessjamesdsp.fusion.HighFrequencyParameters
+import me.timschneeberger.rootlessjamesdsp.fusion.HighFrequencyAdvancedParameters
+import me.timschneeberger.rootlessjamesdsp.fusion.HighFrequencyController
+import me.timschneeberger.rootlessjamesdsp.fusion.FieldController
+import me.timschneeberger.rootlessjamesdsp.fusion.ConvolutionController
+import me.timschneeberger.rootlessjamesdsp.fusion.ConvolutionParameters
+import me.timschneeberger.rootlessjamesdsp.convolver.ConvolverLibrary
+import me.timschneeberger.rootlessjamesdsp.dynamicpeq.DynamicPeqRepository
+import me.timschneeberger.rootlessjamesdsp.fusion.DiffController
+import me.timschneeberger.rootlessjamesdsp.fusion.DiffParameters
+import me.timschneeberger.rootlessjamesdsp.fusion.DiffAdvancedParameters
+import me.timschneeberger.rootlessjamesdsp.fusion.FieldParameters
+import me.timschneeberger.rootlessjamesdsp.fusion.FieldAdvancedParameters
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.backup.BackupManager
 import me.timschneeberger.rootlessjamesdsp.liveprog.EelParser
+import me.timschneeberger.rootlessjamesdsp.liveprog.LiveprogParameterStore
 import me.timschneeberger.rootlessjamesdsp.utils.Constants
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.broadcastPresetLoadEvent
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.sendLocalBroadcast
@@ -61,15 +76,18 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
 
         // Create a TarOutputStream
         try {
+            // Interactive dynamic edits use apply(); finish their ordered writes before reading XML.
+            check(DynamicPeqRepository(ctx).flush()) { "动态 PEQ 参数尚未写入存储，请重试保存" }
+            check(me.timschneeberger.rootlessjamesdsp.expansion.ExpansionEffectsRepository.flush(ctx)) { "新增音效参数尚未写入存储，请重试保存" }
+            check(me.timschneeberger.rootlessjamesdsp.creative.CreativeEffectsRepository.flush(ctx)) { "创意音效参数尚未写入存储，请重试保存" }
             Tar.Composer(targetFile).use { c ->
                 c.metadata = mutableMapOf(
                     META_VERSION to PRESET_VERSION,
                     META_APP_VERSION to BuildConfig.VERSION_NAME,
                     META_APP_FLAVOR to BuildConfig.FLAVOR,
                     META_LIVEPROG_INCLUDED to false.toString(),
-                    // Preserve surround slots instead of silently dropping them in older apps.
-                    META_MIN_VERSION_CODE to if (ctx.getSharedPreferences(
-                        "dsp_fusion_surround", Context.MODE_PRIVATE).all.isNotEmpty()) "1013" else "1010"
+                    // Older APKs cannot represent the fine bass keys and must not silently discard them.
+                    META_MIN_VERSION_CODE to minimumVersionCode(ctx)
                 )
 
                 currentPath(ctx)
@@ -85,7 +103,7 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
 
                         c.metadata[META_LIVEPROG_INCLUDED] = true.toString()
                         File(ctx.cacheDir, FILE_LIVEPROG).let {
-                            liveprogFile.copyTo(it, overwrite = true)
+                            it.writeText(LiveprogParameterStore(ctx).exportSource(liveprogFile.absolutePath))
                             c.add(it)
                         }
                     }
@@ -117,6 +135,50 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
         const val META_APP_FLAVOR = "app_flavor"
         const val META_LIVEPROG_INCLUDED = "liveprog_included" /* version 2+ */
         const val META_MIN_VERSION_CODE = "min_version_code" /* version 3+ */
+
+        internal fun minimumVersionCode(context: Context): String = when {
+            context.getSharedPreferences(me.timschneeberger.rootlessjamesdsp.expansion.ExpansionEffectsKind.SPEAKER_OPTIMIZATION.prefsName,
+                Context.MODE_PRIVATE).all.isNotEmpty() -> "1157"
+            me.timschneeberger.rootlessjamesdsp.expansion.ExpansionEffectsKind.values().any {
+                context.getSharedPreferences(it.prefsName, Context.MODE_PRIVATE).all.isNotEmpty()
+            } -> "1155"
+            me.timschneeberger.rootlessjamesdsp.creative.CreativeEffectsKind.values().any {
+                context.getSharedPreferences(it.prefsName, Context.MODE_PRIVATE).all.isNotEmpty()
+            } -> "1154"
+            context.getSharedPreferences(Constants.PREF_DYNAMIC_PEQ, Context.MODE_PRIVATE).all.isNotEmpty() -> "1152"
+            context.getSharedPreferences(Constants.PREF_LIVEPROG, Context.MODE_PRIVATE).all.keys.any { it.startsWith("liveprog_parameter_v1:") } -> "1052"
+            me.timschneeberger.rootlessjamesdsp.fusion.DdcParameters.newKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.DdcController.preferences(context).all::containsKey) -> "1051"
+            me.timschneeberger.rootlessjamesdsp.fusion.ToneAdvancedParameters.newKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.ToneController.preferences(context).all::containsKey) -> "1050"
+            me.timschneeberger.rootlessjamesdsp.fusion.CompanderParameters.newKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.CompanderController.preferences(context).all::containsKey) -> "1049"
+            (me.timschneeberger.rootlessjamesdsp.fusion.TimbreController.preferences(context).all[me.timschneeberger.rootlessjamesdsp.fusion.TimbreParameters.amount.key] as? Int ?: 1000) > 2000 -> "1048"
+            me.timschneeberger.rootlessjamesdsp.fusion.DynamicParameters.newKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.DynamicController.preferences(context).all::containsKey) -> "1048"
+            me.timschneeberger.rootlessjamesdsp.fusion.TimbreParameters.newKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.TimbreController.preferences(context).all::containsKey) -> "1047"
+            me.timschneeberger.rootlessjamesdsp.fusion.AnalogParameters.newKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.AnalogController.preferences(context).all::containsKey) -> "1046"
+            me.timschneeberger.rootlessjamesdsp.fusion.TubeParameters.newKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.TubeController.preferences(context).all::containsKey) -> "1045"
+            me.timschneeberger.rootlessjamesdsp.fusion.RoomReverbParameters.newKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.RoomReverbController.preferences(context).all::containsKey) -> "1044"
+            me.timschneeberger.rootlessjamesdsp.fusion.ReverbAdvancedParameters.keys.any(context.getSharedPreferences("dsp_fusion_viper",Context.MODE_PRIVATE).all::containsKey) ||
+                me.timschneeberger.rootlessjamesdsp.fusion.PresetCrossfeedParameters.advancedKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.PresetCrossfeedController.preferences(context).all::containsKey) -> "1043"
+            me.timschneeberger.rootlessjamesdsp.fusion.ReverbParameters.newKeys.any(context.getSharedPreferences("dsp_fusion_viper",Context.MODE_PRIVATE).all::containsKey) -> "1042"
+            me.timschneeberger.rootlessjamesdsp.fusion.CrossfeedAdvancedParameters.keys.any(context.getSharedPreferences("dsp_fusion_viper",Context.MODE_PRIVATE).all::containsKey) ||
+                me.timschneeberger.rootlessjamesdsp.fusion.PresetCrossfeedParameters.newKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.PresetCrossfeedController.preferences(context).all::containsKey) -> "1041"
+            me.timschneeberger.rootlessjamesdsp.fusion.CrossfeedParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_viper",Context.MODE_PRIVATE).all) -> "1040"
+            me.timschneeberger.rootlessjamesdsp.fusion.SurroundListeningParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_surround",Context.MODE_PRIVATE).all) -> "1039"
+            me.timschneeberger.rootlessjamesdsp.fusion.SurroundProfessionalParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_surround",Context.MODE_PRIVATE).all) -> "1038"
+            me.timschneeberger.rootlessjamesdsp.fusion.WidthAdvancedParameters.keys.any(me.timschneeberger.rootlessjamesdsp.fusion.WidthController.preferences(context).all::containsKey) -> "1037"
+            me.timschneeberger.rootlessjamesdsp.fusion.WidthParameters.newKeys.any(me.timschneeberger.rootlessjamesdsp.fusion.WidthController.preferences(context).all::containsKey) -> "1036"
+            me.timschneeberger.rootlessjamesdsp.fusion.ConvolutionAdvancedParameters.newKeys.any(ConvolutionController.preferences(context).all::containsKey) -> "1035"
+            ConvolutionParameters.requiresNewApp(ConvolutionController.preferences(context).all) -> "1034"
+            DiffAdvancedParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_viper", Context.MODE_PRIVATE).all) -> "1033"
+            DiffParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_viper", Context.MODE_PRIVATE).all) -> "1032"
+            FieldAdvancedParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_viper", Context.MODE_PRIVATE).all) -> "1031"
+            FieldParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_viper", Context.MODE_PRIVATE).all) -> "1030"
+            HighFrequencyAdvancedParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_viper", Context.MODE_PRIVATE).all) -> "1029"
+            HighFrequencyParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_viper", Context.MODE_PRIVATE).all) -> "1028"
+            BassParameters.requiresNewApp(context.getSharedPreferences("dsp_fusion_viper", Context.MODE_PRIVATE).all,
+                context.getSharedPreferences(Constants.PREF_BASS, Context.MODE_PRIVATE).all) -> "1027"
+            context.getSharedPreferences("dsp_fusion_surround", Context.MODE_PRIVATE).all.isNotEmpty() -> "1013"
+            else -> "1010"
+        }
 
         private fun currentPath(ctx: Context) = File(ctx.applicationInfo.dataDir + "/shared_prefs")
         private fun isKnownEntry(n: String) = (n.startsWith("dsp_") && n.endsWith("xml")) || n == FILE_LIVEPROG
@@ -156,16 +218,64 @@ class Preset(val name: String, externalPath: File? = null): KoinComponent {
                 throw Exception(ctx.getString(R.string.filelibrary_corrupted))
             }
 
+            // Validate this independent namespace before touching any current effect state.
+            val dynamicPeqFile = files.firstOrNull { it.name == "${Constants.PREF_DYNAMIC_PEQ}.xml" }
+            val dynamicPeqState = dynamicPeqFile?.let { DynamicPeqRepository.readPresetPreferences(it) }
+            val expansionFiles = me.timschneeberger.rootlessjamesdsp.expansion.ExpansionEffectsKind.values().associateWith { kind ->
+                files.firstOrNull { it.name == "${kind.prefsName}.xml" }
+            }
+            val expansionStates = expansionFiles.mapValues { (kind, file) ->
+                file?.let { me.timschneeberger.rootlessjamesdsp.expansion.ExpansionEffectsRepository.read(kind, it) }
+            }
+            val creativeFiles = me.timschneeberger.rootlessjamesdsp.creative.CreativeEffectsKind.values().associateWith { kind ->
+                files.firstOrNull { it.name == "${kind.prefsName}.xml" }
+            }
+            val creativeStates = creativeFiles.mapValues { (kind, file) ->
+                file?.let { me.timschneeberger.rootlessjamesdsp.creative.CreativeEffectsRepository.read(kind, it) }
+            }
+            me.timschneeberger.rootlessjamesdsp.creative.CreativeEffectsController.resetTransient(ctx)
+            me.timschneeberger.rootlessjamesdsp.expansion.ExpansionEffectsController.resetTransient(ctx)
+
+            HighFrequencyController.stopAudition(ctx)
+            FieldController.stopAudition(ctx)
+            DiffController.stopAudition(ctx)
+            me.timschneeberger.rootlessjamesdsp.fusion.CrossfeedController.stopAudition(ctx,clearSnapshots=true)
+            me.timschneeberger.rootlessjamesdsp.fusion.ReverbController.stopAudition(ctx,clearSnapshots=true)
+            me.timschneeberger.rootlessjamesdsp.fusion.RoomReverbController.stopAudition(ctx,clearSnapshots=true)
+            me.timschneeberger.rootlessjamesdsp.fusion.TubeController.stopAudition(ctx,clearSnapshots=true)
+            me.timschneeberger.rootlessjamesdsp.fusion.AnalogController.stopAudition(ctx,clearSnapshots=true)
+            me.timschneeberger.rootlessjamesdsp.fusion.DynamicController.stopAudition(ctx,clearSnapshots=true)
+            me.timschneeberger.rootlessjamesdsp.fusion.TimbreController.stopAudition(ctx,clearSnapshots=true)
+            me.timschneeberger.rootlessjamesdsp.fusion.CompanderController.stopAudition(ctx,clearSnapshots=true)
+            me.timschneeberger.rootlessjamesdsp.fusion.ToneAdvancedController.stopAudition(ctx,clearSnapshots=true)
+            me.timschneeberger.rootlessjamesdsp.fusion.DdcController.stopAudition(ctx,clearSnapshots=true)
+            ConvolutionController.stopAudition(ctx)
+            me.timschneeberger.rootlessjamesdsp.fusion.WidthController.stopAudition(ctx)
+
             // Missing processor namespaces must not retain PEQ/tone/ViPER/surround settings
             // from the preceding device profile underneath an older preset.
-            arrayOf("dsp_fusion_viper", "dsp_fusion_tone", "dsp_fusion_surround", Constants.PREF_GEQ).forEach { namespace ->
+            arrayOf("dsp_fusion_viper", "dsp_fusion_tone", "dsp_fusion_surround", Constants.PREF_GEQ, Constants.PREF_BASS, Constants.PREF_CONVOLVER,Constants.PREF_STEREOWIDE,Constants.PREF_REVERB,Constants.PREF_TUBE,Constants.PREF_COMPANDER,Constants.PREF_DDC).forEach { namespace ->
                 if (files.none { it.name == "$namespace.xml" }) {
                     ctx.getSharedPreferences(namespace, Context.MODE_PRIVATE).edit().clear().commit()
                 }
             }
 
+            // A raw copy can be overwritten later by the preceding route's queued apply.
+            // commit serializes the new bank after that queue and refreshes live preferences.
+            check(DynamicPeqRepository(ctx).replaceFromPreset(dynamicPeqState)) { "动态 PEQ 设备配置保存失败" }
+            expansionStates.forEach { (kind, values) ->
+                check(me.timschneeberger.rootlessjamesdsp.expansion.ExpansionEffectsRepository.replace(ctx, kind, values)) {
+                    "${kind.title}设备配置保存失败"
+                }
+            }
+            creativeStates.forEach { (kind, values) ->
+                check(me.timschneeberger.rootlessjamesdsp.creative.CreativeEffectsRepository.replace(ctx, kind, values)) {
+                    "${kind.title}设备配置保存失败"
+                }
+            }
+
             files.forEach next@ { f ->
-                if(!isKnownEntry(f.name))
+                if(!isKnownEntry(f.name) || f == dynamicPeqFile || f in creativeFiles.values || f in expansionFiles.values)
                     return@next
 
                 val target = File(currentPath(ctx), f.name)

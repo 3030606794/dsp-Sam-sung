@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.preference.Preference
+import me.timschneeberger.rootlessjamesdsp.ui.glass.GlassAlertDialogBuilder as MaterialAlertDialogBuilder
 import me.timschneeberger.rootlessjamesdsp.BuildConfig
 import me.timschneeberger.rootlessjamesdsp.R
 import me.timschneeberger.rootlessjamesdsp.activity.OnboardingActivity
@@ -16,6 +17,7 @@ import me.timschneeberger.rootlessjamesdsp.utils.extensions.AssetManagerExtensio
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.ContextExtensions.showAlert
 import me.timschneeberger.rootlessjamesdsp.utils.extensions.PermissionExtensions.hasProjectMediaAppOp
 import me.timschneeberger.rootlessjamesdsp.utils.isRootless
+import me.timschneeberger.rootlessjamesdsp.ui.HelpPreferences
 
 class SettingsMiscFragment : SettingsBaseFragment() {
 
@@ -31,6 +33,24 @@ class SettingsMiscFragment : SettingsBaseFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         preferenceManager.sharedPreferencesName = Constants.PREF_APP
         setPreferencesFromResource(R.xml.app_misc_preferences, rootKey)
+
+        findPreference<Preference>("help_usage")?.setOnPreferenceClickListener {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.help_usage_title)
+                .setMessage(R.string.help_usage_message)
+                .setPositiveButton("知道了", null)
+                .show()
+            true
+        }
+        listOf(HelpPreferences.HIDE_QUESTIONS, HelpPreferences.HIDE_EXCLAMATIONS).forEach { key ->
+            findPreference<Preference>(key)?.setOnPreferenceChangeListener { _, _ ->
+                // Preference persists after this callback; post refresh to the following UI turn.
+                activity?.window?.decorView?.post {
+                    activity?.window?.decorView?.let(HelpPreferences::refresh)
+                }
+                true
+            }
+        }
 
         crashReports?.setOnPreferenceChangeListener { _, newValue ->
             CrashlyticsImpl.setCollectionEnabled(newValue as Boolean)

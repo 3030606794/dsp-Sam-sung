@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="eq_bands_scroll" type="id" />
+    <item name="eq_fixed_actions" type="id" />
+    <item name="eq_reset" type="id" />
+    <item name="eq_presets" type="id" />
+    <item name="eq_filter_type" type="id" />
+    <item name="eq_interpolation" type="id" />
+    <item name="eq_gain_slider" type="id" />
+    <item name="eq_gain_plus" type="id" />
+    <item name="eq_gain_minus" type="id" />
+    <item name="eq_gain_value" type="id" />
+    <item name="eq_gain_input" type="id" />
+</resources>

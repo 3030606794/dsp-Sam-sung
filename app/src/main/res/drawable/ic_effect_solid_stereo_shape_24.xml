@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menu B proposal: native 24-unit geometry, existing theme tint only. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M2,4 L9.3,10.2 L9.3,13.8 L2,20 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M22,4 L14.7,10.2 L14.7,13.8 L22,20 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M11.9,6 H12.1 A1.5,1.5 0,0 1 13.6,7.5 V16.5 A1.5,1.5 0,0 1 12.1,18 H11.9 A1.5,1.5 0,0 1 10.4,16.5 V7.5 A1.5,1.5 0,0 1 11.9,6 Z" />
+</vector>

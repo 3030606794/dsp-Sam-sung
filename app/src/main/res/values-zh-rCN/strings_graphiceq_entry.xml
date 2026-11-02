@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="peq_graphiceq_import_action">导入曲线 TXT</string>
+</resources>

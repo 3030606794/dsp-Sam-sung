@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="filelibrary_search_hint">搜索文件名称</string>
+    <string name="filelibrary_locate">定位</string>
+    <string name="filelibrary_locate_description">定位当前选中的文件</string>
+    <string name="filelibrary_search_empty">未找到匹配的文件</string>
+    <string name="filelibrary_current_file_missing">当前选中的文件已不在此文件库中</string>
+</resources>

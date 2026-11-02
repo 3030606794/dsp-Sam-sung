@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menu A proposal: native 24-unit geometry, existing theme tint only. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.1"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M2.5,2.5 L2.5,21.5 L22,21.5" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M7,21.5 L7,20.3" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M12,21.5 L12,20.3" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M17,21.5 L17,20.3" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M2.5,7 L3.7,7" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M2.5,12 L3.7,12" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.85"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M2.5,17 L3.7,17" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.75"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M4,19 L5.5,17.5" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.75"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M8,15 L9.5,13.5" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.75"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M12,11 L13.5,9.5" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.75"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M16,7 L17.5,5.5" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M4,20 L12,10 L21.5,5.5" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M10.7,8.7 H13.3 V11.3 H10.7 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.1"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M17,2.5 L17,7" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.1"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M15.9024,5.2097 L17,7 L18.0976,5.2097" />
+</vector>

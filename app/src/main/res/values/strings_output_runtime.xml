@@ -4,6 +4,11 @@
     <string name="output_driver_disconnected">驱动：未连接</string>
     <string name="output_rate_value">处理采样率：%1$s kHz</string>
     <string name="output_rate_idle">处理采样率：未处理</string>
+    <string name="output_runtime_standby">待机：等待播放</string>
+    <string name="output_runtime_global_rate">全局系统链 · Session: %1$d · %2$s kHz</string>
+    <string name="output_global_suspended">全局链被系统挂起，未处理当前播放</string>
+    <string name="output_global_different_output">当前播放走其他输出，未经过全局链</string>
+    <string name="output_global_not_processing">全局链未处理当前播放；请检查播放器输出</string>
     <string name="output_rate_unknown">处理采样率：未知</string>
     <string name="output_route_value">输出：%1$s</string>
     <string name="output_route_unknown">未知设备</string>

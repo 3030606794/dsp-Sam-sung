@@ -1,0 +1,68 @@
+Neutron 2.29.0 “均衡器预设 → 默认”完整数据提取记录
+分析日期：2026-10-14（Asia/Shanghai）
+
+范围及结果
+- 输入为用户工作区已存在的 Neutron Player_2.29.0.apk，读取其中 lib/arm64-v8a/libneutronmp.so。
+- 默认菜单完整包含 74 个预设，3098 个频段：29 个 Parametric + 45 个 Graphic。
+- 29 个 Parametric：4-Band Parametric (Default)、4–20 Band、30–130 Band（后者步进10）。
+- 45 个 Graphic：21 个10段 Flat/曲风预设 + 24 个20–130段 Flat 16k / Flat 20k 预设。
+- assets/fc_presets_autoeq.xml 的8849项耳机AutoEQ数据属于另一预设来源，不属于此次指定的“默认”列表，未混入。
+- 未安装或启动APK，未接触手机数据，未执行许可/购买检查，也未复制播放器程序进入应用。
+
+完整性证据
+- Parametric 表在原生 ELF .data.rel.ro 地址/文件偏移 0x184f3c0，29条，每条24字节。
+- Graphic 表在 0x184ef88，45条，每条24字节。
+- 结构为 (uint64 namePointer, uint64 bandCount, uint64 templatePointer)。表项和字符串按原顺序提取。
+- 0x28c614: cmp x22,#0x1d（29）；0x28c1b4: cmp x22,#0x2d（45），循环上界验证完整表长。
+- Graphic 名称构造在0x28bf94–0x28bfac，字符串0x14775ad为“(%d-Band Graphic)”，因此给所有45个名称补上原始后缀。
+- 原始名称以Parametric表在前、Graphic表在后的顺序输出，和用户截图默认列表起点一致。
+
+静态参数与枚举
+- 29项有静态模板，模板开头uint32频段数+uint32 0，之后每段20字节：
+  uint32 filterType, float32 frequencyHz, uint32 qualityMode, float32 qualityValue, float32 gainDb。
+- 模板共263个有效频段，剩余槽位是未使用的NULL，不能当成频段。
+- 0x1847170为filter名称指针数组，第11/12/13项分别是 FILTER__PEAKEQ / FILTER__LOWSHELF / FILTER__HIGHSHELF。
+- qualityMode=0为Q，1为BW（octaves）。库内0x146752b说明字符串明确 BW 的单位为octaves。
+- 4-Band Parametric (Default) 与 4-Band Parametric 是两个不同模板，保留二者。
+  前者频率250/500/3000/6000 Hz，类型低架/峰/峰/高架，中间BW=1；后者100/250/2500/10000 Hz，中间BW=1.25/2。
+- 预设中的有效滤波器均启用。未使用槽位的NULL未输出。
+
+生成型预设
+- 其余45项共2835段由原生纯数学函数0x28b528生成。
+- Graphic：BW=float32(10/段数)，所有段均峰值，起点是上限16k或20k，从高到低递乘 reciprocal=float32(1/float32(exp2(BW)))，最后反序为低到高。
+- Parametric：11–30段上限18k，40–130段上限20k，BW=float32(float32(10/段数)-校正常量)。
+  校正常量由0x14772ac跳表和0x1477258–0x14772a8常量区提取，20段的常量0.125来自fmov指令。
+  首段低架、末段高架，二者Q=库中float32(0.7071067690849304)；中间均峰值并使用上述BW。
+- 原生算法是逐次float32乘法，不是对每个频点直接pow；提取脚本严格保留这个运算顺序。
+- verify_generator.py在隔离ARM64模拟器中只执行0x28b528，唯一外部调用exp2由平台数学函数提供。
+  全部45项生成输出（频段数及每段20字节）与JSON重编码后逐字节完全相等，结果见generator-verification.json。
+
+BW与Q的正确换算
+- 原生0x35b1a8–0x35b290为BW分支，计算 omega=2*pi*f/Fs；alpha=sin(omega)*sinh(ln(2)/2*BW*omega/sin(omega))。
+- 原生Q分支0x35b19c–0x35b1a0为 alpha=sin(omega)/(2*Q)。两式等价得：
+  Q = 1/(2*sinh(ln(2)/2*BW*omega/sin(omega)))。
+- 此公式与本项目 PeqResponse.qFromBandwidth 相同，含数字频率修正，不能用频率无关近似或直接将BW写入Q。
+- 输出JSON的q以48000Hz为参考采样率，同时保留sourceBandwidthOctaves、sourceQualityMode、sourceQualityValue原值。
+  若接入时改变频率，应使用新的频率从sourceBandwidthOctaves重新算Q；若设计需始终保持BW，需随实际Fs重新换算。
+- 全部q@48k范围0.4821389818230366–23.03555011410323。
+
+原前级增益
+- 原Neutron构造预设会调用0x28adf8扫描最大/最小段增益，0x28bfcc与0x28c4e4保存负的最大增益。
+- 因此sourcePreampDb = -max(0, 所有频段gain)，JSON逐项保留。
+- 此为独立前级增益，绝不能加到每一个频段gain上。
+- 若接入应用仅加载滤波器参数且不改全局音量，应明确告知“原前级增益保留为参考，本次仅载入滤波参数”。
+
+已发现兼容边界
+- 全部原始频率范围16.480819702148438–20000 Hz。
+- 11个Flat 16k预设有共26个低于20Hz的频段，见extraction-summary.json。
+- 提取数据不裁剪，不删除重复或相近频率。若当前驱动最低20Hz，应在应用时明确提示这些频点将按20Hz载入，并按新的频率重算BW对应Q；原始数据仍需保留。
+- 相对于原始Neutron数据的低频适配与未加载独立前级增益，是应用边界差异，不应宣称迁移后音效完全相同。
+
+输出
+- extract_presets.py：直接读取原APK，可复现完整JSON。
+- neutron-default-presets.json：74项完整原始数据及48k下Q转换。
+- catalog.tsv：全部名称、数量、边界、前级增益与表行位置。
+- extraction-summary.json：范围与26个低频点明细。
+- verify_generator.py / generator-verification.json：45个生成型预设逐字节核验。
+- default-presets-disasm.txt / generated-presets-disasm.txt / quality-conversion-disasm.txt / headroom-disasm.txt：最小相关反汇编证据。
+- APK与原生库SHA256记录在完整JSON source 内。

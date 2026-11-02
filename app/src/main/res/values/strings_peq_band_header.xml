@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="peq_band_type_title">%1$d • %2$s</string>
     <string name="peq_band_header_frequency">%1$s Hz</string>
 </resources>

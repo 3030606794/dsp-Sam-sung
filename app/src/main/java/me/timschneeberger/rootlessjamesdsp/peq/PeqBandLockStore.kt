@@ -1,0 +1,63 @@
+package me.timschneeberger.rootlessjamesdsp.peq
+
+import android.content.Context
+
+/** Editor protection is local UI state, independent of presets and the audio protocol. */
+class PeqBandLockStore(context: Context) {
+    private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+
+    fun isBandLocked(id: String) = preferences.getBoolean("$id.band", true)
+    // New fields default to unlocked without rewriting older saved locks or audio parameters.
+    fun isFieldLocked(id: String, field: PeqEditField) = preferences.getBoolean("$id.${field.name}", false)
+    fun canEdit(id: String, field: PeqEditField? = null) =
+        !isBandLocked(id) && (field == null || !isFieldLocked(id, field))
+
+    fun isNew(id: String) = preferences.getBoolean("$id.new", false)
+
+    /** A new or copied card is immediately adjustable, independent of the source card's locks. */
+    fun markNew(id: String) {
+        preferences.edit().putBoolean("$id.band", false).putBoolean("$id.new", true).apply {
+            PeqEditField.entries.forEach { putBoolean("$id.${it.name}", false) }
+        }.apply()
+    }
+
+    /** Apply only after successfully saving a system preset and calling markNew for its fresh IDs. */
+    fun applySystemPresetDefaults(ids: Collection<String>) {
+        preferences.edit().apply {
+            ids.forEach { id ->
+                putBoolean("$id.band", false)
+                PeqEditField.entries.forEach { field ->
+                    putBoolean("$id.${field.name}", field == PeqEditField.QUALITY || field == PeqEditField.FREQUENCY)
+                }
+            }
+        }.apply()
+    }
+
+    fun markUsed(id: String) {
+        if (isNew(id)) preferences.edit().putBoolean("$id.new", false).apply()
+    }
+
+    fun setBandLocked(id: String, locked: Boolean) {
+        preferences.edit().putBoolean("$id.band", locked).apply()
+    }
+
+    fun setFieldLocked(id: String, field: PeqEditField, locked: Boolean) {
+        preferences.edit().putBoolean("$id.${field.name}", locked).apply()
+    }
+
+    /** One update clears every field lock while preserving the master lock and all other state. */
+    fun unlockAllFields(id: String) {
+        unlockAll(id, includeBand = false)
+    }
+
+    /** Publish the final master/field state together so a double tap never unlocks in stages. */
+    fun unlockAll(id: String, includeBand: Boolean, preservedBandLocked: Boolean? = null) {
+        preferences.edit().apply {
+            if (includeBand) putBoolean("$id.band", false)
+            else if (preservedBandLocked != null) putBoolean("$id.band", preservedBandLocked)
+            PeqEditField.entries.forEach { putBoolean("$id.${it.name}", false) }
+        }.apply()
+    }
+
+    companion object { const val PREFERENCES = "peq_editor_locks" }
+}

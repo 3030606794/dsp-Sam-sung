@@ -10,7 +10,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import me.timschneeberger.rootlessjamesdsp.ui.glass.GlassAlertDialogBuilder as MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import me.timschneeberger.rootlessjamesdsp.R
@@ -25,7 +25,9 @@ class PeqPresetsDialog(
     private val onExportRequested: (filename: String, json: String) -> Unit,
     private val store: PeqPresetStore = PeqPresetStore(context),
     private val currentScopeLabel: () -> String? = { null },
-    private val canSaveCurrent: () -> Boolean = { true }
+    private val canSaveCurrent: () -> Boolean = { true },
+    private val onSystemPresetsRequested: (() -> Unit)? = null,
+    private val onGraphicEqImportRequested: (() -> Unit)? = null
 ) {
     private val dialogs = mutableListOf<AlertDialog>()
     private var mainDialog: AlertDialog? = null
@@ -56,8 +58,20 @@ class PeqPresetsDialog(
         view.findViewById<View>(R.id.peq_presets_import).setOnClickListener {
             attempt { onImportRequested() }
         }
+        view.findViewById<View>(R.id.peq_presets_import_graphiceq).apply {
+            isVisible = onGraphicEqImportRequested != null
+            setOnClickListener { attempt { onGraphicEqImportRequested?.invoke() } }
+        }
         view.findViewById<View>(R.id.peq_presets_export_all).setOnClickListener {
             attempt { onExportRequested("peq-presets.json", store.exportJson()) }
+        }
+        view.findViewById<View>(R.id.peq_presets_system).apply {
+            isVisible = onSystemPresetsRequested != null
+            setOnClickListener {
+                // Replace this manager, rather than leaving a second parent window behind it.
+                dismissAll()
+                onSystemPresetsRequested?.invoke()
+            }
         }
         dialog.show()
         refresh()

@@ -27,7 +27,7 @@ class EngineLauncherActivity : BaseActivity() {
 
         if (isRoot()) {
             // Root
-            RootAudioProcessorService.startServiceEnhanced(this)
+            RootAudioProcessorService.refreshProcessingMode(this)
             finish()
             return
         }

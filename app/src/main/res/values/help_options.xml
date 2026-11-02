@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="help_title_binding" type="id" />
+    <string name="help_options_category">帮助说明</string>
+    <string name="help_usage_title">使用说明</string>
+    <string name="help_usage_summary">查看说明图标、专业设置和调节方法</string>
+    <string name="help_hide_questions_title">隐藏问号</string>
+    <string name="help_hide_questions_summary">隐藏参数说明图标，长按标题仍可查看说明</string>
+    <string name="help_hide_exclamations_title">隐藏叹号</string>
+    <string name="help_hide_exclamations_summary">隐藏专业说明图标，长按标题仍可查看说明</string>
+    <string name="help_usage_message">• 点击问号查看参数说明，点击叹号查看专业项说明；长按对应标题也可以查看。\n\n• 在此处隐藏问号或叹号后，仍可长按标题打开同一说明。\n\n• 点击首页模块标题展开常用调节；点击开关左侧的设置图标进入完整专业设置。\n\n• 拖动滑杆调节数值，减号和加号用于逐步调整；点击右侧数值框可以精确输入。双击滑杆球可恢复该参数的默认值。\n\n• 图表旁的固定按钮用于固定或取消固定图表区域，方便边调边看。</string>
+</resources>

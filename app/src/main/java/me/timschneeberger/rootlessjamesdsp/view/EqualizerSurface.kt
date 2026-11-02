@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.AttributeSet
 import me.timschneeberger.rootlessjamesdsp.interop.JdspImpResToolbox
 
-class EqualizerSurface(context: Context?, attrs: AttributeSet?) : BaseEqualizerSurface(context, attrs, 15, 20.0, 20000.0, -12.0, 12.0, 3.0f) {
+class EqualizerSurface(context: Context?, attrs: AttributeSet?) : BaseEqualizerSurface(context, attrs, 15, EqPreview.MINIMUM_FREQUENCY, EqPreview.MAXIMUM_FREQUENCY, -12.0, 12.0, 3.0f) {
     enum class Mode {
         Fir,
         Iir
@@ -32,7 +32,9 @@ class EqualizerSurface(context: Context?, attrs: AttributeSet?) : BaseEqualizerS
         response: FloatArray
     ) {
         when(mode) {
-            Mode.Fir -> JdspImpResToolbox.ComputeEqResponse(15, freqs, gains, 1, resolution, dispFreq, response)
+            Mode.Fir -> synchronized(JdspImpResToolbox) {
+                JdspImpResToolbox.ComputeEqResponse(15, freqs, gains, 1, resolution, dispFreq, response)
+            }
             Mode.Iir -> {
                 JdspImpResToolbox.ComputeIIREqualizerCplx(48000, iirOrder, freqs, gains, resolution, dispFreq, cplxRe, cplxIm)
                 JdspImpResToolbox.ComputeIIREqualizerResponse(nPts, cplxRe, cplxIm, response)

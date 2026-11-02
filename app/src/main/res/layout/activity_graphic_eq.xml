@@ -12,11 +12,45 @@
         android:fitsSystemWindows="true"
         app:liftOnScroll="false">
 
-        <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/toolbar"
-            android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            app:titleCentered="true" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="64dp" android:orientation="vertical">
+            <com.google.android.material.appbar.MaterialToolbar
+                android:id="@+id/toolbar"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:minHeight="56dp"
+                android:gravity="center_vertical"
+                app:maxButtonHeight="48dp"
+                app:buttonGravity="center_vertical"
+                app:titleTextAppearance="@style/EqualizerToolbarTitle"
+                app:titleMarginTop="0dp"
+                app:titleMarginBottom="0dp"
+                app:titleCentered="true">
+                <LinearLayout android:id="@+id/peq_toolbar_summary_row"
+                    android:layout_width="wrap_content" android:layout_height="match_parent"
+                    android:layout_gravity="start|center_vertical"
+                    android:layout_marginStart="14dp" android:layout_marginEnd="2dp"
+                    android:orientation="vertical" android:gravity="start|center_vertical"
+                    android:background="@null" android:foreground="@null">
+                    <androidx.appcompat.widget.AppCompatTextView
+                        android:id="@+id/peq_toolbar_title"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:gravity="start|center_vertical" android:includeFontPadding="false"
+                        android:singleLine="true" android:ellipsize="end"
+                        android:textSize="14sp" android:textStyle="bold"
+                        android:textColor="?attr/colorOnSurface" android:text="@string/fusion_peq_title"
+                        android:background="@null" android:foreground="@null" />
+                    <androidx.appcompat.widget.AppCompatTextView
+                        android:id="@+id/peq_toolbar_summary"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:gravity="start|center_vertical" android:includeFontPadding="false"
+                        android:singleLine="true" android:ellipsize="end" android:textSize="12sp"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:background="@null" android:foreground="@null" />
+                </LinearLayout>
+            </com.google.android.material.appbar.MaterialToolbar>
+        </LinearLayout>
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.constraintlayout.widget.ConstraintLayout

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menu A proposal: native 24-unit geometry, existing theme tint only. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.3"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M4,4 H19 V19 H4 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.3"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M1.5,12 L4,12" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.3"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M19,12 L22.5,12" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.55"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M6,12 L8,12 L9.3,7 L11.5,17 L13.5,6.5 L15,12 L17,12" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.9"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M7,20.5 L7,22" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.9"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M11.5,20.5 L11.5,22" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="0.9"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M16,20.5 L16,22" />
+</vector>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:minHeight="44dp" android:orientation="horizontal" android:gravity="center_vertical"
+    android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingTop="8dp" android:paddingBottom="8dp"
+    android:baselineAligned="false">
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+        android:orientation="vertical">
+        <TextView android:id="@android:id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:textSize="14sp" android:fontFamily="sans-serif-medium" android:textColor="?android:attr/textColorPrimary"
+            android:includeFontPadding="false" android:singleLine="false" />
+        <TextView android:id="@android:id/summary" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" android:textSize="13sp" android:textColor="?android:attr/textColorSecondary"
+            android:includeFontPadding="false" android:singleLine="false" />
+    </LinearLayout>
+    <TextView android:id="@+id/liveprog_row_action" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginStart="10dp" android:textSize="14sp" android:textColor="?attr/colorPrimary"
+        android:includeFontPadding="false" android:visibility="gone" />
+</LinearLayout>

@@ -1,9 +1,11 @@
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 #include <vector>
 #include "essential.h"
 #ifdef NDEBUG
@@ -44,6 +46,12 @@ struct Engine {
         return command(EFFECT_CMD_SET_PARAM,sizeof(effect_param_t)+4+n,p);
     }
     template<class T> int set(uint32_t id,T value) { return raw(id,&value,sizeof(value)); }
+    int get(uint32_t id) {
+        std::array<uint32_t,5> packet{0,4,4,id,0},reply{};uint32_t bytes=sizeof(reply);
+        assert(!(*handle)->command(handle,EFFECT_CMD_GET_PARAM,16,packet.data(),&bytes,reply.data()));
+        assert(bytes==sizeof(reply) && reply[0]==0 && reply[1]==4 && reply[2]==4 && reply[3]==id);
+        return static_cast<int32_t>(reply[4]);
+    }
     std::vector<float> render(const std::vector<float>& input,size_t block) {
         std::vector<float> output(input.size());
         for(size_t frame=0;frame<input.size()/2;frame+=block) {
@@ -115,6 +123,65 @@ void testConvolutionStreaming() {
         assert(std::abs(swap[i+1]-input[i])<3e-5);
     }
 }
+void testStatusPollingKeepsWetAudio() {
+    Engine engine(true,false);
+    engine.impulse({.5f},1);
+    assert(engine.get(19998)==0 && engine.get(19998)==1);
+    assert(engine.get(20001)==48000 && engine.get(20002)>0);
+    assert(engine.set(25000,int32_t(1234567))==0 && engine.get(30000)==1234567);
+    const auto input=signal(960);
+    std::atomic<bool> stop{false};std::atomic<unsigned> ready{0},reads{0};
+    std::array<std::thread,3> pollers;
+    for(auto& poller:pollers)poller=std::thread([&]{
+        ++ready;
+        while(!stop.load(std::memory_order_relaxed))
+            for(uint32_t id:{19999u,20000u,20001u,20002u,30000u,30001u,30002u,30003u,131241u,131080u,131081u}) {
+                engine.get(id);reads.fetch_add(1,std::memory_order_relaxed);
+            }
+    });
+    while(ready.load()!=pollers.size() || !reads.load())std::this_thread::yield();
+    // A control-thread GET must never make the audio try_lock choose dry bypass.
+    // A half-gain IR distinguishes that glitch from the committed wet stream.
+    for(unsigned block=0;block<600;++block) {
+        const auto output=engine.render(input,960);
+        for(size_t i=0;i<input.size();++i)assert(std::abs(output[i]-.5f*input[i])<1e-7f);
+    }
+    stop.store(true,std::memory_order_relaxed);
+    for(auto& poller:pollers)poller.join();
+    assert(engine.get(19998)==2 && engine.get(30000)==1234567 && reads.load()>0);
+    assert(!engine.command(EFFECT_CMD_INIT) && engine.get(19998)==3);
+    assert(!engine.command(EFFECT_CMD_RESET) && engine.get(19998)==4);
+    effect_config_t config{};
+    config.inputCfg.samplingRate=config.outputCfg.samplingRate=44100;
+    config.inputCfg.mask=config.outputCfg.mask=EFFECT_CONFIG_SMP_RATE;
+    assert(!engine.command(EFFECT_CMD_SET_CONFIG,sizeof(config),&config));
+    assert(engine.get(19998)==5 && engine.get(20001)==44100);
+    std::printf("Concurrent legacy-status polling: %u reads, no wet/dry discontinuities.\n",reads.load());
+}
+void testRepeatedHostConfigKeepsHistory() {
+    Engine reference(true,false),reconfigured(true,false);
+    std::vector<float> ir(16383);ir[0]=.5f;ir[777]=.2f;ir[8000]=-.1f;
+    reference.impulse(ir,1);reconfigured.impulse(ir,1);
+    const auto input=signal(30000);const auto expected=reference.render(input,960);
+    std::vector<float> output(input.size());
+    effect_config_t config{};
+    config.inputCfg.samplingRate=config.outputCfg.samplingRate=48000;
+    config.inputCfg.channels=config.outputCfg.channels=AUDIO_CHANNEL_OUT_STEREO;
+    config.inputCfg.format=config.outputCfg.format=AUDIO_FORMAT_PCM_FLOAT;
+    config.inputCfg.accessMode=EFFECT_BUFFER_ACCESS_READ;
+    config.outputCfg.accessMode=EFFECT_BUFFER_ACCESS_WRITE;
+    config.inputCfg.mask=config.outputCfg.mask=EFFECT_CONFIG_ALL;
+    unsigned configurations=0;
+    for(size_t offset=0;offset<input.size()/2;offset+=960) {
+        config.inputCfg.buffer.frameCount=config.outputCfg.buffer.frameCount=configurations++%2?512:960;
+        assert(!reconfigured.command(EFFECT_CMD_SET_CONFIG,sizeof(config),&config));
+        audio_buffer_t a{},b{};a.frameCount=b.frameCount=std::min(size_t(960),input.size()/2-offset);
+        a.f32=const_cast<float*>(input.data()+2*offset);b.f32=output.data()+2*offset;
+        assert(!(*reconfigured.handle)->process(reconfigured.handle,&a,&b));
+    }
+    assert(error(output,expected)<1e-7);
+    std::printf("Repeated same-rate host configuration: %u changes, long-IR history error %.9g.\n",configurations,error(output,expected));
+}
 void testCrossfeedStreaming() {
     const auto input=signal(16384,true);
     for(int16_t mode=0;mode<6;++mode) {
@@ -135,21 +202,22 @@ void testCrossfeedStreaming() {
 void testImpulseAllocationFailures() {
     const auto input=signal(2048);
     Engine engine(true,false);
-    // Fail storage, channel-pointer array, each channel, and the FFT object.
+    // Prepared loading owns the incoming storage: fail channel-pointer array, each channel and FFT object.
     // The production Android library has no fault-injection hook.
-    for(int channels:{1,2,4}) for(int failAfter=0;failAfter<channels+3;++failAfter) {
+    for(int channels:{1,2,4}) for(int failAfter=0;failAfter<channels+2;++failAfter) {
         engine.impulse({.5f},1);
         engine.prepareImpulse(std::vector<float>(channels,.25f),channels);
         JamesDSPTestFailIRAllocationAfter(failAfter);
         assert(engine.set(10004,int16_t(1))==-ENOMEM);
         JamesDSPTestFailIRAllocationAfter(-1);
         assert(engine.set(1205,int16_t(1))==0);
-        assert(error(engine.render(input,960),input)<1e-7);
+        const auto retained=engine.render(input,960);
+        for(size_t i=0;i<input.size();++i)assert(std::abs(retained[i]-.5f*input[i])<1e-7);
         engine.impulse({.5f},1);
         const auto recovered=engine.render(input,960);
         for(size_t i=0;i<input.size();++i) assert(std::abs(recovered[i]-.5f*input[i])<1e-7);
     }
-    std::puts("IR loader allocation-failure injection passed (mono/stereo/four-channel, dry fallback and retry).");
+    std::puts("IR loader allocation-failure injection passed (mono/stereo/four-channel, retained committed IR and retry).");
 }
 #endif
 void testRemovedEffectsAndBalance() {
@@ -249,21 +317,43 @@ void testSurroundLimiterOrder() {
         for(float sample:limited) assert(std::isfinite(sample)&&std::abs(sample)<=.502f);
         assert(energy(limited)>1e-5);
     }
-    // Test-only bypass of the James stage removes its limiter: the wrapper
-    // hard clamp is still a final boundary, not the intended level control.
-    Engine unprotected(false,false);
+    // Bypass James' limiter to exercise the final stereo-linked envelope.
+    // A quiet, independently rendered copy provides the linear surround
+    // waveform: clipping before that envelope would distort this shape even
+    // if a later gain stage brought every output sample back below full scale.
+    Engine finalOnly(false,false),quietReference(false,false);
     const std::array<int32_t,6> strongest{1,1,10,16000,500,20};
-    assert(unprotected.raw(196609,strongest.data(),sizeof(strongest))==0);
+    for(auto* engine:{&finalOnly,&quietReference})
+        assert(engine->raw(196609,strongest.data(),sizeof(strongest))==0);
     std::vector<float> input(48000*2);
     for(size_t frame=0;frame<input.size()/2;++frame) {
         input[frame*2]=float(.9*std::sin(2*pi*1000*frame/48000));
         input[frame*2+1]=-input[frame*2];
     }
-    const auto clamped=unprotected.render(input,960);
-    bool hitClamp=false;
-    for(float sample:clamped) {assert(std::isfinite(sample)&&std::abs(sample)<=1);hitClamp|=std::abs(sample)==1;}
-    assert(hitClamp);
-    std::puts("RACE runs before James limiter: full-level mono/antiphase/one-sided inputs protected; emergency clamp only without James.");
+    const auto limited=finalOnly.render(input,960);
+    for(auto& sample:input)sample*=.0625f;
+    const auto quiet=quietReference.render(input,960);
+    double peak=0,referencePeak=0,referenceEnergy=0,cross=0;
+    for(size_t i=0;i<limited.size();++i) {
+        assert(std::isfinite(limited[i])&&std::abs(limited[i])<=.999501f);
+        assert(std::isfinite(quiet[i]));
+        peak=std::max(peak,std::abs(double(limited[i])));
+        if(i>=limited.size()*3/4) {
+            referencePeak=std::max(referencePeak,std::abs(double(quiet[i])));
+            referenceEnergy+=double(quiet[i])*quiet[i];
+            cross+=double(limited[i])*quiet[i];
+        }
+    }
+    assert(peak>.99 && peak<1 && referencePeak*16>1.05 && referencePeak<.9);
+    assert(referenceEnergy>1e-5);
+    const double gain=cross/referenceEnergy;
+    assert(gain>0 && gain<16);
+    double shapeError=0;
+    for(size_t i=limited.size()*3/4;i<limited.size();++i)
+        shapeError=std::max(shapeError,std::abs(double(limited[i])-gain*quiet[i]));
+    assert(shapeError<3e-5);
+    std::printf("RACE final envelope: peak %.9g, unprotected peak %.9g, steady waveform error %.9g\n",peak,referencePeak*16,shapeError);
+    std::puts("RACE precedes James limiter; final linked envelope also protects with James bypassed, without flat tops or intermediate hard clipping.");
 }
 }
 void runStreamingTests() {
@@ -271,6 +361,6 @@ void runStreamingTests() {
 #ifdef DSP_FUSION_TEST_ALLOCATIONS
     testImpulseAllocationFailures();
 #endif
-    testConvolutionStreaming();testCrossfeedStreaming();testRemovedEffectsAndBalance();testAnalogAndTube();testPeqProtocolAndChainOrder();testSurroundLimiterOrder();
+    testConvolutionStreaming();testStatusPollingKeepsWetAudio();testRepeatedHostConfigKeepsHistory();testCrossfeedStreaming();testRemovedEffectsAndBalance();testAnalogAndTube();testPeqProtocolAndChainOrder();testSurroundLimiterOrder();
     std::puts("Streaming, removed algorithms, balance, analog, and retained James limiter passed.");
 }

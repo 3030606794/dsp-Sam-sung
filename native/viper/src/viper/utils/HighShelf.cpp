@@ -19,17 +19,20 @@ void HighShelf::SetGain(float gain) {
 }
 
 void HighShelf::SetSamplingRate(uint32_t samplingRate) {
+    Configure(frequency,static_cast<float>(std::pow(10.0,gain/20.0)),1.f,samplingRate,true);
+}
+
+void HighShelf::Configure(float freq,float gainAmplitude,float slope,uint32_t samplingRate,bool resetState) {
+    SetFrequency(freq);
+    SetGain(gainAmplitude);
     double x = (2 * M_PI * this->frequency) / (double) samplingRate;
     double sinX = sin(x);
     double cosX = cos(x);
     double y = exp((this->gain * log(10.0)) / 40.0);
 
-    this->x_1 = 0.0;
-    this->x_2 = 0.0;
-    this->y_1 = 0.0;
-    this->y_2 = 0.0;
+    if(resetState) this->x_1=this->x_2=this->y_1=this->y_2=0.0;
 
-    double z = sqrt(y * 2.0) * sinX;
+    double z = slope==1.f ? sqrt(y*2.0)*sinX : sqrt(y)*sinX*sqrt((y+1.0/y)*(1.0/slope-1.0)+2.0);
     double a = (y - 1.0) * cosX;
     double b = (y + 1.0) - a;
     double c = z + b;

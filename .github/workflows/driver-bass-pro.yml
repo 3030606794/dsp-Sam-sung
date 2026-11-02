@@ -1,0 +1,91 @@
+name: Build Samsung Bass Pro Driver
+
+on:
+  push:
+    branches: [samsung-bass-pro1]
+    paths:
+      - 'native/**'
+      - 'app/src/main/cpp/libjamesdsp/**'
+      - 'module/**'
+      - 'scripts/package-module.py'
+      - 'scripts/validate-release.py'
+      - 'scripts/test-module-installer.py'
+      - 'docs/THIRD-PARTY.md'
+      - '.github/workflows/driver-bass-pro.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bass-pro-driver-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  driver:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare test reports
+        run: mkdir -p build/driver-reports
+      - name: Test Magisk installation against fixture configs
+        run: python3 scripts/test-module-installer.py 2>&1 | tee build/driver-reports/installer.log
+      - name: Test listening controls
+        run: |
+          cmake -S native/tone -B build/tone -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build/tone --parallel 2
+          ctest --test-dir build/tone --output-on-failure --verbose \
+            --output-junit "$GITHUB_WORKSPACE/build/driver-reports/tone.xml" \
+            2>&1 | tee build/driver-reports/tone.log
+      - name: Test complete audio engines and protocol with AddressSanitizer
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+        run: |
+          cmake -S native -B build/host -DFUSION_BUILD_TESTS=ON -DFUSION_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build/host --parallel 2
+          ctest --test-dir build/host --output-on-failure --verbose \
+            --output-junit "$GITHUB_WORKSPACE/build/driver-reports/native-asan.xml" \
+            2>&1 | tee build/driver-reports/native-asan.log
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install native toolchain
+        run: sdkmanager 'ndk;26.3.11579264'
+      - name: Build ARM64 and ARM32 drivers
+        run: |
+          for ABI in arm64-v8a armeabi-v7a; do
+            cmake -S native -B "build/driver-$ABI" \
+              -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/26.3.11579264/build/cmake/android.toolchain.cmake" \
+              -DANDROID_ABI="$ABI" -DANDROID_PLATFORM=android-26 \
+              -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release
+            cmake --build "build/driver-$ABI" --parallel 2
+          done
+      - name: Package and validate driver module
+        run: |
+          python3 scripts/package-module.py
+          python3 scripts/validate-release.py --driver-only 2>&1 | tee build/driver-reports/package-validation.log
+          (cd dist && sha256sum --check SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DSP-Audio-Driver-0.1.0-alpha12-bass1
+          if-no-files-found: error
+          path: |
+            dist/DSP-Audio-Driver-0.1.0-alpha12-bass1.zip
+            dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DSP-Bass-Pro1-Native-Test-Reports
+          if-no-files-found: warn
+          path: |
+            build/driver-reports/
+            build/host/Testing/Temporary/
+            build/tone/Testing/Temporary/

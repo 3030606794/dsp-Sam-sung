@@ -10,6 +10,9 @@
 #include "../jdsp_header.h"
 #include <math.h>
 #include <string.h>
+#ifdef DSP_FUSION_STREAMING
+#include "RoomReverb.h"
+#endif
 
 // utility functions
 static inline float db2lin(float db){ // dB to linear
@@ -925,21 +928,267 @@ void sf_reverb_process(sf_reverb_state_st *rv, float inputL, float inputR, float
     *outputL = outL;
     *outputR = outR;
 }
-// Reverb
-void Reverb_SetParam(JamesDSPLib *jdsp, int presets)
+
+void sf_room_split_init(sf_room_split_st *split,const sf_reverb_state_st *rv,int rate)
 {
-	sf_presetreverb(&jdsp->reverb, (int)jdsp->fs, (sf_reverb_preset)presets);
+    memset(split,0,sizeof(*split));
+    split->rawL=rv->oversampleL; split->rawR=rv->oversampleR;
+    split->rawDelayL.size=rv->inpdelayL.size; split->rawDelayR.size=rv->inpdelayR.size;
+    split->earlyRatio=split->targetEarlyRatio=1.f;
+    split->smoothing=1.f-expf(-1.f/(.01f*rate));
+    for(int i=0;i<18;++i){
+        split->effectiveTaps[0][i]=clampi(rv->earlyref.delaytblL[i],1,rv->earlyref.delayPWL.size);
+        split->effectiveTaps[1][i]=clampi(rv->earlyref.delaytblR[i],1,rv->earlyref.delayPWR.size);
+    }
+}
+void sf_room_track_original(sf_room_split_st *split,float inputL,float inputR)
+{
+    const float previousRatio=split->earlyRatio;
+    split->earlyRatio+=(split->targetEarlyRatio-split->earlyRatio)*split->smoothing;
+    if(split->earlyRatio==previousRatio || fabsf(split->targetEarlyRatio-split->earlyRatio)<5e-5f)
+        split->earlyRatio=split->targetEarlyRatio;
+    float rawL[SF_REVERB_OF],rawR[SF_REVERB_OF];
+    oversample_stepup(&split->rawL,inputL,rawL);oversample_stepup(&split->rawR,inputR,rawR);
+    for(int i=0;i<split->rawL.factor;++i){delay_step(&split->rawDelayL,rawL[i]);delay_step(&split->rawDelayR,rawR[i]);}
+    split->earlyHistory[0][split->earlyPosition]=inputL;split->earlyHistory[1][split->earlyPosition]=inputR;
+    split->earlyPosition=(split->earlyPosition+1)%SF_ROOM_EARLY_CAPACITY;
+}
+static float room_early_read(sf_room_split_st *split,int c,float delay)
+{
+    delay=clampf(delay,1.f,SF_ROOM_EARLY_CAPACITY-2.f);
+    int first=(int)delay;float fraction=delay-first;
+    int a=split->earlyPosition-first;if(a<0)a+=SF_ROOM_EARLY_CAPACITY;
+    int b=a-1;if(b<0)b+=SF_ROOM_EARLY_CAPACITY;
+    return split->earlyHistory[c][a]+fraction*(split->earlyHistory[c][b]-split->earlyHistory[c][a]);
+}
+static void room_earlyref_step(sf_rv_earlyref_st *earlyref,sf_room_split_st *split,float inputL,float inputR,float *outL,float *outR)
+{
+    split->earlyHistory[0][split->earlyPosition]=inputL;
+    split->earlyHistory[1][split->earlyPosition]=inputR;
+    split->earlyPosition=(split->earlyPosition+1)%SF_ROOM_EARLY_CAPACITY;
+    const float previousRatio=split->earlyRatio;
+    split->earlyRatio+=(split->targetEarlyRatio-split->earlyRatio)*split->smoothing;
+    if(split->earlyRatio==previousRatio || fabsf(split->targetEarlyRatio-split->earlyRatio)<5e-5f)
+        split->earlyRatio=split->targetEarlyRatio;
+    if(fabsf(split->earlyRatio-1.f)<1e-7f && split->targetEarlyRatio==1.f){
+        split->earlyRatio=1.f;earlyref_step(earlyref,inputL,inputR,outL,outR);return;
+    }
+    static const float gainsL[18]={.841f,.504f,.491f,.379f,.380f,.346f,.289f,.272f,.192f,.193f,.217f,.181f,.180f,.181f,.176f,.142f,.167f,.134f};
+    static const float gainsR[18]={.842f,.506f,.489f,.382f,.300f,.346f,.290f,.271f,.193f,.192f,.217f,.195f,.192f,.166f,.186f,.131f,.168f,.133f};
+    delay_step(&earlyref->delayPWL,inputL);delay_step(&earlyref->delayPWR,inputR);
+    float wetL=0,wetR=0;
+    for(int i=0;i<18;++i){wetL+=gainsL[i]*room_early_read(split,0,split->effectiveTaps[0][i]*split->earlyRatio);
+        wetR+=gainsR[i]*room_early_read(split,1,split->effectiveTaps[1][i]*split->earlyRatio);}
+    float L=delay_step(&earlyref->delayRL,inputR+wetR);
+    L=biquad_step(&earlyref->allpassXL,L);L=biquad_step(&earlyref->allpassL,earlyref->wet1*wetL+earlyref->wet2*L);
+    L=iir1_step(&earlyref->hpfL,L);L=iir1_step(&earlyref->lpfL,L);
+    float R=delay_step(&earlyref->delayLR,inputL+wetL);
+    R=biquad_step(&earlyref->allpassXR,R);R=biquad_step(&earlyref->allpassR,earlyref->wet1*wetR+earlyref->wet2*R);
+    R=iir1_step(&earlyref->hpfR,R);R=iir1_step(&earlyref->lpfR,R);*outL=L;*outR=R;
+}
+void sf_room_retune(sf_reverb_state_st *rv,float rt60,float earlyWidth,float lateWidth,int rate,float damp)
+{
+    const float wet=rv->wet1+rv->wet2;
+    rv->earlyref.wet1=earlyWidth*.5f+.5f;rv->earlyref.wet2=(1.f-earlyWidth)*.5f;
+    rv->wet1=wet*(lateWidth*.5f+.5f);rv->wet2=wet*((1.f-lateWidth)*.5f);
+    float decay0=powf(10.f,log10f(.237f)/rt60),decay1=powf(10.f,log10f(.938f)/rt60);
+    float decay2=powf(10.f,log10f(.844f)/rt60),decay3=powf(10.f,log10f(.906f)/rt60);
+    rv->loopdecay=decay0;rv->dampap1L.decay=rv->dampap1R.decay=decay2;
+    rv->dampap2L.decay=rv->dampap2R.decay=decay3;
+    rv->cbassap1L.decay1=rv->cbassap1R.decay1=decay1;rv->cbassap1L.decay2=rv->cbassap1R.decay2=decay2;
+    rv->cbassap2L.decay1=rv->cbassap2R.decay1=decay1;rv->cbassap2L.decay2=rv->cbassap2R.decay2=decay1;
+    rv->cbassap2L.decay3=rv->cbassap2R.decay3=decay2;
+    const float oldL=rv->damplpL.y1,oldR=rv->damplpR.y1;
+    iir1_makeLPF(&rv->damplpL,rate*rv->oversampleL.factor,clampf(damp,100.f,rate*.45f));rv->damplpR=rv->damplpL;
+    rv->damplpL.y1=oldL;rv->damplpR.y1=oldR;
+}
+void sf_room_process_parts(sf_reverb_state_st *rv, sf_room_split_st *split, float inputL, float inputR, float *parts)
+{
+    // extra hardcoded constants
+    const float modnoise1 = 0.09f;
+    const float modnoise2 = 0.06f;
+    const float crossfeed = 0.4f;
+    // oversample buffer
+    float osL[SF_REVERB_OF], osR[SF_REVERB_OF];
+    float rawL[SF_REVERB_OF], rawR[SF_REVERB_OF], dryL[SF_REVERB_OF], dryR[SF_REVERB_OF], earlyL[SF_REVERB_OF], earlyR[SF_REVERB_OF], lateL[SF_REVERB_OF], lateR[SF_REVERB_OF];
+    oversample_stepup(&split->rawL,inputL,rawL);
+    oversample_stepup(&split->rawR,inputR,rawR);
+    float outLRef, outRRef;
+    // early reflection
+    room_earlyref_step(&rv->earlyref, split, inputL, inputR, &outLRef, &outRRef);
+    float erL = outLRef * rv->ertolate + inputL;
+    float erR = outRRef * rv->ertolate + inputR;
+    // oversample the single input into multiple outputs
+    oversample_stepup(&rv->oversampleL, erL, osL);
+    oversample_stepup(&rv->oversampleR, erR, osR);
+    // for each oversampled sample...
+    for (int i2 = 0; i2 < rv->oversampleL.factor; i2++)
+    {
+        // dc cut
+        float outL = dccut_step(&rv->dccutL, osL[i2]);
+        float outR = dccut_step(&rv->dccutR, osR[i2]);
+        // noise
+        float mnoise = noise_step(&rv->noise);
+        float lfo = (lfo_step(&rv->lfo1) + modnoise1 * mnoise) * rv->wander;
+        lfo = iir1_step(&rv->lfo1_lpf, lfo);
+        mnoise *= modnoise2;
+        // diffusion
+        for (int i = 0, s = -1; i < 10; i++, s = -s)
+        {
+            outL = allpassm_step(&rv->diffL[i], outL, lfo * s, mnoise);
+            outR = allpassm_step(&rv->diffR[i], outR, lfo, mnoise * s);
+        }
+        // cross fade
+        float crossL = outL, crossR = outR;
+        for (int i = 0; i < 4; i++)
+        {
+            crossL = allpass_step(&rv->crossL[i], crossL);
+            crossR = allpass_step(&rv->crossR[i], crossR);
+        }
+        outL = iir1_step(&rv->clpfL, outL + crossfeed * crossR);
+        outR = iir1_step(&rv->clpfR, outR + crossfeed * crossL);
+        // bass boost
+        crossL = delay_getlast(&rv->cdelayL);
+        crossR = delay_getlast(&rv->cdelayR);
+        outL += rv->loopdecay *
+                (crossR + rv->bassb * biquad_step(&rv->basslpL, biquad_step(&rv->bassapL, crossR)));
+        outR += rv->loopdecay *
+                (crossL + rv->bassb * biquad_step(&rv->basslpR, biquad_step(&rv->bassapR, crossL)));
+        // dampening
+        outL = allpassm_step(&rv->dampap2L,
+                             delay_step(&rv->dampdL,
+                                        allpassm_step(&rv->dampap1L,
+                                                iir1_step(&rv->damplpL, outL), lfo, mnoise)),
+                             -lfo, -mnoise);
+        outR = allpassm_step(&rv->dampap2R,
+                             delay_step(&rv->dampdR,
+                                        allpassm_step(&rv->dampap1R,
+                                                iir1_step(&rv->damplpR, outR), -lfo, -mnoise)),
+                             lfo, mnoise);
+        // update cross fade bass boost delay
+        delay_step(&rv->cdelayL,
+                   allpass3_step(&rv->cbassap2L,
+                                 delay_step(&rv->cbassd2L,
+                                            allpass2_step(&rv->cbassap1L,
+                                                    delay_step(&rv->cbassd1L, outL))),
+                                 lfo));
+        delay_step(&rv->cdelayR,
+                   allpass3_step(&rv->cbassap2R,
+                                 delay_step(&rv->cbassd2R,
+                                            allpass2_step(&rv->cbassap1R,
+                                                    delay_step(&rv->cbassd1R, outR))),
+                                 -lfo));
+        //
+        float D1 =
+            delay_get(&rv->cbassd1L, rv->outco[0]);
+        float D2 =
+            delay_get(&rv->cbassd2L, rv->outco[1]) -
+            delay_get(&rv->cbassd2R, rv->outco[2]) +
+            delay_get(&rv->cbassd2L, rv->outco[3]) -
+            delay_get(&rv->cdelayR, rv->outco[4]) -
+            delay_get(&rv->cbassd1R, rv->outco[5]) -
+            delay_get(&rv->cbassd2R, rv->outco[6]);
+        float D3 =
+            delay_get(&rv->cdelayL, rv->outco[7]) +
+            allpass2_get1(&rv->cbassap1L, rv->outco[8]) +
+            allpass2_get2(&rv->cbassap1L, rv->outco[9]) -
+            allpass2_get2(&rv->cbassap1R, rv->outco[10]) +
+            allpass3_get1(&rv->cbassap2L, rv->outco[11]) +
+            allpass3_get2(&rv->cbassap2L, rv->outco[12]) +
+            allpass3_get3(&rv->cbassap2L, rv->outco[13]) -
+            allpass3_get2(&rv->cbassap2R, rv->outco[14]);
+        float D4 =
+            delay_get(&rv->cdelayL, rv->outco[15]);
+        float B1 =
+            delay_get(&rv->cbassd1R, rv->outco[16]);
+        float B2 =
+            delay_get(&rv->cbassd2R, rv->outco[17]) -
+            delay_get(&rv->cbassd2L, rv->outco[18]) +
+            delay_get(&rv->cbassd2R, rv->outco[19]) -
+            delay_get(&rv->cdelayL, rv->outco[20]) -
+            delay_get(&rv->cbassd1L, rv->outco[21]) -
+            delay_get(&rv->cbassd2L, rv->outco[22]);
+        float B3 =
+            delay_get(&rv->cdelayR, rv->outco[23]) +
+            allpass2_get1(&rv->cbassap1R, rv->outco[24]) +
+            allpass2_get2(&rv->cbassap1R, rv->outco[25]) -
+            allpass2_get2(&rv->cbassap1L, rv->outco[26]) +
+            allpass3_get1(&rv->cbassap2R, rv->outco[27]) +
+            allpass3_get2(&rv->cbassap2R, rv->outco[28]) +
+            allpass3_get3(&rv->cbassap2R, rv->outco[29]) -
+            allpass3_get2(&rv->cbassap2L, rv->outco[30]);
+        float B4 =
+            delay_get(&rv->cdelayR, rv->outco[31]);
+        float D = D1 * 0.469f + D2 * 0.219f + D3 * 0.064f + D4 * 0.045f;
+        float B = B1 * 0.469f + B2 * 0.219f + B3 * 0.064f + B4 * 0.045f;
+        lfo = iir1_step(&rv->lfo2_lpf, lfo_step(&rv->lfo2) * rv->wander);
+        outL = comb_step(&rv->combL, D, lfo);
+        outR = comb_step(&rv->combR, B, -lfo);
+        outL = delay_step(&rv->lastdelayL, biquad_step(&rv->lastlpfL, outL));
+        outR = delay_step(&rv->lastdelayR, biquad_step(&rv->lastlpfR, outR));
+        const float inputDelayedL=delay_step(&rv->inpdelayL,osL[i2]);
+        const float inputDelayedR=delay_step(&rv->inpdelayR,osR[i2]);
+        const float rawDelayedL=delay_step(&split->rawDelayL,rawL[i2]);
+        const float rawDelayedR=delay_step(&split->rawDelayR,rawR[i2]);
+        lateL[i2]=outL * rv->wet1 + outR * rv->wet2;
+        lateR[i2]=outR * rv->wet1 + outL * rv->wet2;
+        dryL[i2]=rawDelayedL*rv->dry;
+        dryR[i2]=rawDelayedR*rv->dry;
+        earlyL[i2]=(inputDelayedL-rawDelayedL)*rv->dry;
+        earlyR[i2]=(inputDelayedR-rawDelayedR)*rv->dry;
+        // Keep the original arithmetic for the neutral path.
+        osL[i2]=lateL[i2]+inputDelayedL*rv->dry;
+        osR[i2]=lateR[i2]+inputDelayedR*rv->dry;
+    }
+    float outL = oversample_stepdown(&rv->oversampleL, osL);
+    float outR = oversample_stepdown(&rv->oversampleR, osR);
+    outL += outLRef * rv->erefwet + inputL * rv->dry;
+    outR += outRRef * rv->erefwet + inputR * rv->dry;
+    // Legacy stepdown returns its first oversample; split each branch identically.
+    parts[0]=dryL[0]+inputL*rv->dry; parts[1]=dryR[0]+inputR*rv->dry;
+    parts[2]=earlyL[0]+outLRef*rv->erefwet; parts[3]=earlyR[0]+outRRef*rv->erefwet;
+    parts[4]=lateL[0]; parts[5]=lateR[0]; parts[6]=outL; parts[7]=outR;
+}
+// Reverb
+int Reverb_SetParam(JamesDSPLib *jdsp, int presets)
+{
+    if(presets<0 || presets>18)return 0;
+#ifdef DSP_FUSION_STREAMING
+    if(!RoomReverbBase(jdsp->roomReverb,jdsp,presets))return 0;
+    jdsp->roomReverbBase=presets;
+#else
+    sf_presetreverb(&jdsp->reverb,(int)jdsp->fs,(sf_reverb_preset)presets);
+#endif
+    return 1;
+}
+void ReverbRefresh(JamesDSPLib *jdsp)
+{
+#ifdef DSP_FUSION_STREAMING
+    RoomReverbRefresh(jdsp->roomReverb,jdsp);
+#else
+    sf_presetreverb(&jdsp->reverb,(int)jdsp->fs,(sf_reverb_preset)jdsp->roomReverbBase);
+#endif
 }
 void ReverbEnable(JamesDSPLib *jdsp)
 {
-	jdsp->reverbEnabled = 1;
+    jdsp->reverbEnabled=1;
+#ifdef DSP_FUSION_STREAMING
+    RoomReverbEnabled(jdsp->roomReverb,1);
+#endif
 }
 void ReverbDisable(JamesDSPLib *jdsp)
 {
-	jdsp->reverbEnabled = 0;
+    jdsp->reverbEnabled=0;
+#ifdef DSP_FUSION_STREAMING
+    RoomReverbEnabled(jdsp->roomReverb,0);
+#endif
 }
-void ReverbProcess(JamesDSPLib *jdsp, size_t n)
+void ReverbProcess(JamesDSPLib *jdsp,size_t n)
 {
-	for (size_t i = 0; i < n; i++)
-		sf_reverb_process(&jdsp->reverb, jdsp->tmpBuffer[0][i], jdsp->tmpBuffer[1][i], &jdsp->tmpBuffer[0][i], &jdsp->tmpBuffer[1][i]);
+#ifdef DSP_FUSION_STREAMING
+    RoomReverbProcess(jdsp->roomReverb,jdsp->tmpBuffer[0],jdsp->tmpBuffer[1],jdsp->tmpBuffer[0],jdsp->tmpBuffer[1],n);
+#else
+    for(size_t i=0;i<n;++i)
+        sf_reverb_process(&jdsp->reverb,jdsp->tmpBuffer[0][i],jdsp->tmpBuffer[1][i],&jdsp->tmpBuffer[0][i],&jdsp->tmpBuffer[1][i]);
+#endif
 }

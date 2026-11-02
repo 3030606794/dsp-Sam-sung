@@ -2,104 +2,106 @@ package me.timschneeberger.rootlessjamesdsp.view
 
 import android.content.Context
 import android.util.AttributeSet
+import android.view.MotionEvent
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import me.timschneeberger.rootlessjamesdsp.R
+import me.timschneeberger.rootlessjamesdsp.ui.power.PowerMotionConfig
+import me.timschneeberger.rootlessjamesdsp.ui.power.PowerMotionController
 
 class FloatingToggleButton @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : FloatingActionButton(context, attrs) {
-
     private var onToggledListener: OnToggledListener? = null
     private var onClickListener: OnToggleClickListener? = null
-
-    private var touchX = Float.NaN
-    private var touchY = Float.NaN
-    private var pendingClickAt: Long? = null
-    private var transition: PowerTransition? = null
-
-    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
-        if (event.actionMasked == android.view.MotionEvent.ACTION_UP) {
-            touchX = event.rawX
-            touchY = event.rawY
-        }
-        if (event.actionMasked == android.view.MotionEvent.ACTION_CANCEL) {
-            touchX = Float.NaN
-            touchY = Float.NaN
-            pendingClickAt = null
-        }
-        return super.onTouchEvent(event)
-    }
-
-    private fun animatePowerChange(enabled: Boolean) {
-        val clickedAt = pendingClickAt ?: return
-        pendingClickAt = null
-        if (android.os.SystemClock.uptimeMillis() - clickedAt > 2000L || !isAttachedToWindow ||
-            !android.animation.ValueAnimator.areAnimatorsEnabled()) return
-        val host = rootView as? android.view.ViewGroup ?: return
-        if (host.width <= 0 || host.height <= 0) return
-        val hostLocation = IntArray(2).also(host::getLocationOnScreen)
-        val buttonLocation = IntArray(2).also(::getLocationOnScreen)
-        val x = if (touchX.isFinite()) touchX - hostLocation[0] else buttonLocation[0] - hostLocation[0] + width / 2f
-        val y = if (touchY.isFinite()) touchY - hostLocation[1] else buttonLocation[1] - hostLocation[1] + height / 2f
-        touchX = Float.NaN
-        touchY = Float.NaN
-        transition?.cancel()
-        transition = PowerTransition(host, x.coerceIn(0f, host.width.toFloat()),
-            y.coerceIn(0f, host.height.toFloat()), enabled).also { it.start() }
-    }
-
-    override fun onDetachedFromWindow() {
-        transition?.cancel()
-        transition = null
-        pendingClickAt = null
-        super.onDetachedFromWindow()
+    private var dispatchingClick = false
+    private var committingUserState = false
+    // Nullable because View may dispatch visibility changes during its constructor.
+    private var motionController: PowerMotionController? = null
+    private val powerAnimationsEnabled = context.obtainStyledAttributes(
+        attrs, R.styleable.FloatingToggleButton
+    ).let { attributes ->
+        try { attributes.getBoolean(R.styleable.FloatingToggleButton_powerAnimationsEnabled, true) }
+        finally { attributes.recycle() }
     }
 
     var isToggled = false
         set(value) {
-            val changed = field != value
             field = value
             isSelected = value
             onToggledListener?.onToggled(value)
-            if (changed) animatePowerChange(value)
+            if (!dispatchingClick && !committingUserState) motionController?.showState(field)
         }
 
     var toggleOnClick = true
 
     init {
-        setOnClickListener {
-            pendingClickAt = android.os.SystemClock.uptimeMillis()
-            onClickListener?.onClick()
-            if(toggleOnClick) {
-                isToggled = !isToggled
-            }
-            // Rejected clicks must not animate a later service-driven state refresh.
-            pendingClickAt = null
-            touchX = Float.NaN
-            touchY = Float.NaN
-        }
-
-        // The main switch sits inside the bottom bar rather than floating above it.
         stateListAnimator = null
         compatElevation = 0f
         supportBackgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
         rippleColor = android.graphics.Color.TRANSPARENT
-        drawable.setTintList(context.getColorStateList(R.color.selector_floating_toggle_foreground_tint))
+        motionController = PowerMotionController(this, powerAnimationsEnabled, isToggled)
+        setOnClickListener {
+            val before = isToggled
+            dispatchingClick = true
+            try {
+                onClickListener?.onClick()
+                if (toggleOnClick) isToggled = !isToggled
+            } finally {
+                dispatchingClick = false
+                if (before != isToggled) motionController?.accepted(isToggled)
+                else motionController?.cancelInteraction()
+            }
+        }
     }
 
-    fun setOnToggledListener(listener: OnToggledListener) {
-        onToggledListener = listener
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (isEnabled && event.actionMasked == MotionEvent.ACTION_DOWN) motionController?.press()
+        if (event.actionMasked == MotionEvent.ACTION_CANCEL) motionController?.cancelInteraction()
+        val handled = super.onTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_UP) motionController?.releaseAfterClickDispatch()
+        return handled
     }
 
-    fun setOnToggleClickListener(listener: OnToggleClickListener) {
-        onClickListener = listener
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        motionController?.attach()
+    }
+    override fun onDetachedFromWindow() {
+        motionController?.detach()
+        super.onDetachedFromWindow()
+    }
+    override fun onVisibilityChanged(changedView: android.view.View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        motionController?.refreshVisibility()
+    }
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        motionController?.refreshVisibility()
+    }
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        motionController?.resize()
+    }
+    override fun onInitializeAccessibilityNodeInfo(info: android.view.accessibility.AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.className = android.widget.ToggleButton::class.java.name
+        info.isCheckable = true
+        info.isChecked = isToggled
     }
 
-    interface OnToggleClickListener {
-        fun onClick()
+    fun applyMotionConfig(config: PowerMotionConfig) { motionController?.applyMotionConfig(config) }
+    /** Marks a successful asynchronous user request, without replaying normal service refreshes. */
+    fun commitUserToggle(value: Boolean, commit: () -> Unit = {}) {
+        val before = isToggled
+        committingUserState = true
+        try { isToggled = value; commit() } finally { committingUserState = false }
+        if (!dispatchingClick && before != isToggled) motionController?.accepted(isToggled)
     }
+    fun setMotionResumed(resumed: Boolean) { motionController?.setMotionResumed(resumed) }
+    internal fun motionSnapshot(): PowerMotionController.Snapshot = requireNotNull(motionController).snapshot()
 
-    interface OnToggledListener {
-        fun onToggled(enabled: Boolean)
-    }
+    fun setOnToggledListener(listener: OnToggledListener) { onToggledListener = listener }
+    fun setOnToggleClickListener(listener: OnToggleClickListener) { onClickListener = listener }
+    interface OnToggleClickListener { fun onClick() }
+    interface OnToggledListener { fun onToggled(enabled: Boolean) }
 }
